@@ -323,7 +323,8 @@ export default function MarketOverviewClient({
   }, [applyBatchedUpdates]);
 
   // Web Socket Hook - use the shared stream from LiveDataContext
-  const { streamStatus, subscribeToPrices, subscribeToInstruments, data: liveContextData } = useLiveData();
+  const { streamStatus, subscribeToPrices, subscribeToInstruments, initialize, data: liveContextData } = useLiveData();
+  useEffect(() => { initialize(); }, [initialize]);
   // Prefer Upstox API-driven market status; fall back to sync check if data not loaded yet
   const isMarketCurrentlyOpen = liveContextData?.marketStatus ? liveContextData.marketStatus === 'OPEN' : isMarketOpen();
   const showStreaming = isVisible && isMarketCurrentlyOpen && !!tokenStatus?.hasToken;

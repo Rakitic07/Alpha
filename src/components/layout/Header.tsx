@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useTransition } from 'react';
 import { checkMarketStatus } from '@/app/actions/market-status';
 
 import { usePathname } from 'next/navigation';
@@ -43,22 +43,25 @@ export default function Header() {
   const [marketOpen, setMarketOpen] = useState(false);
   const [timings, setTimings] = useState<{ start_time: number, end_time: number }[]>([]);
   const [lastDataDate, setLastDataDate] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
-    // Initial Fetch
-    const checkServerStatus = async () => {
-        const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
+    // Deferred fetch - doesn't block initial paint
+    startTransition(() => {
+      const checkServerStatus = async () => {
+          const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
 
-        const result = await checkMarketStatus(dateStr);
-        setTimings(result.timings);
-        setMarketOpen(result.isOpen);
-        setLastDataDate(result.lastDataDate);
-    };
-    checkServerStatus();
+          const result = await checkMarketStatus(dateStr);
+          setTimings(result.timings);
+          setMarketOpen(result.isOpen);
+          setLastDataDate(result.lastDataDate);
+      };
+      checkServerStatus();
+    });
 
     // Ticker
     const interval = setInterval(() => {
@@ -163,10 +166,10 @@ export default function Header() {
 
             <NextLink href="/" className="group flex items-center gap-2">
               <Image 
-                src="/logo.png" 
-                alt="Alpha Logo" 
-                width={46} 
-                height={40} 
+                src="/logo.webp"
+                alt="Alpha Logo"
+                width={46}
+                height={40}
                 className="h-8 w-auto md:h-10 object-contain transition-all duration-300"
                 priority
               />
@@ -256,12 +259,11 @@ export default function Header() {
             <div className="h-16 flex items-center px-6 border-b border-white/5">
                 <NextLink href="/" className="flex items-center gap-3" onClick={() => setIsMobileMenuOpen(false)}>
                     <Image 
-                        src="/logo.png" 
-                        alt="Alpha Logo" 
-                        width={40} 
-                        height={34} 
+                        src="/logo.webp"
+                        alt="Alpha Logo"
+                        width={40}
+                        height={34}
                         className="h-8 w-auto object-contain"
-                        priority
                     />
                     <span className="text-lg font-bold text-white tracking-wide">Alpha</span>
                 </NextLink>

@@ -2,26 +2,13 @@
 
 import React from 'react';
 import { usePortfolioExits } from '@/hooks/useQueries';
-import { useHasMounted } from '@/hooks/useHasMounted';
 import ExitsTable from '@/components/exits/ExitsTable';
-
-// Loading skeleton
-function ExitsSkeleton() {
-  return (
-    <main className="container mx-auto px-2 md:px-4 animate-fade-in max-w-7xl animate-pulse">
-      <div className="h-12 w-48 bg-slate-800/50 rounded-xl mb-4"></div>
-      <div className="h-[600px] bg-slate-800/50 rounded-2xl border border-white/5"></div>
-    </main>
-  );
-}
 
 export default function ExitsPage() {
   const { data: exits, isLoading, isFetching } = usePortfolioExits();
-  const hasMounted = useHasMounted();
 
-  // Show skeleton on server render AND initial client load
-  if (!hasMounted || (isLoading && !exits)) {
-    return <ExitsSkeleton />;
+  if (isLoading && !exits) {
+    return null; // Next.js loading.tsx handles the skeleton
   }
 
   if (!exits) {

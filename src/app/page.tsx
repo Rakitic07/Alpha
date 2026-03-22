@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLiveData } from '@/context/LiveDataContext';
 import { formatNumber } from '@/lib/format';
-import { toPng } from 'html-to-image';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { LiveHeader, LiveStatsCards, LiveMovers, PerformanceRank, IntradayPnLChart } from '@/components/live';
@@ -25,24 +24,31 @@ const itemVariants = {
 };
 
 export default function LivePage() {
-  const { 
-    data, 
-    prevData, 
-    loading, 
-    lastRefreshed, 
-    refresh: fetchData, 
-    hasAnimatedInitial, 
-    setHasAnimatedInitial, 
-    showDynamicTitle, 
+  const {
+    data,
+    prevData,
+    loading,
+    lastRefreshed,
+    refresh: fetchData,
+    initialize,
+    hasAnimatedInitial,
+    setHasAnimatedInitial,
+    showDynamicTitle,
     setShowDynamicTitle,
     connectionError,
     pnlHistory
   } = useLiveData();
 
+  useEffect(() => { initialize(); }, [initialize]);
+
   // Use Upstox API-driven market status from server instead of hardcoded hours
   const marketOpen = data?.marketStatus === 'OPEN';
   const [downloading, setDownloading] = useState(false);
-  const [privacyMode, setPrivacyMode] = useState(false);
+  const [privacyMode, setPrivacyMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return JSON.parse(localStorage.getItem('privacyMode') ?? 'false'); }
+    catch { return false; }
+  });
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -52,13 +58,8 @@ export default function LivePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('privacyMode');
-    if (saved) setPrivacyMode(JSON.parse(saved));
-  }, []);
-
   const togglePrivacy = useCallback(() => {
-    setPrivacyMode(prev => {
+    setPrivacyMode((prev: boolean) => {
       const newVal = !prev;
       localStorage.setItem('privacyMode', JSON.stringify(newVal));
       return newVal;
@@ -70,16 +71,17 @@ export default function LivePage() {
     try {
       // Small delay to ensure UI updates before capture (e.g. hiding buttons)
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       const element = document.getElementById('live-dashboard-content');
       if (element) {
-        const dataUrl = await toPng(element, { 
+        const { toPng } = await import('html-to-image');
+        const dataUrl = await toPng(element, {
           cacheBust: true,
           quality: 0.95,
           pixelRatio: 2,
           backgroundColor: '#0f172a' // match bg-slate-900
         });
-        
+
         const link = document.createElement('a');
         link.download = `market-dashboard-${new Date().toISOString().split('T')[0]}.png`;
         link.href = dataUrl;
@@ -150,11 +152,11 @@ export default function LivePage() {
   }
 
   return (
-    <motion.main 
-      id="live-dashboard-content" 
+    <motion.main
+      id="live-dashboard-content"
       className="flex flex-col gap-4 md:gap-8 pb-24 md:pb-8"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
         {/* Header Section */}

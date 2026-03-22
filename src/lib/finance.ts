@@ -1903,7 +1903,7 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
 const getPortfolioHoldingsCached = unstable_cache(
     getPortfolioHoldingsInternal,
     ['portfolio-holdings-list'],
-    { tags: ['portfolio-data'] }
+    { tags: ['portfolio-data'], revalidate: 300 }
 );
 
 export async function getPortfolioHoldings() {
@@ -2036,7 +2036,7 @@ async function getHistoricalPortfolioHoldingsInternal() {
 export const getHistoricalPortfolioHoldings = unstable_cache(
     getHistoricalPortfolioHoldingsInternal,
     ['portfolio-historical-holdings'],
-    { tags: ['portfolio-data'] }
+    { tags: ['portfolio-data'], revalidate: 3600 }
 );
 
 
@@ -2070,7 +2070,7 @@ async function calculatePortfolioXIRRInternal(currentValue: number) {
 export const calculatePortfolioXIRR = unstable_cache(
     calculatePortfolioXIRRInternal,
     ['portfolio-xirr'],
-    { tags: ['portfolio-data'] }
+    { tags: ['portfolio-data'], revalidate: 3600 }
 );
 
 // Shared helper for market cap segmentation with concurrent fetching
@@ -2443,7 +2443,7 @@ async function getLatestPortfolioStatsInternal() {
 export const getLatestPortfolioStats = unstable_cache(
     getLatestPortfolioStatsInternal,
     ['portfolio-latest-stats'],
-    { tags: ['portfolio-data'] }
+    { tags: ['portfolio-data'], revalidate: 300 }
 );
 
 // Get dashboard stats (NAV, DD, returns)
@@ -2526,7 +2526,7 @@ async function getDashboardStatsInternal() {
 export const getDashboardStats = unstable_cache(
     getDashboardStatsInternal,
     ['dashboard-stats'],
-    { tags: ['portfolio-data'] }
+    { tags: ['portfolio-data'], revalidate: 300 }
 );
 
 /**

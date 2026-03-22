@@ -2,15 +2,19 @@
 
 import { keepPreviousData, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { ReactNode, useState } from 'react';
 
-// Create persister for localStorage
+// Create async persister for localStorage (non-blocking)
 const createPersister = () => {
   if (typeof window === 'undefined') return undefined;
-  
-  return createSyncStoragePersister({
-    storage: window.localStorage,
+
+  return createAsyncStoragePersister({
+    storage: {
+      getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
+      setItem: (key: string, value: string) => { localStorage.setItem(key, value); return Promise.resolve(); },
+      removeItem: (key: string) => { localStorage.removeItem(key); return Promise.resolve(); },
+    },
     key: 'alpha-query-cache',
   });
 };
@@ -27,8 +31,8 @@ function makeQueryClient() {
         retry: 2,
         // Keep previous data visible while revalidating or changing keys
         placeholderData: keepPreviousData,
-        // Refetch on window focus (good for when user returns to app)
-        refetchOnWindowFocus: true,
+        // Don't refetch on window focus - freshness managed by staleTime + manual refresh
+        refetchOnWindowFocus: false,
         // Don't refetch when first reconnecting (too aggressive)
         refetchOnReconnect: false,
       },
@@ -57,7 +61,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
     return (
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={{ 
+        persistOptions={{
           persister,
           maxAge: 24 * 60 * 60 * 1000, // 24 hours
           buster: process.env.NEXT_PUBLIC_APP_VERSION ?? 'v1', // Tied to app version — bump package.json version to bust stale cache

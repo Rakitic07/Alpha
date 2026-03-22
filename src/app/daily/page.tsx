@@ -1,27 +1,14 @@
 'use client';
 
 import { useDailySnapshots } from "@/hooks/useQueries";
-import { useHasMounted } from '@/hooks/useHasMounted';
 import { format } from "date-fns";
 import { formatCurrency } from '@/lib/format';
 
-// Loading skeleton
-function DailySkeleton() {
-  return (
-    <div style={{ padding: '2rem' }} className="animate-pulse">
-      <div className="h-8 w-48 bg-slate-800/50 rounded-xl mb-6"></div>
-      <div className="h-[600px] bg-slate-800/50 rounded-xl border border-white/5"></div>
-    </div>
-  );
-}
-
 export default function DailySnapshotPage() {
   const { data: snapshots, isLoading, isFetching } = useDailySnapshots();
-  const hasMounted = useHasMounted();
 
-  // Show skeleton on server render AND initial client load
-  if (!hasMounted || (isLoading && !snapshots)) {
-    return <DailySkeleton />;
+  if (isLoading && !snapshots) {
+    return null; // Next.js loading.tsx handles the skeleton
   }
 
   if (!snapshots) {

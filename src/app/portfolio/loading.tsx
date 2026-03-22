@@ -1,27 +1,13 @@
-import Skeleton from '@/components/ui/Skeleton';
-import TableSkeleton from '@/components/ui/TableSkeleton';
-import { Box } from '@mui/material';
-
-export default function Loading() {
+export default function PortfolioLoading() {
   return (
-    <div className="flex flex-col gap-4">
-        <div className="flex flex-row justify-between items-center">
-            {/* Title Skeleton */}
-            <Skeleton variant="text" className="w-32 h-10" />
-
-            {/* Toggle Buttons Skeleton */}
-            <Box sx={{ display: 'flex' }}>
-                <div className="flex gap-0">
-                    <Skeleton className="w-[140px] h-9 rounded-l-full" />
-                    <Skeleton className="w-[140px] h-9 rounded-r-full" />
-                </div>
-            </Box>
-        </div>
-
-        <div className="flex flex-col gap-6">
-            {/* Table Skeleton */}
-            <TableSkeleton rows={12} cols={7} />
-        </div>
+    <div className="flex flex-col gap-4 animate-pulse">
+      <div className="h-10 w-64 bg-slate-800/50 rounded-xl mb-4"></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-24 bg-slate-800/50 rounded-2xl border border-white/5"></div>
+        ))}
+      </div>
+      <div className="h-[500px] bg-slate-800/50 rounded-2xl border border-white/5 mt-4"></div>
     </div>
   );
 }

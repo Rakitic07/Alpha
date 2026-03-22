@@ -1,31 +1,16 @@
 'use client';
 
 import { useTransactions, useSymbolMappings } from '@/hooks/useQueries';
-import { useHasMounted } from '@/hooks/useHasMounted';
 import ManageTradesClient from './ManageTradesClient';
-
-// Loading skeleton
-function TradesSkeleton() {
-  return (
-    <main className="animate-fade-in flex flex-col h-[calc(100vh-8rem)] animate-pulse">
-      <div className="flex-1 min-h-0">
-        <div className="h-12 w-48 bg-slate-800/50 rounded-xl mb-4"></div>
-        <div className="h-full bg-slate-800/50 rounded-2xl border border-white/5"></div>
-      </div>
-    </main>
-  );
-}
 
 export default function TradesPage() {
   const { data: transactions, isLoading: transactionsLoading } = useTransactions();
   const { data: mappings, isLoading: mappingsLoading, isFetching } = useSymbolMappings();
-  const hasMounted = useHasMounted();
 
   const isLoading = transactionsLoading || mappingsLoading;
 
-  // Show skeleton on server render AND initial client load
-  if (!hasMounted || (isLoading && (!transactions || !mappings))) {
-    return <TradesSkeleton />;
+  if (isLoading && (!transactions || !mappings)) {
+    return null; // Next.js loading.tsx handles the skeleton
   }
 
   if (!transactions) {
@@ -42,9 +27,9 @@ export default function TradesPage() {
         </div>
       )}
       <div className="flex-1 min-h-0">
-        <ManageTradesClient 
-          initialTransactions={transactions} 
-          initialMappings={mappings || {}} 
+        <ManageTradesClient
+          initialTransactions={transactions}
+          initialMappings={mappings || {}}
         />
       </div>
     </main>

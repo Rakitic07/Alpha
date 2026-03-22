@@ -22,6 +22,7 @@ interface LiveDataContextType {
   loading: boolean;
   lastRefreshed: Date | null;
   refresh: () => Promise<void>;
+  initialize: () => void;
   hasAnimatedInitial: boolean;
   setHasAnimatedInitial: (val: boolean) => void;
   showDynamicTitle: boolean;
@@ -49,12 +50,21 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [hasAnimatedInitial, setHasAnimatedInitial] = useState(false);
-  const [showDynamicTitle, setShowDynamicTitleState] = useState(false);
-  const [streamingEnabled, setStreamingEnabledState] = useState(true);
+  const [showDynamicTitle, setShowDynamicTitleState] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return JSON.parse(localStorage.getItem('showDynamicTitle') ?? 'false'); }
+    catch { return false; }
+  });
+  const [streamingEnabled, setStreamingEnabledState] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try { return JSON.parse(localStorage.getItem('streamingEnabled') ?? 'true'); }
+    catch { return true; }
+  });
   const [connectionError, setConnectionError] = useState<ConnectionError | null>(null);
   const [pnlHistory, setPnlHistory] = useState<PnLHistoryPoint[]>([]);
   const isFetchingBus = useRef(false);
   const errorShownRef = useRef(false); // Prevent duplicate error toasts
+  const [initialized, setInitialized] = useState(false);
   
   // Batched update refs - accumulate updates and apply every UPDATE_INTERVAL_MS
   const pendingUpdatesRef = useRef<Map<string, PriceUpdate>>(new Map());
@@ -71,30 +81,21 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     errorShownRef.current = false;
   }, []);
 
-  // Initialize preferences from localStorage on mount
-  useEffect(() => {
-    // Only run on client side
-    if (typeof window === 'undefined') return;
-    
-    const savedDynamicTitle = localStorage.getItem('showDynamicTitle');
-    if (savedDynamicTitle !== null) {
-      setShowDynamicTitleState(JSON.parse(savedDynamicTitle));
-    }
-    
-    const savedStreaming = localStorage.getItem('streamingEnabled');
-    if (savedStreaming !== null) {
-      setStreamingEnabledState(JSON.parse(savedStreaming));
-    }
-
-    // Load P/L history from server
-    getIntradayPnLHistory()
-      .then(history => {
-        if (history.length > 0) {
-          setPnlHistory(history);
-          console.log(`[LiveData] Loaded ${history.length} P/L history points from server`);
-        }
-      })
-      .catch(err => console.error('[LiveData] Failed to load P/L history:', err));
+  // Lazy initialize method - pages call this when they need live data
+  const initialize = useCallback(() => {
+    setInitialized(prev => {
+      if (prev) return prev;
+      // Load P/L history from server on first init
+      getIntradayPnLHistory()
+        .then(history => {
+          if (history.length > 0) {
+            setPnlHistory(history);
+            console.log(`[LiveData] Loaded ${history.length} P/L history points from server`);
+          }
+        })
+        .catch(err => console.error('[LiveData] Failed to load P/L history:', err));
+      return true;
+    });
   }, []);
 
   const setShowDynamicTitle = useCallback((val: boolean) => {
@@ -496,6 +497,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   }, [data?.marketStatus]);
 
   useEffect(() => {
+    // Only start fetching/polling after a page calls initialize()
+    if (!initialized) return;
+
     // Initial fetch (always needed to get full data including indices, sectors, etc.)
     refresh();
 
@@ -517,7 +521,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
     const scheduleSync = () => {
       const msUntilNext = getMsUntilNextSync();
-      
+
       timeoutId = setTimeout(() => {
         // If streaming is connected, do less frequent full refreshes (every 5 minutes)
         // If not streaming, poll every 30 seconds
@@ -556,7 +560,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       clearInterval(intervalId);
       if (indicesIntervalId) clearInterval(indicesIntervalId);
     };
-  }, [refresh, isStreaming]);
+  }, [refresh, isStreaming, initialized]);
 
   const subscribeToPrices = useCallback((callback: (updates: PriceUpdate[]) => void) => {
     priceSubscribersRef.current.add(callback);
@@ -567,12 +571,13 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LiveDataContext.Provider value={{
-      data, 
-      prevData, 
-      loading, 
-      lastRefreshed, 
-      refresh, 
-      hasAnimatedInitial, 
+      data,
+      prevData,
+      loading,
+      lastRefreshed,
+      refresh,
+      initialize,
+      hasAnimatedInitial,
       setHasAnimatedInitial,
       showDynamicTitle,
       setShowDynamicTitle,

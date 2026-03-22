@@ -54,7 +54,7 @@ export function useHistoricalHoldings(options?: Omit<UseQueryOptions<Awaited<Ret
   return useQuery({
     queryKey: queryKeys.portfolio.historical(),
     queryFn: fetchHistoricalHoldings,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes - only changes on recompute
     ...options,
   });
 }
@@ -76,7 +76,7 @@ export function useTransactions(options?: Omit<UseQueryOptions<Awaited<ReturnTyp
   return useQuery({
     queryKey: queryKeys.trades.transactions(),
     queryFn: fetchTransactions,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes - only changes on import/edit
     ...options,
   });
 }
@@ -96,7 +96,7 @@ export function usePortfolioExits(options?: Omit<UseQueryOptions<Awaited<ReturnT
   return useQuery({
     queryKey: queryKeys.exits.list(),
     queryFn: fetchPortfolioExits,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes - only changes on recompute
     ...options,
   });
 }
