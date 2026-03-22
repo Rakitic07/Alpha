@@ -7,20 +7,23 @@ import { usePathname } from 'next/navigation';
 import NextLink from 'next/link';
 
 import { useRecompute } from '@/context/RecomputeContext';
+import { useLiveData } from '@/context/LiveDataContext';
 import { CircularProgress } from '@mui/material';
 import Image from 'next/image';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faChartLine, 
+import {
+  faChartLine,
   faChartBar,
-  faBriefcase, 
-  faBolt, 
-  faRightFromBracket, 
-  faCamera, 
+  faBriefcase,
+  faBolt,
+  faRightFromBracket,
+  faCamera,
   faGear,
   faBars,
   faXmark,
-  faSignal
+  faSignal,
+  faEye,
+  faEyeSlash
 } from '@fortawesome/free-solid-svg-icons';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -36,9 +39,12 @@ const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMob
   { text: 'Settings', path: '/settings', icon: faGear },
 ];
 
+const SENSITIVE_PATHS = new Set(['/portfolio', '/snapshots', '/trades', '/exits']);
+
 export default function Header() {
   const pathname = usePathname();
   const { isRecomputing } = useRecompute();
+  const { privacyMode, togglePrivacy } = useLiveData();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
   const [timings, setTimings] = useState<{ start_time: number, end_time: number }[]>([]);
@@ -197,7 +203,7 @@ export default function Header() {
                     }}
                  />
 
-                {menuItems.map((item, index) => {
+                {menuItems.filter(item => !privacyMode || !SENSITIVE_PATHS.has(item.path)).map((item, index) => {
                   const isActive = pathname === item.path;
                   return (
                     <NextLink
@@ -205,8 +211,8 @@ export default function Header() {
                       ref={(el) => { itemsRef.current[index] = el; }}
                       href={item.path}
                       className={`relative z-10 px-3 md:px-4 py-3.5 rounded-xl text-base font-medium transition-colors duration-300 flex items-center gap-1.5 ${
-                        isActive 
-                          ? 'text-blue-100 shadow-sm' 
+                        isActive
+                          ? 'text-blue-100 shadow-sm'
                           : 'text-gray-400 hover:text-gray-200'
                       }`}
                     >
@@ -216,9 +222,9 @@ export default function Header() {
                           <span className={`relative inline-flex rounded-full h-2 w-2 ${marketOpen ? 'bg-green-500' : 'bg-red-500'}`}></span>
                         </div>
                       ) : (
-                        <FontAwesomeIcon 
-                          icon={item.icon} 
-                          className={`w-4 h-4 transition-transform duration-300 ${isActive ? 'scale-110 text-blue-400' : 'group-hover:text-white'}`} 
+                        <FontAwesomeIcon
+                          icon={item.icon}
+                          className={`w-4 h-4 transition-transform duration-300 ${isActive ? 'scale-110 text-blue-400' : 'group-hover:text-white'}`}
                         />
                       )}
                       <span className={`${item.path === '/settings' ? 'hidden' : 'block'}`}>
@@ -228,6 +234,19 @@ export default function Header() {
                   );
                 })}
             </div>
+
+            {/* Privacy Mode Toggle */}
+            <button
+              onClick={togglePrivacy}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+                privacyMode
+                  ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                  : 'bg-white/5 hover:bg-white/10 text-gray-500 border border-transparent'
+              }`}
+              title={privacyMode ? 'Show Values' : 'Hide Values'}
+            >
+              <FontAwesomeIcon icon={privacyMode ? faEyeSlash : faEye} className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -279,7 +298,7 @@ export default function Header() {
                     </div>
                 )}
 
-                {menuItems.filter(item => !item.hiddenOnMobile).map((item) => {
+                {menuItems.filter(item => !item.hiddenOnMobile && (!privacyMode || !SENSITIVE_PATHS.has(item.path))).map((item) => {
                     const isActive = pathname === item.path;
                     return (
                         <NextLink
@@ -309,11 +328,22 @@ export default function Header() {
                 })}
             </div>
             
-            {/* Drawer Footer (Optional - e.g. User Profile or Logout) */}
-            <div className="p-4 border-t border-white/5 bg-black/20">
-                <div className="text-xs text-center text-gray-600">
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-white/5 bg-black/20 flex items-center justify-between">
+                <div className="text-xs text-gray-600">
                     &copy; 2026 Alpha Portfolio
                 </div>
+                <button
+                  onClick={togglePrivacy}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+                    privacyMode
+                      ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                      : 'bg-white/5 text-gray-500 border border-transparent'
+                  }`}
+                  title={privacyMode ? 'Show Values' : 'Hide Values'}
+                >
+                  <FontAwesomeIcon icon={privacyMode ? faEyeSlash : faEye} className="w-4 h-4" />
+                </button>
             </div>
         </div>
         </div>

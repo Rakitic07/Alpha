@@ -36,7 +36,8 @@ export default function LivePage() {
     showDynamicTitle,
     setShowDynamicTitle,
     connectionError,
-    pnlHistory
+    pnlHistory,
+    privacyMode,
   } = useLiveData();
 
   useEffect(() => { initialize(); }, [initialize]);
@@ -44,11 +45,6 @@ export default function LivePage() {
   // Use Upstox API-driven market status from server instead of hardcoded hours
   const marketOpen = data?.marketStatus === 'OPEN';
   const [downloading, setDownloading] = useState(false);
-  const [privacyMode, setPrivacyMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try { return JSON.parse(localStorage.getItem('privacyMode') ?? 'false'); }
-    catch { return false; }
-  });
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -56,14 +52,6 @@ export default function LivePage() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  const togglePrivacy = useCallback(() => {
-    setPrivacyMode((prev: boolean) => {
-      const newVal = !prev;
-      localStorage.setItem('privacyMode', JSON.stringify(newVal));
-      return newVal;
-    });
   }, []);
 
   const handleDownloadSnapshot = useCallback(async () => {
@@ -165,12 +153,10 @@ export default function LivePage() {
             lastRefreshed={lastRefreshed}
             loading={loading}
             downloading={downloading}
-            privacyMode={privacyMode}
             showDynamicTitle={showDynamicTitle}
             isMobile={isMobile}
             onRefresh={fetchData}
             onDownloadSnapshot={handleDownloadSnapshot}
-            onTogglePrivacy={togglePrivacy}
             onToggleDynamicTitle={handleToggleDynamicTitle}
             itemVariants={itemVariants}
             marketStatus={data.marketStatus}

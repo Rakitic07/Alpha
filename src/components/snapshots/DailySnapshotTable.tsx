@@ -96,7 +96,7 @@ VirtuosoTableBody.displayName = 'VirtuosoTableBody';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VirtuosoTableRow = ({ item, ...props }: { item: DailyPortfolioSnapshot } & React.ComponentProps<typeof TableRow>) => <StyledTableRow {...props} />;
 
-export default function DailySnapshotTable({ snapshots }: { snapshots: DailyPortfolioSnapshot[], lockDate: string | null }) {
+export default function DailySnapshotTable({ snapshots, privacyMode = false }: { snapshots: DailyPortfolioSnapshot[], lockDate: string | null, privacyMode?: boolean }) {
     const [sortKey, setSortKey] = useState<SortKey>('date');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     
@@ -248,16 +248,20 @@ export default function DailySnapshotTable({ snapshots }: { snapshots: DailyPort
                                 </span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <span 
-                                    className="text-white font-medium cursor-pointer hover:text-blue-400 hover:underline transition-colors"
-                                    onClick={() => handleViewHoldings(new Date(row.date))}
-                                    title="View Holdings"
-                                >
-                                    {formatCurrency(row.totalEquity)}
-                                </span>
+                                {privacyMode ? (
+                                    <span className="text-gray-500">****</span>
+                                ) : (
+                                    <span
+                                        className="text-white font-medium cursor-pointer hover:text-blue-400 hover:underline transition-colors"
+                                        onClick={() => handleViewHoldings(new Date(row.date))}
+                                        title="View Holdings"
+                                    >
+                                        {formatCurrency(row.totalEquity)}
+                                    </span>
+                                )}
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <span className="text-gray-400">{formatCurrency(row.investedCapital)}</span>
+                                <span className="text-gray-400">{privacyMode ? '****' : formatCurrency(row.investedCapital)}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
                                 {(() => {
@@ -271,10 +275,11 @@ export default function DailySnapshotTable({ snapshots }: { snapshots: DailyPort
                                     // Virtuoso renders based on `sortedSnapshots`.
                                     
                                     // Safest way: Check against the oldest date in the entire set
-                                    const isFirstDay = row.date === sortedSnapshots[sortedSnapshots.length - 1].date || 
+                                    const isFirstDay = row.date === sortedSnapshots[sortedSnapshots.length - 1].date ||
                                                        (sortDirection === 'asc' && index === 0) ||
                                                        (sortDirection === 'desc' && index === sortedSnapshots.length - 1);
 
+                                    if (privacyMode) return <span className="text-gray-500">****</span>;
                                     if (isFirstDay) return <span className="text-gray-500 text-xs">-</span>;
 
                                     const cf = row.cashflow || 0;
@@ -288,43 +293,44 @@ export default function DailySnapshotTable({ snapshots }: { snapshots: DailyPort
                                 })()}
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <span className="text-blue-300 font-mono">{row.portfolioNAV != null ? row.portfolioNAV.toFixed(2) : '-'}</span>
+                                <span className="text-blue-300 font-mono">{privacyMode ? '****' : (row.portfolioNAV != null ? row.portfolioNAV.toFixed(2) : '-')}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <ReturnChip value={row.dailyReturn} period="daily" />
+                                {privacyMode ? <span className="text-gray-500">****</span> : <ReturnChip value={row.dailyReturn} period="daily" />}
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                    <span className={`text-sm ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {row.dailyPnL != null ? (isProfit ? '+' : '') + formatCurrency(row.dailyPnL, 0, 0) : '-'}
-                                    </span>
+                                <span className={`text-sm ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {privacyMode ? '****' : (row.dailyPnL != null ? (isProfit ? '+' : '') + formatCurrency(row.dailyPnL, 0, 0) : '-')}
+                                </span>
                             </StyledTableCell>
-                                <StyledTableCell align="right">
-                                    {(() => {
-                                        const dd = row.drawdown || 0;
-                                        // Effectively zero (allowing for tiny float errors)
-                                        const isATH = dd >= -0.0001; 
-                                        
-                                        let colorClass = 'text-gray-400';
-                                        if (isATH) colorClass = 'text-orange-500 font-bold flex items-center justify-end gap-1';
-                                        else if (dd < -0.20) colorClass = 'text-red-500 font-medium';
-                                        else if (dd < -0.10) colorClass = 'text-orange-400';
-                                        else if (dd < -0.05) colorClass = 'text-amber-400';
+                            <StyledTableCell align="right">
+                                {privacyMode ? (
+                                    <span className="text-gray-500">****</span>
+                                ) : (() => {
+                                    const dd = row.drawdown || 0;
+                                    const isATH = dd >= -0.0001;
 
-                                        if (isATH) {
-                                            return (
-                                                <span className={colorClass}>
-                                                    ATH <RocketLaunchIcon sx={{ fontSize: 16 }} />
-                                                </span>
-                                            );
-                                        }
+                                    let colorClass = 'text-gray-400';
+                                    if (isATH) colorClass = 'text-orange-500 font-bold flex items-center justify-end gap-1';
+                                    else if (dd < -0.20) colorClass = 'text-red-500 font-medium';
+                                    else if (dd < -0.10) colorClass = 'text-orange-400';
+                                    else if (dd < -0.05) colorClass = 'text-amber-400';
 
+                                    if (isATH) {
                                         return (
                                             <span className={colorClass}>
-                                                {(dd * 100).toFixed(2)}%
+                                                ATH <RocketLaunchIcon sx={{ fontSize: 16 }} />
                                             </span>
                                         );
-                                    })()}
-                                </StyledTableCell>
+                                    }
+
+                                    return (
+                                        <span className={colorClass}>
+                                            {(dd * 100).toFixed(2)}%
+                                        </span>
+                                    );
+                                })()}
+                            </StyledTableCell>
                         </>
                     );
                 }}

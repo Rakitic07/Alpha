@@ -32,6 +32,9 @@ interface LiveDataContextType {
   isStreaming: boolean;
   streamingEnabled: boolean;
   setStreamingEnabled: (val: boolean) => void;
+  // Privacy mode
+  privacyMode: boolean;
+  togglePrivacy: () => void;
   // Error handling
   connectionError: ConnectionError | null;
   clearConnectionError: () => void;
@@ -59,6 +62,11 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return true;
     try { return JSON.parse(localStorage.getItem('streamingEnabled') ?? 'true'); }
     catch { return true; }
+  });
+  const [privacyMode, setPrivacyModeState] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return JSON.parse(localStorage.getItem('privacyMode') ?? 'false'); }
+    catch { return false; }
   });
   const [connectionError, setConnectionError] = useState<ConnectionError | null>(null);
   const [pnlHistory, setPnlHistory] = useState<PnLHistoryPoint[]>([]);
@@ -106,6 +114,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const setStreamingEnabled = useCallback((val: boolean) => {
     setStreamingEnabledState(val);
     localStorage.setItem('streamingEnabled', JSON.stringify(val));
+  }, []);
+
+  const togglePrivacy = useCallback(() => {
+    setPrivacyModeState(prev => {
+      const next = !prev;
+      localStorage.setItem('privacyMode', JSON.stringify(next));
+      return next;
+    });
   }, []);
 
   // Monitor data changes to save P/L history periodically (throttled to 1 minute)
@@ -585,6 +601,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       isStreaming,
       streamingEnabled,
       setStreamingEnabled,
+      privacyMode,
+      togglePrivacy,
       connectionError,
       clearConnectionError,
       pnlHistory,

@@ -2,6 +2,7 @@
 
 import { useDashboardData } from '@/hooks/useQueries';
 import { useMemo } from 'react';
+import { useLiveData } from '@/context/LiveDataContext';
 import { 
   faRocket,
   faArrowTrendDown,
@@ -49,6 +50,7 @@ const ExitsScatterChart = dynamic(() => import('@/components/exits/ExitsScatterC
 
 export default function DashboardPage() {
   const { data, isLoading, isFetching } = useDashboardData();
+  const { privacyMode } = useLiveData();
 
   if (isLoading && !data) {
     return null; // Next.js loading.tsx handles the skeleton
@@ -111,6 +113,7 @@ export default function DashboardPage() {
            currentNAV={dashboardStats.currentNAV}
            currentDD={dashboardStats.currentDD}
            dashboardHistory={dashboardHistory}
+           privacyMode={privacyMode}
         />
       </div>
 
@@ -118,16 +121,17 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 flex-none h-auto md:h-[180px]">
         {/* P/L Card */}
         <div className="col-span-1 h-full">
-             <PnLCard 
-                totalPnL={totalPnL} 
-                realizedPnL={totalRealizedPnL} 
-                unrealizedPnL={totalUnrealizedPnL} 
+             <PnLCard
+                totalPnL={totalPnL}
+                realizedPnL={totalRealizedPnL}
+                unrealizedPnL={totalUnrealizedPnL}
+                privacyMode={privacyMode}
              />
         </div>
 
         {/* XIRR Card */}
         <div className="col-span-1 h-full">
-            <XirrCard xirrValue={xirrValue} />
+            <XirrCard xirrValue={xirrValue} privacyMode={privacyMode} />
         </div>
 
         {/* Avg Holding */}
@@ -155,11 +159,12 @@ export default function DashboardPage() {
 
           {/* Returns - 3 Cols */}
           <div className="col-span-1 md:col-span-3 h-full">
-              <ReturnsCard 
+              <ReturnsCard
                   weekReturn={dashboardStats.weekReturn}
                   monthReturn={dashboardStats.monthReturn}
                   yearReturn={dashboardStats.yearReturn}
                   oneYearReturn={dashboardStats.oneYearReturn}
+                  privacyMode={privacyMode}
               />
           </div>
 
@@ -184,7 +189,7 @@ export default function DashboardPage() {
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sector Allocation</span>
                     </div>
                     <div className="flex-1 min-h-[400px]">
-                        <SectorAllocationWrapper allocations={sectorAllocations} privacyMode={false} />
+                        <SectorAllocationWrapper allocations={sectorAllocations} privacyMode={privacyMode} />
                     </div>
               </div>
           </div>

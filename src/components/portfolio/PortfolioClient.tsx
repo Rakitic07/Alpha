@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useLiveData } from '@/context/LiveDataContext';
 import HoldingsTable from './HoldingsTable';
 import HistoricalHoldingsTable from './HistoricalHoldingsTable';
 import RebalanceModal from './RebalanceModal';
@@ -24,6 +25,7 @@ export default function PortfolioClient({
     historicalHoldings,
     totalEquity 
 }: PortfolioClientProps) {
+    const { privacyMode } = useLiveData();
     const [view, setView] = useState<'current' | 'historical'>('current');
     const [rebalanceOpen, setRebalanceOpen] = useState(false);
     const searchParams = useSearchParams();
@@ -153,7 +155,7 @@ export default function PortfolioClient({
 
             <section className="animate-fade-in-up">
                 {view === 'current' ? (
-                     <HoldingsTable holdings={currentHoldings} />
+                     <HoldingsTable holdings={currentHoldings} privacyMode={privacyMode} />
                 ) : (
                     <HistoricalHoldingsTable holdings={historicalHoldings} />
                 )}

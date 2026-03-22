@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCamera, faRotateRight, faEye, faEyeSlash, faTag, faCalendar } from '@fortawesome/free-solid-svg-icons';
+import { faCamera, faRotateRight, faTag, faCalendar } from '@fortawesome/free-solid-svg-icons';
 
 import type { Variants } from 'framer-motion';
 
@@ -12,12 +12,10 @@ interface LiveHeaderProps {
     lastRefreshed: Date | null;
     loading: boolean;
     downloading: boolean;
-    privacyMode: boolean;
     showDynamicTitle: boolean;
     isMobile: boolean;
     onRefresh: () => void;
     onDownloadSnapshot: () => void;
-    onTogglePrivacy: () => void;
     onToggleDynamicTitle: () => void;
     itemVariants: Variants;
     marketStatus?: 'OPEN' | 'CLOSED' | 'UNKNOWN';
@@ -29,12 +27,10 @@ const LiveHeader = memo(function LiveHeader({
     lastRefreshed,
     loading,
     downloading,
-    privacyMode,
     showDynamicTitle,
     isMobile,
     onRefresh,
     onDownloadSnapshot,
-    onTogglePrivacy,
     onToggleDynamicTitle,
     itemVariants,
     marketStatus,
@@ -114,31 +110,17 @@ const LiveHeader = memo(function LiveHeader({
                     {/* Action Buttons Group */}
                     <div className="flex items-center gap-1.5">
                         {!isMobile && (
-                            <>
-                                <button
-                                    onClick={onTogglePrivacy}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-                                        privacyMode 
-                                            ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' 
-                                            : 'bg-white/5 hover:bg-white/10 text-gray-500 border border-transparent'
-                                    }`}
-                                    title={privacyMode ? "Show Values" : "Hide Values"}
-                                >
-                                    <FontAwesomeIcon icon={privacyMode ? faEyeSlash : faEye} className="w-2 h-2" />
-                                </button>
-
-                                <button
-                                    onClick={onToggleDynamicTitle}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-                                        showDynamicTitle 
-                                            ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' 
-                                            : 'bg-white/5 hover:bg-white/10 text-gray-500 border border-transparent'
-                                    }`}
-                                    title={showDynamicTitle ? "Disable Dynamic Title" : "Enable Dynamic Title"}
-                                >
-                                    <FontAwesomeIcon icon={faTag} className="w-2 h-2" />
-                                </button>
-                            </>
+                            <button
+                                onClick={onToggleDynamicTitle}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+                                    showDynamicTitle
+                                        ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                        : 'bg-white/5 hover:bg-white/10 text-gray-500 border border-transparent'
+                                }`}
+                                title={showDynamicTitle ? "Disable Dynamic Title" : "Enable Dynamic Title"}
+                            >
+                                <FontAwesomeIcon icon={faTag} className="w-2 h-2" />
+                            </button>
                         )}
 
                         <button

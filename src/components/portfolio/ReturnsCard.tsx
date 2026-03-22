@@ -9,13 +9,15 @@ interface ReturnsCardProps {
     monthReturn: number;
     yearReturn: number;
     oneYearReturn: number;
+    privacyMode?: boolean;
 }
 
 export default function ReturnsCard({
     weekReturn,
     monthReturn,
     yearReturn,
-    oneYearReturn
+    oneYearReturn,
+    privacyMode = false
 }: ReturnsCardProps) {
     const getReturnColor = (val: number) => val >= 0 ? 'text-emerald-400' : 'text-red-400';
 
@@ -32,12 +34,7 @@ export default function ReturnsCard({
                 {/* Week */}
                 <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-sm border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all duration-300 hover:-translate-y-1">
                     <div className={`text-xl font-bold ${getReturnColor(weekReturn)}`}>
-                        <AnimatedNumber 
-                            value={Math.abs(weekReturn)} 
-                            prefix={Math.abs(weekReturn) < 0.01 ? '' : (weekReturn >= 0 ? '+' : '-')} 
-                            suffix="%" 
-                            decimals={Math.abs(weekReturn) < 0.01 ? 0 : 2}
-                        />
+                        {privacyMode ? '****' : <AnimatedNumber value={Math.abs(weekReturn)} prefix={Math.abs(weekReturn) < 0.01 ? '' : (weekReturn >= 0 ? '+' : '-')} suffix="%" decimals={Math.abs(weekReturn) < 0.01 ? 0 : 2} />}
                     </div>
                     <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">Week</div>
                 </div>
@@ -45,12 +42,7 @@ export default function ReturnsCard({
                 {/* Month */}
                 <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-sm border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all duration-300 hover:-translate-y-1">
                     <div className={`text-xl font-bold ${getReturnColor(monthReturn)}`}>
-                        <AnimatedNumber 
-                            value={Math.abs(monthReturn)} 
-                            prefix={Math.abs(monthReturn) < 0.01 ? '' : (monthReturn >= 0 ? '+' : '-')} 
-                            suffix="%" 
-                            decimals={Math.abs(monthReturn) < 0.01 ? 0 : 2}
-                        />
+                        {privacyMode ? '****' : <AnimatedNumber value={Math.abs(monthReturn)} prefix={Math.abs(monthReturn) < 0.01 ? '' : (monthReturn >= 0 ? '+' : '-')} suffix="%" decimals={Math.abs(monthReturn) < 0.01 ? 0 : 2} />}
                     </div>
                     <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">Month</div>
                 </div>
@@ -58,12 +50,7 @@ export default function ReturnsCard({
                 {/* YTD */}
                 <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-sm border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all duration-300 hover:-translate-y-1">
                     <div className={`text-xl font-bold ${getReturnColor(yearReturn)}`}>
-                        <AnimatedNumber 
-                            value={Math.abs(yearReturn)} 
-                            prefix={Math.abs(yearReturn) < 0.01 ? '' : (yearReturn >= 0 ? '+' : '-')} 
-                            suffix="%" 
-                            decimals={Math.abs(yearReturn) < 0.01 ? 0 : 2}
-                        />
+                        {privacyMode ? '****' : <AnimatedNumber value={Math.abs(yearReturn)} prefix={Math.abs(yearReturn) < 0.01 ? '' : (yearReturn >= 0 ? '+' : '-')} suffix="%" decimals={Math.abs(yearReturn) < 0.01 ? 0 : 2} />}
                     </div>
                     <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">YTD</div>
                 </div>
@@ -71,12 +58,7 @@ export default function ReturnsCard({
                 {/* 1 Year */}
                 <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-sm border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all duration-300 hover:-translate-y-1">
                     <div className={`text-xl font-bold ${getReturnColor(oneYearReturn)}`}>
-                        <AnimatedNumber 
-                            value={Math.abs(oneYearReturn)} 
-                            prefix={Math.abs(oneYearReturn) < 0.01 ? '' : (oneYearReturn >= 0 ? '+' : '-')} 
-                            suffix="%" 
-                            decimals={Math.abs(oneYearReturn) < 0.01 ? 0 : 2}
-                        />
+                        {privacyMode ? '****' : <AnimatedNumber value={Math.abs(oneYearReturn)} prefix={Math.abs(oneYearReturn) < 0.01 ? '' : (oneYearReturn >= 0 ? '+' : '-')} suffix="%" decimals={Math.abs(oneYearReturn) < 0.01 ? 0 : 2} />}
                     </div>
                     <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">1 Year</div>
                 </div>
