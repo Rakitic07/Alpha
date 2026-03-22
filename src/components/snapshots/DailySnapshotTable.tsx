@@ -96,7 +96,7 @@ VirtuosoTableBody.displayName = 'VirtuosoTableBody';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VirtuosoTableRow = ({ item, ...props }: { item: DailyPortfolioSnapshot } & React.ComponentProps<typeof TableRow>) => <StyledTableRow {...props} />;
 
-export default function DailySnapshotTable({ snapshots, privacyMode = false }: { snapshots: DailyPortfolioSnapshot[], lockDate: string | null, privacyMode?: boolean }) {
+export default function DailySnapshotTable({ snapshots, lockDate }: { snapshots: DailyPortfolioSnapshot[], lockDate: string | null }) {
     const [sortKey, setSortKey] = useState<SortKey>('date');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     
@@ -248,38 +248,23 @@ export default function DailySnapshotTable({ snapshots, privacyMode = false }: {
                                 </span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                {privacyMode ? (
-                                    <span className="text-gray-500">****</span>
-                                ) : (
-                                    <span
-                                        className="text-white font-medium cursor-pointer hover:text-blue-400 hover:underline transition-colors"
-                                        onClick={() => handleViewHoldings(new Date(row.date))}
-                                        title="View Holdings"
-                                    >
-                                        {formatCurrency(row.totalEquity)}
-                                    </span>
-                                )}
+                                <span
+                                    className="text-white font-medium cursor-pointer hover:text-blue-400 hover:underline transition-colors"
+                                    onClick={() => handleViewHoldings(new Date(row.date))}
+                                    title="View Holdings"
+                                >
+                                    {formatCurrency(row.totalEquity)}
+                                </span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <span className="text-gray-400">{privacyMode ? '****' : formatCurrency(row.investedCapital)}</span>
+                                <span className="text-gray-400">{formatCurrency(row.investedCapital)}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
                                 {(() => {
-                                    // Hide cashflow for the first day (last in list since sorted desc by default)
-                                    // Actually, we sort by date. If sorted desc (newest first), last item is 1st day.
-                                    // If sorted asc (oldest first), first item is 1st day.
-                                    
-                                    // Robust check: Is this the earliest date in the full list?
-                                    // Since we receive `snapshots` prop which might be filtered/sorted...
-                                    // Let's just key off index if we are sure about sort order.
-                                    // Virtuoso renders based on `sortedSnapshots`.
-                                    
-                                    // Safest way: Check against the oldest date in the entire set
                                     const isFirstDay = row.date === sortedSnapshots[sortedSnapshots.length - 1].date ||
                                                        (sortDirection === 'asc' && index === 0) ||
                                                        (sortDirection === 'desc' && index === sortedSnapshots.length - 1);
 
-                                    if (privacyMode) return <span className="text-gray-500">****</span>;
                                     if (isFirstDay) return <span className="text-gray-500 text-xs">-</span>;
 
                                     const cf = row.cashflow || 0;
@@ -293,20 +278,18 @@ export default function DailySnapshotTable({ snapshots, privacyMode = false }: {
                                 })()}
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <span className="text-blue-300 font-mono">{privacyMode ? '****' : (row.portfolioNAV != null ? row.portfolioNAV.toFixed(2) : '-')}</span>
+                                <span className="text-blue-300 font-mono">{row.portfolioNAV != null ? row.portfolioNAV.toFixed(2) : '-'}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
                                 <ReturnChip value={row.dailyReturn} period="daily" />
                             </StyledTableCell>
                             <StyledTableCell align="right">
                                 <span className={`text-sm ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {privacyMode ? '****' : (row.dailyPnL != null ? (isProfit ? '+' : '') + formatCurrency(row.dailyPnL, 0, 0) : '-')}
+                                    {row.dailyPnL != null ? (isProfit ? '+' : '') + formatCurrency(row.dailyPnL, 0, 0) : '-'}
                                 </span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                {privacyMode ? (
-                                    <span className="text-gray-500">****</span>
-                                ) : (() => {
+                                {(() => {
                                     const dd = row.drawdown || 0;
                                     const isATH = dd >= -0.0001;
 

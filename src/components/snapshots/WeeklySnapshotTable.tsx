@@ -89,7 +89,7 @@ const formatWinLossAvg = (avgWin: number | null, avgLoss: number | null) => {
     );
 };
 
-export default function WeeklySnapshotTable({ snapshots, privacyMode = false }: { snapshots: WeeklyPortfolioSnapshot[], privacyMode?: boolean }) {
+export default function WeeklySnapshotTable({ snapshots }: { snapshots: WeeklyPortfolioSnapshot[] }) {
     if (!snapshots || snapshots.length === 0) {
         return (
             <Paper className="glass-card" sx={{ p: 4, textAlign: 'center', backgroundColor: 'transparent' }}>
@@ -138,10 +138,10 @@ export default function WeeklySnapshotTable({ snapshots, privacyMode = false }: 
                                     </span>
                                 </StyledTableCell>
                                 <StyledTableCell align="right">
-                                    <span className="text-white font-medium">{privacyMode ? '****' : formatCurrency(row.totalEquity)}</span>
+                                    <span className="text-white font-medium">{formatCurrency(row.totalEquity)}</span>
                                 </StyledTableCell>
                                 <StyledTableCell align="right">
-                                    <span className="text-blue-300 font-mono">{privacyMode ? '****' : (row.nav != null ? row.nav.toFixed(2) : '-')}</span>
+                                    <span className="text-blue-300 font-mono">{row.nav != null ? row.nav.toFixed(2) : '-'}</span>
                                 </StyledTableCell>
                                 <StyledTableCell align="right">
                                     <ReturnChip value={row.weeklyReturn} period="weekly" />

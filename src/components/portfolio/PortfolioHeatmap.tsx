@@ -22,10 +22,32 @@ interface PortfolioHeatmapProps {
 export default function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
     if (!data.allHoldings || data.allHoldings.length === 0) return null;
 
+  const colorScale = [
+    { color: '#b91c1c', label: '<-10%' },
+    { color: '#ef4444', label: '-10' },
+    { color: '#f87171', label: '-5' },
+    { color: '#fca5a5', label: '-3' },
+    { color: '#fee2e2', label: '-1.5' },
+    { color: '#64748b', label: '0' },
+    { color: '#d1fae5', label: '+1.5' },
+    { color: '#6ee7b7', label: '+3' },
+    { color: '#34d399', label: '+5' },
+    { color: '#10b981', label: '+10' },
+    { color: '#059669', label: '>+10%' },
+  ];
+
   return (
-    <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 h-[400px] flex flex-col">
-      <div className="px-5 pt-5 pb-0 flex items-center justify-between shrink-0">
+    <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 h-[500px] flex flex-col">
+      <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Portfolio Heatmap</h3>
+        <div className="flex items-center gap-0.5">
+          {colorScale.map(({ color, label }) => (
+            <div key={label} className="flex flex-col items-center gap-0.5">
+              <div style={{ backgroundColor: color, width: 14, height: 10, borderRadius: 2 }} />
+              <span style={{ fontSize: 7, color: '#6b7280', lineHeight: 1 }}>{label}</span>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>
         <ResponsiveTreeMap
@@ -71,31 +93,33 @@ export default function PortfolioHeatmap({ data, isMobile, privacyMode }: Portfo
             let textColor = '#ffffff';
             if (percent > 0 && percent < 5) textColor = '#0f172a'; // Dark text for < 5% gain
             if (percent < 0 && percent > -5) textColor = '#0f172a'; // Dark text for < 5% loss
-            const showSymbol = node.width > 35 && node.height > 30;
-            const showPercent = node.width > 45 && node.height > 45;
+            const showSymbol = node.width > 28 && node.height > 22;
+            const showPercent = node.width > 40 && node.height > 38;
+            const maxFs = isMobile ? 8 : 11;
+            const fontSize = Math.min(node.width / 5, node.height / (showPercent ? 4.5 : 2.8), maxFs);
             return (
-              <motion.g 
+              <motion.g
                 key={node.id}
                 initial={{ opacity: 0, scale: 0.9, x: node.x, y: node.y }}
                 animate={{ opacity: 1, scale: 1, x: node.x, y: node.y }}
-                transition={{ 
-                  type: "spring", 
-                  damping: 20, 
-                  stiffness: 300, 
-                  delay: (node.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 20) / 100 
+                transition={{
+                  type: "spring",
+                  damping: 20,
+                  stiffness: 300,
+                  delay: (node.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 20) / 100
                 }}
-                style={{ cursor: 'pointer' }} 
-                onMouseEnter={node.onMouseEnter} 
-                onMouseMove={node.onMouseMove} 
-                onMouseLeave={node.onMouseLeave} 
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={node.onMouseEnter}
+                onMouseMove={node.onMouseMove}
+                onMouseLeave={node.onMouseLeave}
                 onClick={node.onClick}
               >
-                <rect width={node.width} height={node.height} fill={node.color} stroke="#0f172a" strokeWidth={3} rx={4} ry={4} />
+                <rect width={node.width} height={node.height} fill={node.color} stroke="#0f172a" strokeWidth={2} rx={3} ry={3} />
                 {showSymbol && (
                   <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle" style={{ pointerEvents: 'none' }}>
-                    <tspan x={node.width / 2} dy={showPercent ? "-0.7em" : "0.3em"} fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="700" fill={textColor} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{node.id}</tspan>
+                    <tspan x={node.width / 2} dy={showPercent ? "-0.6em" : "0.3em"} fontSize={fontSize} fontWeight="700" fill={textColor} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{node.id.length > 8 ? node.id.slice(0, 7) + '…' : node.id}</tspan>
                     {showPercent && typeof percent === 'number' && (
-                      <tspan x={node.width / 2} dy="1.5em" fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="600" fill={textColor} fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{percent > 0 ? '+' : ''}{percent.toFixed(1)}%</tspan>
+                      <tspan x={node.width / 2} dy="1.4em" fontSize={fontSize} fontWeight="600" fill={textColor} fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{percent > 0 ? '+' : ''}{percent.toFixed(1)}%</tspan>
                     )}
                   </text>
                 )}

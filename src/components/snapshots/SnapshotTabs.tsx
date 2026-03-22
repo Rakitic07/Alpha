@@ -6,8 +6,6 @@ import DailySnapshotTable from './DailySnapshotTable';
 import WeeklySnapshotTable from './WeeklySnapshotTable';
 import MonthlySnapshotTable from './MonthlySnapshotTable';
 import { DailyPortfolioSnapshot, WeeklyPortfolioSnapshot, MonthlyPortfolioSnapshot } from '@prisma/client';
-import { useLiveData } from '@/context/LiveDataContext';
-
 interface SnapshotTabsProps {
     dailySnapshots: DailyPortfolioSnapshot[];
     weeklySnapshots: WeeklyPortfolioSnapshot[];
@@ -21,8 +19,6 @@ export default function SnapshotTabs({dailySnapshots, weeklySnapshots, monthlySn
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
-    const { privacyMode } = useLiveData();
-
     const currentView = (searchParams.get('view') as ViewType) || 'daily';
 
     const handleViewChange = (event: React.MouseEvent<HTMLElement>, newView: ViewType | null) => {
@@ -74,9 +70,9 @@ export default function SnapshotTabs({dailySnapshots, weeklySnapshots, monthlySn
                 </ToggleButtonGroup>
             </div>
             
-            {currentView === 'daily' && <DailySnapshotTable snapshots={dailySnapshots} lockDate={lockDate} privacyMode={privacyMode} />}
-            {currentView === 'weekly' && <WeeklySnapshotTable snapshots={weeklySnapshots} privacyMode={privacyMode} />}
-            {currentView === 'monthly' && <MonthlySnapshotTable snapshots={monthlySnapshots} privacyMode={privacyMode} />}
+            {currentView === 'daily' && <DailySnapshotTable snapshots={dailySnapshots} lockDate={lockDate} />}
+            {currentView === 'weekly' && <WeeklySnapshotTable snapshots={weeklySnapshots} />}
+            {currentView === 'monthly' && <MonthlySnapshotTable snapshots={monthlySnapshots} />}
         </Box>
     );
 }
