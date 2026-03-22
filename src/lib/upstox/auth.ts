@@ -1,9 +1,9 @@
 /**
  * Upstox Authentication Service
- * 
- * Handles token management with in-memory caching.
- * Tokens are stored in the database and cached for 30 seconds to reduce DB queries.
- * 
+ *
+ * Uses the Analytics Token — a long-lived (1-year) read-only token set via env var.
+ * Falls back to DB-stored OAuth tokens if present (legacy support).
+ *
  * NOTE: External consumers should import token functions from '@/lib/upstox-client'
  * which re-exports everything from this file. This module is the internal implementation.
  */
@@ -12,7 +12,18 @@ import { prisma } from '../db';
 import { TokenStatus, TokenExpiredError, NoTokenError } from './types';
 
 // ============================================================================
-// Token Cache
+// Analytics Token (Long-lived, env var based)
+// ============================================================================
+
+/**
+ * Check if Analytics Token is configured
+ */
+export function hasAnalyticsToken(): boolean {
+  return !!process.env.UPSTOX_ANALYTICS_TOKEN;
+}
+
+// ============================================================================
+// Legacy OAuth Token Cache (Short-lived, DB based)
 // ============================================================================
 
 interface TokenCache {
@@ -33,13 +44,16 @@ export function clearTokenCache(): void {
 }
 
 /**
- * Get the current valid access token from the database
- * Uses in-memory cache to reduce database queries
+ * Get the current valid access token
+ * Prefers Analytics Token (env var) over legacy DB token
  */
 export async function getStoredToken(): Promise<string | null> {
+  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+    return process.env.UPSTOX_ANALYTICS_TOKEN;
+  }
+
   const now = Date.now();
 
-  // Check cache first - but with a short TTL
   if (
     tokenCache &&
     tokenCache.expiresAt > new Date() &&
@@ -57,12 +71,10 @@ export async function getStoredToken(): Promise<string | null> {
     });
 
     if (token) {
-      // Check if this is a newer token than what we have cached
       if (tokenCache && token.id !== tokenCache.tokenId) {
         console.log(`[Upstox Auth] New token detected (ID: ${token.id}), updating cache`);
       }
 
-      // Update cache
       tokenCache = {
         token: token.accessToken,
         tokenId: token.id,
@@ -72,7 +84,6 @@ export async function getStoredToken(): Promise<string | null> {
       return token.accessToken;
     }
 
-    // Clear cache if no valid token found
     tokenCache = null;
     return null;
   } catch (error) {
@@ -83,13 +94,15 @@ export async function getStoredToken(): Promise<string | null> {
 
 /**
  * Get access token - throws if not available
- * Includes helpful error messages for common issues
  */
 export async function getAccessToken(): Promise<string> {
+  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+    return process.env.UPSTOX_ANALYTICS_TOKEN;
+  }
+
   const token = await getStoredToken();
 
   if (!token) {
-    // Check if there's an expired token to provide better error message
     try {
       const expiredToken = await prisma.upstoxToken.findFirst({
         orderBy: { createdAt: 'desc' },
@@ -99,11 +112,9 @@ export async function getAccessToken(): Promise<string> {
         throw new TokenExpiredError(expiredToken.expiresAt);
       }
     } catch (dbError) {
-      // If it's already our custom error, rethrow
       if (dbError instanceof TokenExpiredError) {
         throw dbError;
       }
-      // Ignore other DB errors, fall through to generic message
     }
 
     throw new NoTokenError();
@@ -116,15 +127,29 @@ export async function getAccessToken(): Promise<string> {
  * Check if we have a valid token
  */
 export async function hasValidToken(): Promise<boolean> {
+  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+    return true;
+  }
   const token = await getStoredToken();
   return token !== null;
 }
 
 /**
  * Get token status for UI display
- * Includes warning when token is close to expiry
  */
 export async function getTokenStatus(): Promise<TokenStatus> {
+  // Analytics token — long-lived, no expiry concerns
+  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+    return {
+      hasToken: true,
+      isAnalyticsToken: true,
+      expiresAt: null,
+      hoursRemaining: null,
+      isExpiringSoon: false,
+      statusMessage: 'Analytics Token active (read-only, 1-year validity)',
+    };
+  }
+
   try {
     const token = await prisma.upstoxToken.findFirst({
       where: {
@@ -135,15 +160,16 @@ export async function getTokenStatus(): Promise<TokenStatus> {
 
     if (token) {
       const hoursRemaining = (token.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60);
-      const isExpiringSoon = hoursRemaining < 2; // Less than 2 hours
+      const isExpiringSoon = hoursRemaining < 2;
 
       let statusMessage = `Token valid for ${hoursRemaining.toFixed(1)} hours`;
       if (isExpiringSoon) {
-        statusMessage = `Token expiring soon (${hoursRemaining.toFixed(1)} hours remaining). Please refresh.`;
+        statusMessage = `Token expiring soon (${hoursRemaining.toFixed(1)} hours remaining).`;
       }
 
       return {
         hasToken: true,
+        isAnalyticsToken: false,
         expiresAt: token.expiresAt,
         hoursRemaining,
         isExpiringSoon,
@@ -151,35 +177,18 @@ export async function getTokenStatus(): Promise<TokenStatus> {
       };
     }
 
-    // Check for expired token
-    const expiredToken = await prisma.upstoxToken.findFirst({
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (expiredToken) {
-      const minutesAgo = (Date.now() - expiredToken.expiresAt.getTime()) / (1000 * 60);
-      const timeAgoStr = minutesAgo < 60 
-        ? `${Math.round(minutesAgo)} minutes ago`
-        : `${(minutesAgo / 60).toFixed(1)} hours ago`;
-      return {
-        hasToken: false,
-        expiresAt: expiredToken.expiresAt,
-        hoursRemaining: null,
-        isExpiringSoon: false,
-        statusMessage: `Token expired ${timeAgoStr}. Please login again.`,
-      };
-    }
-
     return {
       hasToken: false,
+      isAnalyticsToken: false,
       expiresAt: null,
       hoursRemaining: null,
       isExpiringSoon: false,
-      statusMessage: 'No token found. Please login at /api/upstox/login',
+      statusMessage: 'No token found. Set UPSTOX_ANALYTICS_TOKEN in .env.local',
     };
   } catch {
     return {
       hasToken: false,
+      isAnalyticsToken: false,
       expiresAt: null,
       hoursRemaining: null,
       isExpiringSoon: false,
@@ -192,19 +201,18 @@ export async function getTokenStatus(): Promise<TokenStatus> {
  * Validate Upstox configuration
  */
 export function validateConfig(): { valid: boolean; missing: string[] } {
-  const missing: string[] = [];
-  if (!process.env.UPSTOX_API_KEY) missing.push('UPSTOX_API_KEY');
-  if (!process.env.UPSTOX_API_SECRET) missing.push('UPSTOX_API_SECRET');
-  return { valid: missing.length === 0, missing };
+  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+    return { valid: true, missing: [] };
+  }
+  return { valid: false, missing: ['UPSTOX_ANALYTICS_TOKEN'] };
 }
 
 /**
  * Get the WebSocket authorization URL for direct client connection
- * This allows the frontend to connect directly to Upstox WebSocket
  */
 export async function getWebSocketAuthUrl(): Promise<string> {
   const accessToken = await getAccessToken();
-  
+
   const response = await fetch('https://api.upstox.com/v3/feed/market-data-feed/authorize', {
     cache: 'no-store',
     headers: {
@@ -219,10 +227,10 @@ export async function getWebSocketAuthUrl(): Promise<string> {
   }
 
   const json = await response.json();
-  
+
   if (json.status === 'success' && json.data?.authorized_redirect_uri) {
     return json.data.authorized_redirect_uri;
   }
-  
+
   throw new Error('Invalid response from WebSocket authorization endpoint');
 }

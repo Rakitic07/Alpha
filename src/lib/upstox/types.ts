@@ -91,6 +91,7 @@ export interface MarketTiming {
 
 export interface TokenStatus {
   hasToken: boolean;
+  isAnalyticsToken: boolean;
   expiresAt: Date | null;
   hoursRemaining: number | null;
   isExpiringSoon: boolean;
@@ -238,7 +239,7 @@ export class TokenExpiredError extends UpstoxError {
   constructor(expiredAt: Date) {
     const hoursAgo = (Date.now() - expiredAt.getTime()) / (1000 * 60 * 60);
     super(
-      `Upstox token expired ${hoursAgo.toFixed(1)} hours ago. Please login again at /api/upstox/login or approve the token request on your phone.`,
+      `Upstox token expired ${hoursAgo.toFixed(1)} hours ago. Set UPSTOX_ANALYTICS_TOKEN in .env.local.`,
       401,
       'TOKEN_EXPIRED'
     );
@@ -249,7 +250,7 @@ export class TokenExpiredError extends UpstoxError {
 export class NoTokenError extends UpstoxError {
   constructor() {
     super(
-      'No Upstox token found. Please login at /api/upstox/login or approve the token request on your phone.',
+      'No Upstox token found. Set UPSTOX_ANALYTICS_TOKEN in .env.local.',
       401,
       'NO_TOKEN'
     );

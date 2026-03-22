@@ -37,21 +37,17 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 
 ---
 
-### Step 1: Create an Upstox Developer App
+### Step 1: Get an Upstox Analytics Token
 
 1. Go to [developer.upstox.com](https://developer.upstox.com/) and sign in with your Upstox credentials
-2. Click **"New App"** and fill in:
-   - **App Name**: Any name (e.g., "Alpha Portfolio Tracker")
-   - **Redirect URL**: `http://localhost:3000/api/upstox/callback`  
-     *(You'll add your Vercel URL here later for production)*
-   - **Postback URL / Webhook**: `https://your-vercel-app.vercel.app/api/upstox/webhook`  
-     *(Add this after deploying to Vercel)*
-3. After creating the app, note down your:
-   - **API Key** (also called `client_id`)
-   - **API Secret** (also called `client_secret`)
+2. Navigate to the **Analytics** tab on your Developer Apps page
+3. Click **"Generate Token"** and confirm
+4. Copy the token — you'll add it to `.env.local` in Step 3
 
-> [!IMPORTANT]
-> The Upstox access token expires every 24 hours. The app has a daily cron job that sends a push notification to your phone — you approve it, and the token auto-refreshes. See [Daily Token Refresh](#daily-token-refresh) for setup.
+That's it! No OAuth app, no redirect URLs, no daily token refresh needed.
+
+> [!TIP]
+> The Analytics Token provides read-only access to all market data APIs (quotes, historical data, WebSocket streaming) with 1-year validity. Since this app only reads market data and doesn't place orders, the Analytics Token is all you need. See [Upstox docs](https://upstox.com/developer/api-documentation/analytics-token/) for details.
 
 ---
 
@@ -112,13 +108,8 @@ Edit `.env.local` with your values:
 # Database
 DATABASE_URL=libsql://alpha-portfolio-<your-username>.turso.io?authToken=eyJhb...your-token
 
-# Upstox API
-UPSTOX_API_KEY=your-api-key-uuid
-UPSTOX_API_SECRET=your-api-secret
-UPSTOX_REDIRECT_URI=http://localhost:3000/api/upstox/callback
-UPSTOX_MOBILE_NUMBER=your-mobile-number
-UPSTOX_TOTP_SECRET=your-totp-secret
-UPSTOX_PIN=your-pin
+# Upstox Analytics Token
+UPSTOX_ANALYTICS_TOKEN=your-analytics-token
 
 # Zerodha Kite Connect (Optional - for order sync)
 # ZERODHA_USER_ID=your-user-id
@@ -153,13 +144,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-#### First-Time Upstox Authentication
-
-1. Go to the **Settings** page (`/settings`)
-2. Click **"Browser Login"** — this opens the Upstox OAuth page
-3. Log in with your Upstox credentials and authorize the app
-4. You'll be redirected back with a success message
-5. The access token is now stored in your database (valid for ~24 hours)
+The app picks up the Analytics Token from `.env.local` automatically — no login needed.
 
 ---
 
@@ -205,25 +190,13 @@ git push -u origin main
 | Variable | Value | Notes |
 |----------|-------|-------|
 | `DATABASE_URL` | `libsql://...?authToken=eyJhb...` | Turso URL + Auth Token |
-| `UPSTOX_API_KEY` | Your API key | From Step 1 |
-| `UPSTOX_API_SECRET` | Your API secret | Mark as **Sensitive** |
-| `UPSTOX_REDIRECT_URI` | `https://your-app.vercel.app/api/upstox/callback` | ⚠️ Use your Vercel URL |
-| `UPSTOX_MOBILE_NUMBER` | Your mobile number | Mark as **Sensitive** |
-| `UPSTOX_TOTP_SECRET` | Upstox TOTP Secret | Mark as **Sensitive** |
-| `UPSTOX_PIN` | Upstox PIN | Mark as **Sensitive** |
+| `UPSTOX_ANALYTICS_TOKEN` | Your analytics token | From Developer Apps → Analytics tab. Mark as **Sensitive** |
 | `CRON_SECRET` | A random string | Required for cron endpoint auth |
 
 > [!TIP]
 > If you are using the optional **Zerodha Order Sync**, you should also add the `ZERODHA_*` variables listed in the [Environment Variables Reference](#zerodha-kite-integration) below.
 
 4. Click **Deploy**
-
-> [!WARNING]
-> After deploying, go back to [developer.upstox.com](https://developer.upstox.com/) and add your Vercel production URL to the **Redirect URL** field:
-> `https://your-app.vercel.app/api/upstox/callback`
-> 
-> Also add the **Webhook/Postback URL**:
-> `https://your-app.vercel.app/api/upstox/webhook`
 
 ### Step 3: Set Up Cron Jobs
 
@@ -234,7 +207,7 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
 1. Sign up at [cron-job.org](https://cron-job.org/) (free account)
 2. Click **"Create cronjob"**
 3. For each job below, fill in:
-   - **Title**: A descriptive name (e.g., "Alpha - Token Refresh Morning")
+   - **Title**: A descriptive name (e.g., "Alpha - Daily Snapshot")
    - **URL**: `https://your-app.vercel.app` + the endpoint path + `?secret=YOUR_CRON_SECRET`
    - **Schedule**: Use the "Custom" option and paste the cron expression
    - **Time zone**: Set to **UTC** for all jobs
@@ -250,14 +223,12 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
 | # | Title | Endpoint | Schedule (UTC) | IST | What it does |
 |---|-------|----------|----------------|-----|--------------|
 | 1 | Intraday P/L | `/api/cron/intraday-pnl` | `* 4-10 * * 1-5` | Every min (9:30am-4:00pm) | Records P/L every minute to power the Intraday chart. |
-| 2 | Token Refresh (AM) | `/api/cron/request-upstox-token` | `30 2 * * 1-5` | 8:00 AM Mon-Fri | Push notification to approve Upstox token. **Crucial for live data.** |
-| 3 | Token Refresh (PM) | `/api/cron/request-upstox-token` | `30 14 * * 1-5` | 8:00 PM Mon-Fri | Backup token refresh if morning is missed. |
-| 4 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon-Fri | End-of-day portfolio value, NAV, drawdown. |
-| 5 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR). |
-| 6 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats. |
-| 7 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE automatically. |
-| 8 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Scrapes latest stock-to-sector mappings. |
-| 9 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Weekly check for new market cap classifications. |
+| 2 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon-Fri | End-of-day portfolio value, NAV, drawdown. |
+| 3 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR). |
+| 4 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats. |
+| 5 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE automatically. |
+| 6 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Scrapes latest stock-to-sector mappings. |
+| 7 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Weekly check for new market cap classifications. |
 
 > [!TIP]
 > After setting up all 6 jobs, you should see them listed in your cron-job.org dashboard. You can manually trigger any job by clicking "Run now" to test it.
@@ -270,21 +241,7 @@ The Settings page (`/settings`) is your control center for managing the app:
 
 ### Upstox Authentication
 
-Two ways to authenticate:
-- **Browser Login** — Opens Upstox OAuth in a new tab. You log in, authorize, and the token is saved via the callback URL.
-- **Phone Auth** — Sends a push notification to your Upstox-registered mobile number. Approve it, and the token is delivered via webhook.
-
-The token status bar shows remaining validity (up to 24 hours). A cron job runs daily before market open to request a new token via the phone notification method.
-
-### Daily Token Refresh
-
-Upstox tokens expire every 24 hours. To automate renewal:
-
-1. Set up the **Webhook URL** in your Upstox app settings: `https://your-app.vercel.app/api/upstox/webhook`
-2. Set up the cron job for `/api/cron/request-upstox-token` (see cron table above)
-3. **Each morning**: The cron job triggers a push notification to your phone → you approve it → the token is delivered to the webhook → stored in your database automatically
-
-No manual login needed after initial setup — just approve the daily notification.
+Set `UPSTOX_ANALYTICS_TOKEN` in `.env.local`. The Analytics Token is a long-lived (1-year) read-only token — no login, no refresh, no cron jobs needed. The Settings page shows the token status.
 
 ### Data Lock
 
@@ -411,9 +368,8 @@ src/
 │   │   ├── live.ts        # Live dashboard data
 │   │   └── sectors.ts     # Sector mapping actions
 │   ├── api/               # API Routes
-│   │   ├── cron/          # Scheduled jobs (token, snapshot, sector)
+│   │   ├── cron/          # Scheduled jobs (snapshot, sector, corporate actions)
 │   │   ├── stream/        # WebSocket authorization
-│   │   ├── upstox/        # OAuth callback, login, webhook
 │   │   └── portfolio/     # Snapshot generation
 │   ├── dashboard/         # Historical dashboard page
 │   ├── settings/          # Settings page (auth, AMFI, corp actions)
@@ -496,12 +452,7 @@ If you want to auto-sync orders from Zerodha Kite:
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | Turso database URL with `?authToken=` appended |
-| `UPSTOX_API_KEY` | Upstox API key (client_id) |
-| `UPSTOX_API_SECRET` | Upstox API secret |
-| `UPSTOX_REDIRECT_URI` | OAuth callback URL |
-| `UPSTOX_MOBILE_NUMBER` | Upstox mobile number for auto login |
-| `UPSTOX_TOTP_SECRET` | Upstox TOTP secret for auto login |
-| `UPSTOX_PIN` | Upstox PIN for auto login |
+| `UPSTOX_ANALYTICS_TOKEN` | Long-lived (1-year) read-only token. Generate at Developer Apps → Analytics tab. |
 
 ### Optional — Personalization
 
@@ -514,7 +465,7 @@ If you want to auto-sync orders from Zerodha Kite:
 
 | Variable | Used For | Description |
 |----------|----------|-------------|
-| `CRON_SECRET` | Securing cron/admin endpoints | Prevents unauthorized access to `/api/cron/*`, `/api/recompute`, `/api/revalidate`, and webhook endpoints. Pass as `?secret=` query param or `Authorization: Bearer` header. |
+| `CRON_SECRET` | Securing cron/admin endpoints | Prevents unauthorized access to `/api/cron/*`, `/api/recompute`, `/api/revalidate` endpoints. Pass as `?secret=` query param or `Authorization: Bearer` header. |
 
 ### Optional — Zerodha Order Sync
 
@@ -543,8 +494,7 @@ npx prisma db push
 ```
 
 ### Known Limitations
-1. **Daily Token Refresh** — Upstox tokens expire every 24 hours. You must approve the daily push notification (or manually log in via Settings) to keep data flowing.
-2. **Index History** — NIFTY500 MOMENTUM 50 historical data before Sep 30, 2024 requires CSV backfill
+1. **Index History** — NIFTY500 MOMENTUM 50 historical data before Sep 30, 2024 requires CSV backfill
 3. **Corporate Actions** — Must be manually entered (no API auto-detection for splits/bonuses)
 4. **Real-time WebSocket** — May disconnect during market hours; auto-reconnect handles this
 5. **AMFI Data** — PDF upload is manual; AMFI releases classification data twice per year

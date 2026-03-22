@@ -4,7 +4,6 @@ import { useMemo, useCallback, useSyncExternalStore } from 'react';
 import { useLiveData, ConnectionError } from '@/context/LiveDataContext';
 import { Snackbar, Alert, Button, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import LoginIcon from '@mui/icons-material/Login';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -72,10 +71,6 @@ export default function ConnectionErrorToast() {
         refresh();
     }, [clearConnectionError, router, refresh]);
 
-    const handleLogin = useCallback(() => {
-        window.location.href = '/api/upstox/login';
-    }, []);
-
     const handleRetry = useCallback(() => {
         clearConnectionError();
         refresh();
@@ -109,8 +104,8 @@ export default function ConnectionErrorToast() {
     if (!isErrorOpen || !currentError) return null;
 
     const isTokenError = currentError.type === 'token';
-    const errorTitle = isTokenError 
-        ? 'Upstox Connection Required' 
+    const errorTitle = isTokenError
+        ? 'Upstox Token Missing'
         : 'Connection Error';
 
     return (
@@ -144,31 +139,13 @@ export default function ConnectionErrorToast() {
                 <div className="flex flex-col gap-2">
                     <div className="font-semibold">{errorTitle}</div>
                     <div className="text-sm opacity-90">
-                        {isTokenError 
-                            ? 'Login to Upstox to enable real-time market data and streaming prices.'
+                        {isTokenError
+                            ? 'Set UPSTOX_ANALYTICS_TOKEN in .env.local to enable real-time market data.'
                             : currentError.message
                         }
                     </div>
-                    <div className="flex gap-2 mt-1">
-                        {isTokenError ? (
-                            <Button
-                                size="small"
-                                variant="contained"
-                                startIcon={<LoginIcon />}
-                                onClick={handleLogin}
-                                sx={{
-                                    backgroundColor: 'white',
-                                    color: '#b45309',
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    '&:hover': {
-                                        backgroundColor: '#f3f4f6',
-                                    },
-                                }}
-                            >
-                                Login to Upstox
-                            </Button>
-                        ) : (
+                    {!isTokenError && (
+                        <div className="flex gap-2 mt-1">
                             <Button
                                 size="small"
                                 variant="outlined"
@@ -186,8 +163,8 @@ export default function ConnectionErrorToast() {
                             >
                                 Retry
                             </Button>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </Alert>
         </Snackbar>

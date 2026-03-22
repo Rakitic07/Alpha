@@ -1,11 +1,8 @@
 /**
  * Upstox Client
- * 
- * Handles Upstox API interactions using tokens stored in the database.
- * Tokens are obtained via the semi-automated flow:
- * 1. Cron job requests token daily
- * 2. User approves via phone notification
- * 3. Token is delivered to webhook and stored in DB
+ *
+ * Handles Upstox API interactions using the Analytics Token (env var)
+ * or legacy DB-stored OAuth tokens.
  */
 
 import {
@@ -13,10 +10,7 @@ import {
     clearTokenCache,
 } from './upstox/auth';
 
-// Configuration from environment
 const CONFIG = {
-    apiKey: process.env.UPSTOX_API_KEY,
-    apiSecret: process.env.UPSTOX_API_SECRET,
     baseUrl: 'https://api.upstox.com/v2',
     baseUrlV3: 'https://api.upstox.com/v3',
 };

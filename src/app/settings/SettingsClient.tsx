@@ -8,13 +8,11 @@ import {
 } from '@mui/material';
 import { SettingsSection } from './SettingsLayout';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 
 import { initializeJob, triggerRecalculatePortfolio } from '@/app/actions';
 import { setDataLockDate } from '@/app/actions/settings';
 import { refreshSectorMappings } from '@/app/actions/sectors';
-import { getUpstoxTokenStatus, triggerPhoneAuth } from '@/app/actions/auth';
+import { getUpstoxTokenStatus } from '@/app/actions/auth';
 import { useLiveData } from '@/context/LiveDataContext';
 
 
@@ -48,13 +46,13 @@ export default function SettingsClient({
     // --- Authentication State ---
     const [tokenStatus, setTokenStatus] = useState<{
         hasToken: boolean;
+        isAnalyticsToken: boolean;
         expiresAt: Date | null;
         hoursRemaining: number | null;
         isExpiringSoon: boolean;
         statusMessage: string;
     } | null>(null);
     const [isLoadingToken, setIsLoadingToken] = useState(true);
-    const [isTriggeringPhoneAuth, setIsTriggeringPhoneAuth] = useState(false);
 
     // Fetch token status on mount
     const fetchTokenStatus = useCallback(async () => {
@@ -74,72 +72,6 @@ export default function SettingsClient({
         const interval = setInterval(fetchTokenStatus, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, [fetchTokenStatus]);
-
-    const handleBrowserLogin = () => {
-        window.open('/api/upstox/login', '_blank');
-        // Start polling for token after browser login is initiated
-        startTokenPolling();
-    };
-
-    // Poll for token status after auth is initiated
-    const startTokenPolling = useCallback(() => {
-        let attempts = 0;
-        const maxAttempts = 60; // Poll for up to 5 minutes (60 * 5s)
-        
-        const pollInterval = setInterval(async () => {
-            attempts++;
-            try {
-                const status = await getUpstoxTokenStatus();
-                setTokenStatus(status);
-                
-                // Stop polling if token is obtained or max attempts reached
-                if (status.hasToken || attempts >= maxAttempts) {
-                    clearInterval(pollInterval);
-                    if (status.hasToken) {
-                        setSnackbar({
-                            open: true,
-                            message: 'Authentication successful! Token obtained.',
-                            severity: 'success',
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Token polling error:', error);
-                if (attempts >= maxAttempts) {
-                    clearInterval(pollInterval);
-                }
-            }
-        }, 5000); // Poll every 5 seconds
-        
-        // Return cleanup function
-        return () => clearInterval(pollInterval);
-    }, []);
-
-    const handlePhoneAuth = async () => {
-        setIsTriggeringPhoneAuth(true);
-        try {
-            const result = await triggerPhoneAuth();
-            setSnackbar({
-                open: true,
-                message: result.message,
-                severity: result.success ? 'success' : 'error',
-            });
-            
-            if (result.success) {
-                // Start polling for token after phone auth is triggered
-                startTokenPolling();
-            }
-        } catch (err) {
-            console.error('Phone auth error:', err);
-            setSnackbar({
-                open: true,
-                message: 'Failed to send phone notification',
-                severity: 'error',
-            });
-        } finally {
-            setIsTriggeringPhoneAuth(false);
-        }
-    };
 
     // --- Common Handlers ---
     const handleRecomputeSnapshots = async () => {
@@ -228,67 +160,33 @@ export default function SettingsClient({
                             )}
                         </div>
 
-                        {/* Progress Bar + Buttons in one row */}
-                        <div className="flex items-center gap-6">
-                            {/* Token Status Progress Bar */}
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
-                                    <div 
-                                        className={`h-full rounded-full transition-all ${
-                                            !tokenStatus?.hasToken ? 'bg-red-500' :
-                                            tokenStatus.isExpiringSoon ? 'bg-amber-500' : 'bg-green-500'
-                                        }`}
-                                        style={{ width: tokenStatus?.hasToken && tokenStatus.hoursRemaining !== null 
-                                            ? `${Math.min(100, (tokenStatus.hoursRemaining / 24) * 100)}%` 
-                                            : '0%' 
-                                        }}
-                                    />
-                                </div>
-                                <span className="text-xs text-gray-500 whitespace-nowrap">
-                                    {tokenStatus?.hasToken && tokenStatus.hoursRemaining !== null 
-                                        ? `${tokenStatus.hoursRemaining.toFixed(1)}h left`
-                                        : 'No token'}
-                                </span>
-                            </div>
-
-                            {/* Authentication Buttons */}
-                            <div className="flex gap-2 shrink-0">
-                                <Button
-                                    variant="contained"
-                                    onClick={handleBrowserLogin}
-                                    size="small"
-                                    startIcon={<OpenInNewIcon sx={{ fontSize: 14 }} />}
-                                    sx={{ 
-                                        textTransform: 'none', 
-                                        height: '32px',
-                                        minWidth: 'auto',
-                                        px: 1.5,
-                                        backgroundColor: '#6366f1',
-                                        '&:hover': { backgroundColor: '#4f46e5' },
-                                        fontSize: '0.75rem'
+                        {/* Token Status Bar */}
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full transition-all ${
+                                        !tokenStatus?.hasToken ? 'bg-red-500' :
+                                        tokenStatus.isExpiringSoon ? 'bg-amber-500' : 'bg-green-500'
+                                    }`}
+                                    style={{ width: tokenStatus?.hasToken
+                                        ? (tokenStatus.isAnalyticsToken
+                                            ? '100%'
+                                            : tokenStatus.hoursRemaining !== null
+                                                ? `${Math.min(100, (tokenStatus.hoursRemaining / 24) * 100)}%`
+                                                : '0%')
+                                        : '0%'
                                     }}
-                                >
-                                    Browser Login
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    onClick={handlePhoneAuth}
-                                    disabled={isTriggeringPhoneAuth}
-                                    size="small"
-                                    startIcon={isTriggeringPhoneAuth ? <CircularProgress size={12} color="inherit" /> : <PhoneAndroidIcon sx={{ fontSize: 14 }} />}
-                                    sx={{ 
-                                        textTransform: 'none', 
-                                        height: '32px',
-                                        minWidth: 'auto',
-                                        px: 1.5,
-                                        backgroundColor: '#10b981',
-                                        '&:hover': { backgroundColor: '#059669' },
-                                        fontSize: '0.75rem'
-                                    }}
-                                >
-                                    {isTriggeringPhoneAuth ? 'Sending...' : 'Phone Auth'}
-                                </Button>
+                                />
                             </div>
+                            <span className="text-xs text-gray-500 whitespace-nowrap">
+                                {tokenStatus?.hasToken
+                                    ? (tokenStatus.isAnalyticsToken
+                                        ? 'Analytics Token'
+                                        : tokenStatus.hoursRemaining !== null
+                                            ? `${tokenStatus.hoursRemaining.toFixed(1)}h left`
+                                            : 'Connected')
+                                    : 'No token — set UPSTOX_ANALYTICS_TOKEN in .env.local'}
+                            </span>
                         </div>
                     </div>
                 </Paper>
