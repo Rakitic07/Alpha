@@ -183,7 +183,7 @@ export async function getTokenStatus(): Promise<TokenStatus> {
       expiresAt: null,
       hoursRemaining: null,
       isExpiringSoon: false,
-      statusMessage: 'No token found. Set UPSTOX_ANALYTICS_TOKEN in .env.local',
+      statusMessage: 'No token found. Set UPSTOX_ANALYTICS_TOKEN in your environment variables.',
     };
   } catch {
     return {

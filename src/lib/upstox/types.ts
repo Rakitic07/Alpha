@@ -239,7 +239,7 @@ export class TokenExpiredError extends UpstoxError {
   constructor(expiredAt: Date) {
     const hoursAgo = (Date.now() - expiredAt.getTime()) / (1000 * 60 * 60);
     super(
-      `Upstox token expired ${hoursAgo.toFixed(1)} hours ago. Set UPSTOX_ANALYTICS_TOKEN in .env.local.`,
+      `Upstox token expired ${hoursAgo.toFixed(1)} hours ago. Set UPSTOX_ANALYTICS_TOKEN in your environment variables.`,
       401,
       'TOKEN_EXPIRED'
     );
@@ -250,7 +250,7 @@ export class TokenExpiredError extends UpstoxError {
 export class NoTokenError extends UpstoxError {
   constructor() {
     super(
-      'No Upstox token found. Set UPSTOX_ANALYTICS_TOKEN in .env.local.',
+      'No Upstox token found. Set UPSTOX_ANALYTICS_TOKEN in your environment variables.',
       401,
       'NO_TOKEN'
     );
