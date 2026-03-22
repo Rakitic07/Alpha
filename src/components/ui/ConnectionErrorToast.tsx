@@ -140,7 +140,7 @@ export default function ConnectionErrorToast() {
                     <div className="font-semibold">{errorTitle}</div>
                     <div className="text-sm opacity-90">
                         {isTokenError
-                            ? 'Set UPSTOX_ANALYTICS_TOKEN in .env.local to enable real-time market data.'
+                            ? 'Set UPSTOX_ANALYTICS_TOKEN in your environment variables to enable real-time market data.'
                             : currentError.message
                         }
                     </div>

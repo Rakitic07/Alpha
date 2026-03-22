@@ -185,7 +185,7 @@ export default function SettingsClient({
                                         : tokenStatus.hoursRemaining !== null
                                             ? `${tokenStatus.hoursRemaining.toFixed(1)}h left`
                                             : 'Connected')
-                                    : 'No token — set UPSTOX_ANALYTICS_TOKEN in .env.local'}
+                                    : 'No token — set UPSTOX_ANALYTICS_TOKEN in your environment'}
                             </span>
                         </div>
                     </div>
