@@ -97,6 +97,8 @@ export default function PortfolioHeatmap({ data, isMobile, privacyMode }: Portfo
             const showPercent = node.width > 40 && node.height > 38;
             const maxFs = isMobile ? 8 : 11;
             const fontSize = Math.min(node.width / 5, node.height / (showPercent ? 4.5 : 2.8), maxFs);
+            const clipId = `hm-${node.id.replace(/[^a-z0-9]/gi, '_')}`;
+            const pad = 3;
             return (
               <motion.g
                 key={node.id}
@@ -114,10 +116,15 @@ export default function PortfolioHeatmap({ data, isMobile, privacyMode }: Portfo
                 onMouseLeave={node.onMouseLeave}
                 onClick={node.onClick}
               >
+                <defs>
+                  <clipPath id={clipId}>
+                    <rect x={pad} y={pad} width={Math.max(0, node.width - pad * 2)} height={Math.max(0, node.height - pad * 2)} />
+                  </clipPath>
+                </defs>
                 <rect width={node.width} height={node.height} fill={node.color} stroke="#0f172a" strokeWidth={2} rx={3} ry={3} />
                 {showSymbol && (
-                  <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle" style={{ pointerEvents: 'none' }}>
-                    <tspan x={node.width / 2} dy={showPercent ? "-0.6em" : "0.3em"} fontSize={fontSize} fontWeight="700" fill={textColor} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{node.id.length > 8 ? node.id.slice(0, 7) + '…' : node.id}</tspan>
+                  <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle" clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }}>
+                    <tspan x={node.width / 2} dy={showPercent ? "-0.6em" : "0.3em"} fontSize={fontSize} fontWeight="700" fill={textColor} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{node.id}</tspan>
                     {showPercent && typeof percent === 'number' && (
                       <tspan x={node.width / 2} dy="1.4em" fontSize={fontSize} fontWeight="600" fill={textColor} fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{percent > 0 ? '+' : ''}{percent.toFixed(1)}%</tspan>
                     )}
