@@ -56,8 +56,9 @@ const LiveHeader = memo(function LiveHeader({
         const now = new Date();
         const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
         const todayIST = `${istTime.getFullYear()}-${String(istTime.getMonth() + 1).padStart(2, '0')}-${String(istTime.getDate()).padStart(2, '0')}`;
-        // Get data date as YYYY-MM-DD string
-        const dataDateStr = dataDateObj.toISOString().split('T')[0];
+        // Get data date in IST (not UTC) for consistent comparison
+        const dataDateIST = new Date(dataDateObj.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        const dataDateStr = `${dataDateIST.getFullYear()}-${String(dataDateIST.getMonth() + 1).padStart(2, '0')}-${String(dataDateIST.getDate()).padStart(2, '0')}`;
         return dataDateStr !== todayIST;
     })() : false;
 

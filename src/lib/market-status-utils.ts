@@ -9,9 +9,9 @@ export const isMarketOpen = (): boolean => {
   const minutes = istTime.getMinutes();
   const totalMinutes = hours * 60 + minutes;
 
-  // Market hours: 9:00 AM - 4:00 PM
-  const startMinutes = 9 * 60;      // 9:00 AM
-  const endMinutes = 16 * 60;       // 4:00 PM
+  // NSE market hours (sync fallback; authoritative status from Upstox Market Timings API)
+  const startMinutes = 9 * 60 + 15;  // 9:15 AM
+  const endMinutes = 15 * 60 + 30;   // 3:30 PM
 
   // Check if it's a weekday (Monday=1 to Friday=5)
   if (day >= 1 && day <= 5) {

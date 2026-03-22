@@ -41,7 +41,7 @@ export default function Header() {
   const { isRecomputing } = useRecompute();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
-  const [, setTimings] = useState<{ start_time: number, end_time: number }[]>([]);
+  const [timings, setTimings] = useState<{ start_time: number, end_time: number }[]>([]);
   const [lastDataDate, setLastDataDate] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,24 +77,33 @@ export default function Header() {
 
   const getStatusLabel = () => {
      if (marketOpen) return 'Live';
-     
+
+     // If Upstox timings show market traded today and has closed, it's "Today"
+     const now = Date.now();
+     if (timings.length > 0 && timings.every(t => t.end_time < now)) {
+         // Verify timings are from today (prevent stale timings across midnight)
+         const latestEnd = new Date(Math.max(...timings.map(t => t.end_time)));
+         const latestEndIST = new Date(latestEnd.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+         const todayCheck = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+         if (latestEndIST.getDate() === todayCheck.getDate() &&
+             latestEndIST.getMonth() === todayCheck.getMonth() &&
+             latestEndIST.getFullYear() === todayCheck.getFullYear()) {
+             return 'Today';
+         }
+     }
+
      if (!lastDataDate) return 'No Data';
 
      const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
      const today = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-     
-     // Normalize dataDate to midnight for comparison (it comes as YYYY-MM-DD string so it's UTC midnight, but intended as local date)
-     // actually lastDataDate string "2024-01-24" is parsed as UTC.
-     // today is Local midnight.
-     // Safe comparison: Compare string YYYY-MM-DD
-     
+
      const year = d.getFullYear();
      const month = String(d.getMonth() + 1).padStart(2, '0');
      const day = String(d.getDate()).padStart(2, '0');
      const todayStr = `${year}-${month}-${day}`;
-     
+
      if (lastDataDate === todayStr) return 'Today';
-     
+
      // Check yesterday
      const yesterday = new Date(today);
      yesterday.setDate(yesterday.getDate() - 1);
@@ -102,9 +111,9 @@ export default function Header() {
      const yMonth = String(yesterday.getMonth() + 1).padStart(2, '0');
      const yDay = String(yesterday.getDate()).padStart(2, '0');
      const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
-     
+
      if (lastDataDate === yesterdayStr) return 'Yesterday';
-     
+
      // Format DD MMM
      const dateObj = new Date(lastDataDate);
      return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });

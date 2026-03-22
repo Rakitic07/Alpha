@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from 'react';
 import { ResponsiveTreeMap } from '@nivo/treemap';
+import { motion } from 'framer-motion';
 
 interface MarketHeatmapProps {
   constituents: Array<{
@@ -12,9 +13,27 @@ interface MarketHeatmapProps {
     weight: number;
   }>;
   isMobile: boolean;
+  // Index stats — integrated into the card header
+  indexName?: string;
+  indexValue?: number;
+  indexChangePercent?: number;
+  advancing?: number;
+  declining?: number;
+  unchanged?: number;
+  loading?: boolean;
 }
 
-export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHeatmapProps) {
+export default memo(function MarketHeatmap({
+  constituents,
+  isMobile,
+  indexName,
+  indexValue,
+  indexChangePercent,
+  advancing,
+  declining,
+  unchanged,
+  loading,
+}: MarketHeatmapProps) {
   if (!constituents || constituents.length === 0) return null;
 
   const count = constituents.length;
@@ -38,10 +57,76 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
     })),
   }), [constituents]);
 
+  const hasIndexStats = indexName !== undefined;
+  const total = (advancing ?? 0) + (declining ?? 0) + (unchanged ?? 0);
+  const advPct = total > 0 ? ((advancing ?? 0) / total) * 100 : 0;
+  const decPct = total > 0 ? ((declining ?? 0) / total) * 100 : 0;
+  const unchPct = total > 0 ? ((unchanged ?? 0) / total) * 100 : 0;
+  const isPositive = (indexChangePercent ?? 0) >= 0;
+
   return (
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height }}>
-      <div className="px-5 pt-5 pb-2 shrink-0">
-        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Market Heatmap</h3>
+      <div className="px-4 pt-4 pb-3 shrink-0">
+        {hasIndexStats ? (
+          /* Integrated index stats header */
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            {/* Left: name + value + change */}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider truncate">
+                  {indexName}
+                </span>
+                {loading && (
+                  <span className="w-2.5 h-2.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                )}
+              </div>
+              {(indexValue ?? 0) > 0 && (
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="text-lg font-bold text-gray-100 tabular-nums">
+                    {(indexValue ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </span>
+                  <span className={`text-sm font-bold tabular-nums ${isPositive ? 'text-emerald-400' : 'text-rose-500'}`}>
+                    {isPositive ? '+' : ''}{(indexChangePercent ?? 0).toFixed(2)}%
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Right: Advance / Decline bar */}
+            {total > 0 && (
+              <div className="flex flex-col gap-1.5 shrink-0 min-w-[200px] max-w-[340px] flex-1">
+                <div className="flex justify-between items-end px-0.5 font-mono tracking-tight">
+                  <span className="text-sm font-bold text-emerald-400">{advancing}</span>
+                  <span className="text-sm font-bold text-rose-500">{declining}</span>
+                </div>
+                <div className="relative h-2.5 w-full rounded-full overflow-hidden flex bg-slate-800 shadow-inner">
+                  <motion.div
+                    className="h-full bg-emerald-400"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${advPct}%` }}
+                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                  />
+                  {unchPct > 0 && (
+                    <motion.div
+                      className="h-full bg-slate-600/80"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${unchPct}%` }}
+                      transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+                    />
+                  )}
+                  <motion.div
+                    className="h-full bg-rose-500"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${decPct}%` }}
+                    transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Fallback: plain label */
+          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Market Heatmap</h3>
+        )}
       </div>
       <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>
         <ResponsiveTreeMap
@@ -78,25 +163,38 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
             if (percent > 0 && percent < 5) textColor = '#0f172a';
             if (percent < 0 && percent > -5) textColor = '#0f172a';
 
-            // Use tile area to decide what to show — works for any index size
+            const shadow = textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.6))' : 'none';
+
+            // Show conditions — based on tile area
             const area = node.width * node.height;
             const showSymbol = area > 2500 && node.width > 30 && node.height > 18;
-            const showPercent = area > 5000 && node.width > 40 && node.height > 32;
+            const showPercent = area > 5000 && node.width > 42 && node.height > 34;
 
-            // Scale font to tile size AND symbol length, with hard min/max
+            // Font sizing — character width ~0.6x font size for sans-serif
             const symbolLen = (node.id || '').length;
-            const maxByWidth = node.width / Math.max(symbolLen * 0.85, 1);
-            const maxByHeight = node.height / 3;
-            const fontSize = Math.max(5, Math.min(maxByWidth, maxByHeight, isMobile ? 9 : 11));
+            const CHAR_RATIO = 0.6;
+            // Max font where text fits horizontally (with 82% width budget)
+            const maxByWidth = (node.width * 0.82) / Math.max(symbolLen * CHAR_RATIO, 1);
+            // Max font where text fits vertically (tighter when showing two lines)
+            const maxByHeight = showPercent ? node.height * 0.28 : node.height * 0.42;
+            // Scale naturally — no hard pixel cap so large tiles get large text
+            const maxSize = isMobile ? 11 : 16;
+            const fontSize = Math.min(Math.max(Math.min(maxByWidth, maxByHeight), 5), maxSize);
+            const percentFontSize = Math.min(fontSize * 0.82, maxSize * 0.82);
+
+            // Absolute Y positions — more reliable than dy offsets
+            const cx = node.width / 2;
+            const cy = node.height / 2;
+            const symbolY = showPercent ? cy - fontSize * 0.55 : cy;
+            const percentY = cy + percentFontSize * 0.9;
 
             return (
               <g
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: 'default' }}
                 transform={`translate(${node.x},${node.y})`}
                 onMouseEnter={node.onMouseEnter}
                 onMouseMove={node.onMouseMove}
                 onMouseLeave={node.onMouseLeave}
-                onClick={node.onClick}
               >
                 <rect
                   width={node.width}
@@ -108,37 +206,35 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
                   ry={count > 100 ? 1 : 3}
                 />
                 {showSymbol && (
-                  <text
-                    x={node.width / 2}
-                    y={node.height / 2}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    <tspan
-                      x={node.width / 2}
-                      dy={showPercent ? '-0.6em' : '0.3em'}
+                  <>
+                    <text
+                      x={cx}
+                      y={symbolY}
+                      textAnchor="middle"
+                      dominantBaseline="central"
                       fontSize={fontSize}
                       fontWeight="700"
                       fill={textColor}
-                      style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}
+                      style={{ pointerEvents: 'none', filter: shadow }}
                     >
                       {node.id}
-                    </tspan>
+                    </text>
                     {showPercent && typeof percent === 'number' && (
-                      <tspan
-                        x={node.width / 2}
-                        dy="1.4em"
-                        fontSize={fontSize * 0.85}
+                      <text
+                        x={cx}
+                        y={percentY}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize={percentFontSize}
                         fontWeight="600"
                         fill={textColor}
                         fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8}
-                        style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}
+                        style={{ pointerEvents: 'none', filter: shadow }}
                       >
                         {percent > 0 ? '+' : ''}{percent.toFixed(1)}%
-                      </tspan>
+                      </text>
                     )}
-                  </text>
+                  </>
                 )}
               </g>
             );

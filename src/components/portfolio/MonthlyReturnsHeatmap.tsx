@@ -39,7 +39,7 @@ const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
 function formatPercentage(val: number): string {
   const percentage = val * 100;
   const sign = percentage >= 0 ? '+' : '';
-  return `${sign}${percentage.toFixed(1)}%`;
+  return `${sign}${percentage.toFixed(2)}%`;
 }
 
 /**

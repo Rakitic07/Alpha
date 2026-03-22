@@ -20,7 +20,7 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
         select: { date: true }
       });
       
-      const lastDataDate = latestSnapshot?.date ? latestSnapshot.date.toISOString().split('T')[0] : null;
+      let lastDataDate = latestSnapshot?.date ? latestSnapshot.date.toISOString().split('T')[0] : null;
 
       // Check for valid token BEFORE trying to fetch timings
       const hasToken = await hasValidToken();
@@ -51,7 +51,14 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
       
       const now = Date.now();
       const isOpen = nseTimings.some(t => now >= t.start_time && now <= t.end_time);
-      
+
+      // If market traded today and has closed, the effective data date is today
+      // (even if today's EOD snapshot hasn't been written to DB yet)
+      if (!isOpen && nseTimings.every(t => t.end_time < now)) {
+          const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+          lastDataDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+
       let status = isOpen ? 'Live' : 'Closed';
       
       // Enhance status message

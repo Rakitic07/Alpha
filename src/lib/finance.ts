@@ -269,8 +269,9 @@ export async function updateStockHistory(
          isEOD = !status.isOpen || new Date() >= status.closeTime;
          if (isEOD) console.log(`[UpdateStockHistory] EOD Detected via API (Close Time: ${status.closeTime.toLocaleTimeString()})`);
     } else {
-         // Fallback to static schedule
-         isEOD = today.getHours() >= 16; // After 4:00 PM IST
+         // Fallback to static schedule (use IST hours, not server-local hours)
+         const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+         isEOD = istNow.getHours() >= 16; // After 4:00 PM IST
          console.log(`[UpdateStockHistory] EOD Detected via Static Fallback (No API status)`);
     }
     

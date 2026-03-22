@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { isMarketOpen } from '@/lib/market-status-utils';
 import { useLiveData } from '@/context/LiveDataContext';
 import { formatNumber } from '@/lib/format';
 import { toPng } from 'html-to-image';
@@ -40,16 +39,11 @@ export default function LivePage() {
     pnlHistory
   } = useLiveData();
 
-  const [marketOpen, setMarketOpen] = useState(false);
+  // Use Upstox API-driven market status from server instead of hardcoded hours
+  const marketOpen = data?.marketStatus === 'OPEN';
   const [downloading, setDownloading] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    setMarketOpen(isMarketOpen());
-    const interval = setInterval(() => setMarketOpen(isMarketOpen()), 60000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);

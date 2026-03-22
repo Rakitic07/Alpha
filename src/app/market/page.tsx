@@ -6,10 +6,10 @@ export const dynamic = 'force-dynamic';
 
 export default async function MarketOverviewPage() {
   // Pre-fetch initial data on the server in parallel!
-  // NIFTY 50 is the default selected index for the page.
+  // NIFTY Total Market is the default selected index for the page.
   const [summariesRes, indexRes] = await Promise.all([
     fetchAllIndexSummaries(),
-    fetchMarketOverview('NIFTY 50')
+    fetchMarketOverview('NIFTY Total Market')
   ]);
 
   const tokenStatus = indexRes?.tokenStatus || summariesRes?.tokenStatus || null;

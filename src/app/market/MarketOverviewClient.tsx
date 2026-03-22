@@ -8,7 +8,7 @@ import type { MarketOverviewData } from '@/app/actions/market-overview';
 import { isMarketOpen } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
-import IndexSummaryCards from '@/components/market/IndexSummaryCards';
+import IndexSidebar from '@/components/market/IndexSidebar';
 import { useLiveData } from '@/context/LiveDataContext';
 import { PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 
@@ -55,7 +55,7 @@ export default function MarketOverviewClient({
   initialData,
   initialTokenStatus
 }: MarketOverviewClientProps) {
-  const [selectedIndex, setSelectedIndex] = useState('NIFTY 50');
+  const [selectedIndex, setSelectedIndex] = useState('NIFTY Total Market');
   const [indexSummaries, setIndexSummaries] = useState<IndexSummary[]>(initialSummaries);
   const [data, setData] = useState<MarketOverviewData | null>(initialData);
   const [loading, setLoading] = useState(false); // Default false since we have SSR data
@@ -323,8 +323,10 @@ export default function MarketOverviewClient({
   }, [applyBatchedUpdates]);
 
   // Web Socket Hook - use the shared stream from LiveDataContext
-  const { streamStatus, subscribeToPrices, subscribeToInstruments } = useLiveData();
-  const showStreaming = isVisible && isMarketOpen() && !!tokenStatus?.hasToken;
+  const { streamStatus, subscribeToPrices, subscribeToInstruments, data: liveContextData } = useLiveData();
+  // Prefer Upstox API-driven market status; fall back to sync check if data not loaded yet
+  const isMarketCurrentlyOpen = liveContextData?.marketStatus ? liveContextData.marketStatus === 'OPEN' : isMarketOpen();
+  const showStreaming = isVisible && isMarketCurrentlyOpen && !!tokenStatus?.hasToken;
 
   useEffect(() => {
     if (showStreaming) {
@@ -358,6 +360,10 @@ export default function MarketOverviewClient({
   const isStreamingRef = useRef(isStreaming);
   useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
 
+  // Track API-driven market status in ref for interval callbacks
+  const marketOpenRef = useRef(isMarketCurrentlyOpen);
+  useEffect(() => { marketOpenRef.current = isMarketCurrentlyOpen; }, [isMarketCurrentlyOpen]);
+
   useEffect(() => {
     // Clear any existing interval before creating a new one
     if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
@@ -366,14 +372,14 @@ export default function MarketOverviewClient({
       // When streaming, WebSocket drives constituent data.
       // Only sync index summaries every 60s (lightweight) for SectoralHeatmap/IndexCards.
       dataRefreshRef.current = setInterval(() => {
-        if (isMarketOpen()) {
+        if (marketOpenRef.current) {
           loadSummaries(false);
         }
       }, 60000);
     } else {
       // When NOT streaming, poll full data every 10s as fallback
       dataRefreshRef.current = setInterval(() => {
-        if (isMarketOpen()) {
+        if (marketOpenRef.current) {
           loadSummaries(false);
           loadData(selectedIndexRef.current, false);
         }
@@ -411,47 +417,204 @@ export default function MarketOverviewClient({
           </div>
           <div className="h-8 w-20 bg-slate-800/50 rounded-lg" />
         </div>
+        {/* Sidebar + Content Skeleton */}
+        <div className="flex flex-col md:flex-row gap-4 md:gap-5">
+          {/* Sidebar Skeleton */}
+          <div className="hidden md:flex flex-col gap-2 w-[220px] shrink-0">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-[76px] bg-slate-800/50 rounded-xl border border-white/5" />
+            ))}
+          </div>
+          {/* Mobile pills skeleton */}
+          <div className="flex md:hidden gap-2 overflow-hidden">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-[52px] w-[110px] bg-slate-800/50 rounded-xl border border-white/5 shrink-0" />
+            ))}
+          </div>
+          {/* Content Skeleton */}
+          <div className="flex-1 flex flex-col gap-4 md:gap-5 min-w-0">
+            {/* Heatmap card with integrated header */}
+            <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
+              <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <div className="h-3 w-28 bg-slate-800/50 rounded" />
+                  <div className="flex items-baseline gap-2">
+                    <div className="h-6 w-20 bg-slate-800/60 rounded" />
+                    <div className="h-4 w-14 bg-slate-800/40 rounded" />
+                  </div>
+                </div>
+                <div className="flex-1 max-w-[340px] flex flex-col gap-1.5">
+                  <div className="flex justify-between">
+                    <div className="h-4 w-8 bg-slate-800/50 rounded" />
+                    <div className="h-4 w-8 bg-slate-800/40 rounded" />
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-800/50 rounded-full" />
+                </div>
+              </div>
+              <div className="h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {[0, 1].map(i => (
+                <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5 h-[200px]" />
+              ))}
+            </div>
+          </div>
+        </div>
         {/* Sectoral Heatmap Skeleton */}
         <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
           <div className="px-5 pt-5 pb-2">
-            <div className="h-3 w-32 bg-slate-800/50 rounded" />
+            <div className="h-3 w-36 bg-slate-800/50 rounded" />
           </div>
           <div className="h-[350px] md:h-[400px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
-        </div>
-        {/* Index Card Grid Skeleton */}
-        <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-          {[...Array(12)].map((_, i) => (
-            <div key={i} className="h-[68px] bg-slate-800/50 rounded-xl border border-white/5" />
-          ))}
-        </div>
-        {/* Index Stats Bar Skeleton */}
-        <div className="h-[56px] bg-slate-900/40 rounded-2xl border border-white/5" />
-        {/* Heatmap Skeleton */}
-        <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
-          <div className="px-5 pt-5 pb-2">
-            <div className="h-3 w-28 bg-slate-800/50 rounded" />
-          </div>
-          <div className="h-[400px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
-        </div>
-        {/* Top Movers Skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {[0, 1].map(i => (
-            <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
-              <div className="h-4 w-24 bg-slate-800/50 rounded mb-4" />
-              <div className="flex flex-col gap-3">
-                {[...Array(5)].map((_, j) => (
-                  <div key={j} className="flex justify-between items-center">
-                    <div className="h-3.5 w-20 bg-slate-800/40 rounded" />
-                    <div className="h-5 w-14 bg-slate-800/40 rounded-md" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     );
   }
+
+  // Content area (index stats + heatmap + movers) or loading/empty states
+  const renderContent = () => {
+    if (loading && !data) {
+      return (
+        <div className="flex-1 flex flex-col gap-4 md:gap-5 min-w-0 animate-pulse">
+          {/* Heatmap card skeleton — stats + treemap combined */}
+          <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
+            <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5">
+                <div className="h-3 w-28 bg-slate-800/50 rounded" />
+                <div className="flex items-baseline gap-2">
+                  <div className="h-6 w-20 bg-slate-800/60 rounded" />
+                  <div className="h-4 w-14 bg-slate-800/40 rounded" />
+                </div>
+              </div>
+              <div className="flex-1 max-w-[340px] flex flex-col gap-1.5">
+                <div className="flex justify-between">
+                  <div className="h-4 w-8 bg-slate-800/50 rounded" />
+                  <div className="h-4 w-8 bg-slate-800/40 rounded" />
+                </div>
+                <div className="h-2.5 w-full bg-slate-800/50 rounded-full" />
+              </div>
+            </div>
+            <div className="h-[400px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {[0, 1].map(i => (
+              <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
+                <div className="h-4 w-24 bg-slate-800/50 rounded mb-4" />
+                <div className="flex flex-col gap-3">
+                  {[...Array(5)].map((_, j) => (
+                    <div key={j} className="flex justify-between items-center">
+                      <div className="h-3.5 w-20 bg-slate-800/40 rounded" />
+                      <div className="h-5 w-14 bg-slate-800/40 rounded-md" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (data) {
+      return (
+        <div className="flex-1 flex flex-col gap-4 md:gap-5 min-w-0">
+          {/* Mobile-only compact stats row (heatmap is hidden on mobile, so stats still need to be shown) */}
+          {isMobile && (
+            <motion.div variants={itemVariants} className="flex items-center justify-between gap-3 bg-slate-900/40 border border-white/5 rounded-2xl px-4 py-3">
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] font-medium text-gray-400 truncate">{data.indexName}</span>
+                {data.indexValue > 0 && (
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-base font-bold text-gray-100 tabular-nums">
+                      {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </span>
+                    <span className={`text-sm font-bold tabular-nums ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                      {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+              <AdvanceDecline
+                advancing={data.advancing}
+                declining={data.declining}
+                unchanged={data.unchanged}
+              />
+            </motion.div>
+          )}
+
+          {/* Heatmap — stats integrated into card header on desktop */}
+          {!isMobile && (
+            <motion.div variants={itemVariants}>
+              {loading && data.indexName !== selectedIndex ? (
+                /* Skeleton while switching index — prevents Nivo layout animation distortion */
+                <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 animate-pulse">
+                  <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <div className="h-3 w-28 bg-slate-800/50 rounded" />
+                      <div className="flex items-baseline gap-2">
+                        <div className="h-6 w-20 bg-slate-800/60 rounded" />
+                        <div className="h-4 w-14 bg-slate-800/40 rounded" />
+                      </div>
+                    </div>
+                    <div className="flex-1 max-w-[340px] flex flex-col gap-1.5">
+                      <div className="flex justify-between">
+                        <div className="h-4 w-8 bg-slate-800/50 rounded" />
+                        <div className="h-4 w-8 bg-slate-800/40 rounded" />
+                      </div>
+                      <div className="h-2.5 w-full bg-slate-800/50 rounded-full" />
+                    </div>
+                  </div>
+                  <div className="h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+                </div>
+              ) : (
+                /* key forces full remount when index changes — prevents stale Nivo layout animation */
+                <MarketHeatmap
+                  key={data.indexName}
+                  constituents={data.constituents}
+                  isMobile={isMobile}
+                  indexName={data.indexName}
+                  indexValue={data.indexValue}
+                  indexChangePercent={data.indexChangePercent}
+                  advancing={data.advancing}
+                  declining={data.declining}
+                  unchanged={data.unchanged}
+                  loading={loading}
+                />
+              )}
+            </motion.div>
+          )}
+
+          {/* Top Movers */}
+          <motion.div variants={itemVariants}>
+            <TopMovers
+              topGainers={data.topGainers}
+              topLosers={data.topLosers}
+              totalConstituents={data.constituents.length}
+              isMobile={isMobile}
+            />
+          </motion.div>
+        </div>
+      );
+    }
+
+    // No data state
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
+        <div className="bg-amber-500/10 text-amber-400 p-6 rounded-2xl border border-amber-500/20 max-w-md">
+          <h3 className="font-semibold text-lg mb-2">No Data Available</h3>
+          <p className="text-sm opacity-90">
+            {tokenStatus?.message || 'Could not load market data. Please check your Upstox token and try again.'}
+          </p>
+          <button
+            onClick={() => loadData(selectedIndex)}
+            className="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <motion.main
@@ -464,7 +627,9 @@ export default function MarketOverviewClient({
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Market Overview</h1>
+            <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
+              <span className="gradient-text">Market Overview</span>
+            </h1>
             {isStreaming && (
               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-medium text-emerald-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -496,7 +661,7 @@ export default function MarketOverviewClient({
         </button>
       </motion.div>
 
-      {/* Error Banner — shown when loadData fails (e.g. Microcap 250 CSV unavailable) */}
+      {/* Error Banner */}
       {loadError && (
         <motion.div variants={itemVariants} className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs flex items-center gap-2">
           <span>⚠️</span>
@@ -504,7 +669,21 @@ export default function MarketOverviewClient({
         </motion.div>
       )}
 
-      {/* Sectoral Heatmap */}
+      {/* Sidebar + Content — horizontal layout on desktop, vertical on mobile */}
+      <motion.div variants={itemVariants} className="flex flex-col md:flex-row gap-4 md:gap-5">
+        {/* Index Sidebar */}
+        <IndexSidebar
+          indices={indexSummaries}
+          selectedIndex={selectedIndex}
+          onSelectIndex={handleSelectIndex}
+          isMobile={isMobile}
+        />
+
+        {/* Main Content */}
+        {renderContent()}
+      </motion.div>
+
+      {/* Sectoral Heatmap — full width, below the sidebar+content area */}
       {indexSummaries.length > 0 && (
         <motion.div variants={itemVariants}>
           <SectoralHeatmap
@@ -512,123 +691,6 @@ export default function MarketOverviewClient({
             isMobile={isMobile}
           />
         </motion.div>
-      )}
-
-      {/* Index Cards / Tabs */}
-      <motion.div variants={itemVariants}>
-        <IndexSummaryCards
-          indices={indexSummaries}
-          selectedIndex={selectedIndex}
-          onSelectIndex={handleSelectIndex}
-          isMobile={isMobile}
-        />
-      </motion.div>
-
-      {/* Content: loading state per-index */}
-      {loading && !data ? (
-        <div className="flex flex-col gap-4 md:gap-6 animate-pulse">
-          {/* Index Stats Bar Skeleton */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-8 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-5 sm:py-3.5">
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-28 bg-slate-800/60 rounded" />
-              <div className="h-5 w-20 bg-slate-800/50 rounded" />
-              <div className="h-5 w-16 bg-slate-800/40 rounded" />
-            </div>
-            <div className="flex-1 flex justify-end">
-              <div className="h-4 w-48 bg-slate-800/40 rounded-full" />
-            </div>
-          </div>
-          {/* Heatmap Skeleton */}
-          <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
-            <div className="px-5 pt-5 pb-2">
-              <div className="h-3 w-28 bg-slate-800/50 rounded" />
-            </div>
-            <div className="h-[400px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
-          </div>
-          {/* Top Movers Skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {[0, 1].map(i => (
-              <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
-                <div className="h-4 w-24 bg-slate-800/50 rounded mb-4" />
-                <div className="flex flex-col gap-3">
-                  {[...Array(5)].map((_, j) => (
-                    <div key={j} className="flex justify-between items-center">
-                      <div className="h-3.5 w-20 bg-slate-800/40 rounded" />
-                      <div className="h-5 w-14 bg-slate-800/40 rounded-md" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : data ? (
-        <>
-          {/* Index Header Stats */}
-          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-5 sm:py-3.5">
-            <div className="flex flex-col shrink-0 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-base sm:text-lg font-extrabold text-white tracking-tight truncate">{data.indexName}</span>
-                {loading && (
-                  <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                )}
-              </div>
-              {data.indexValue > 0 && (
-                <div className="flex items-baseline gap-2 mt-0.5">
-                  <span className="text-xl sm:text-2xl font-bold text-gray-100 tabular-nums">
-                    {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                  </span>
-                  <span className={`text-sm sm:text-base font-bold tabular-nums ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                    {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="w-full sm:flex-1 min-w-0 flex items-center justify-end">
-              <AdvanceDecline
-                advancing={data.advancing}
-                declining={data.declining}
-                unchanged={data.unchanged}
-              />
-            </div>
-          </motion.div>
-
-          {/* Heatmap — updates every 5s via batched WebSocket ticks */}
-          {!isMobile && (
-            <motion.div variants={itemVariants}>
-              <MarketHeatmap
-                constituents={data.constituents}
-                isMobile={isMobile}
-              />
-            </motion.div>
-          )}
-
-          {/* Top Movers */}
-          <motion.div variants={itemVariants}>
-            <TopMovers
-              topGainers={data.topGainers}
-              topLosers={data.topLosers}
-              totalConstituents={data.constituents.length}
-              isMobile={isMobile}
-            />
-          </motion.div>
-        </>
-      ) : (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
-          <div className="bg-amber-500/10 text-amber-400 p-6 rounded-2xl border border-amber-500/20 max-w-md">
-            <h3 className="font-semibold text-lg mb-2">No Data Available</h3>
-            <p className="text-sm opacity-90">
-              {tokenStatus?.message || 'Could not load market data. Please check your Upstox token and try again.'}
-            </p>
-            <button
-              onClick={() => loadData(selectedIndex)}
-              className="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
       )}
     </motion.main>
   );

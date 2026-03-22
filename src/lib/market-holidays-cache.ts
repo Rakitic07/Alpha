@@ -154,8 +154,8 @@ export async function getTodayHoliday(): Promise<MarketHoliday | null> {
     try {
         const now = new Date();
         const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const today = istTime.toISOString().split('T')[0];
-        
+        const today = `${istTime.getFullYear()}-${String(istTime.getMonth() + 1).padStart(2, '0')}-${String(istTime.getDate()).padStart(2, '0')}`;
+
         const holidays = await getCachedHolidays();
         return holidays.find(h => h.date === today) || null;
     } catch (error) {
@@ -255,7 +255,7 @@ export async function getMarketStatus(): Promise<MarketStatus> {
     const now = new Date();
     // Use Indian Standard Time (IST) for date string
     const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-    const today = istTime.toISOString().split('T')[0];
+    const today = `${istTime.getFullYear()}-${String(istTime.getMonth() + 1).padStart(2, '0')}-${String(istTime.getDate()).padStart(2, '0')}`;
 
     // 1. Check Holiday first
     const isHoliday = await isTradingHoliday(today);

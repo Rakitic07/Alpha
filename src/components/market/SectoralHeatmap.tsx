@@ -98,7 +98,7 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
                   stiffness: 300, 
                   delay: (node.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 20) / 100 
                 }}
-                style={{ cursor: 'pointer' }} 
+                style={{ cursor: 'default' }}
                 onMouseEnter={node.onMouseEnter} 
                 onMouseMove={node.onMouseMove} 
                 onMouseLeave={node.onMouseLeave} 
