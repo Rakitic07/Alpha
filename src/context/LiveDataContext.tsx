@@ -117,7 +117,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const togglePrivacy = useCallback(() => {
-    setPrivacyModeState(prev => {
+    setPrivacyModeState((prev: boolean) => {
       const next = !prev;
       localStorage.setItem('privacyMode', JSON.stringify(next));
       return next;
