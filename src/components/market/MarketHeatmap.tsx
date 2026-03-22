@@ -165,24 +165,41 @@ export default memo(function MarketHeatmap({
 
             const shadow = textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.6))' : 'none';
 
-            // Show conditions — based on tile area
-            const area = node.width * node.height;
-            const showSymbol = area > 2500 && node.width > 30 && node.height > 18;
-            const showPercent = area > 5000 && node.width > 42 && node.height > 34;
-
-            // Font sizing — character width ~0.6x font size for sans-serif
-            const symbolLen = (node.id || '').length;
             const CHAR_RATIO = 0.6;
-            // Max font where text fits horizontally (with 82% width budget)
-            const maxByWidth = (node.width * 0.82) / Math.max(symbolLen * CHAR_RATIO, 1);
-            // Max font where text fits vertically (tighter when showing two lines)
-            const maxByHeight = showPercent ? node.height * 0.28 : node.height * 0.42;
-            // Scale naturally — no hard pixel cap so large tiles get large text
+            const minFont = isMobile ? 4 : 5;
             const maxSize = isMobile ? 11 : 16;
-            const fontSize = Math.min(Math.max(Math.min(maxByWidth, maxByHeight), 5), maxSize);
+            const symbol = node.id || '';
+
+            // Determine how many chars we can fit — trim symbol if needed
+            const availW = node.width * 0.88;
+            const availH = node.height * 0.88;
+            // Skip labels only for truly microscopic tiles
+            const tooSmall = node.width < 8 || node.height < 8;
+
+            // Determine if percent line fits (need enough vertical room for 2 lines)
+            const showPercent = !tooSmall && node.height > 22 && node.width > 28;
+
+            // Font sizing — scale to tile
+            const maxByHeight = showPercent ? node.height * 0.28 : node.height * 0.42;
+            // Start with full symbol to compute font
+            const maxByWidthFull = availW / Math.max(symbol.length * CHAR_RATIO, 1);
+            let fontSize = Math.min(Math.max(Math.min(maxByWidthFull, maxByHeight), minFont), maxSize);
+
+            // If font is too small with full symbol, trim it to fit at a readable size
+            let displaySymbol = symbol;
+            if (fontSize < minFont + 1 && symbol.length > 3) {
+              // How many chars fit at the minimum readable font?
+              const charsAtMin = Math.floor(availW / ((minFont + 1) * CHAR_RATIO));
+              if (charsAtMin >= 2) {
+                displaySymbol = symbol.slice(0, Math.max(charsAtMin, 2));
+                const maxByWidthTrimmed = availW / Math.max(displaySymbol.length * CHAR_RATIO, 1);
+                fontSize = Math.min(Math.max(Math.min(maxByWidthTrimmed, maxByHeight), minFont), maxSize);
+              }
+            }
+
             const percentFontSize = Math.min(fontSize * 0.82, maxSize * 0.82);
 
-            // Absolute Y positions — more reliable than dy offsets
+            // Absolute Y positions
             const cx = node.width / 2;
             const cy = node.height / 2;
             const symbolY = showPercent ? cy - fontSize * 0.55 : cy;
@@ -205,7 +222,7 @@ export default memo(function MarketHeatmap({
                   rx={count > 100 ? 1 : 3}
                   ry={count > 100 ? 1 : 3}
                 />
-                {showSymbol && (
+                {!tooSmall && (
                   <>
                     <text
                       x={cx}
@@ -217,7 +234,7 @@ export default memo(function MarketHeatmap({
                       fill={textColor}
                       style={{ pointerEvents: 'none', filter: shadow }}
                     >
-                      {node.id}
+                      {displaySymbol}
                     </text>
                     {showPercent && typeof percent === 'number' && (
                       <text
