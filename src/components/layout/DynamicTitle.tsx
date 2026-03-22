@@ -6,10 +6,10 @@ import { useLiveData } from '@/context/LiveDataContext';
 import { formatCurrency, formatNumber } from '@/lib/format';
 
 const DEFAULT_TITLE = 'A🏃lpha';
-const ROTATION_INTERVAL = 5000; // 5 seconds
+const ROTATION_INTERVAL = 4000; // 4 seconds
 
 export default function DynamicTitle() {
-  const { data, showDynamicTitle } = useLiveData();
+  const { data, showDynamicTitle, privacyMode } = useLiveData();
   const pathname = usePathname();
   const [index, setIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
@@ -29,22 +29,30 @@ export default function DynamicTitle() {
 
     const items: string[] = [];
 
-    // 1. Day's P/L
+    // 1. Day's P/L — show only % in privacy mode
     const plSign = data.dayGain >= 0 ? '+' : '';
-    items.push(`${plSign}${formatCurrency(data.dayGain, 0, 0)} (${plSign}${data.dayGainPercent.toFixed(2)}%)`);
+    if (privacyMode) {
+      items.push(`Today: ${plSign}${data.dayGainPercent.toFixed(2)}%`);
+    } else {
+      items.push(`${plSign}${formatCurrency(data.dayGain, 0, 0)} (${plSign}${data.dayGainPercent.toFixed(2)}%)`);
+    }
 
-    // 2. Nifty Value
+    // 2. Portfolio total P/L % (always safe to show as it's just a %)
+    const ptfSign = data.totalPnlPercent >= 0 ? '+' : '';
+    items.push(`Ptf: ${ptfSign}${data.totalPnlPercent.toFixed(2)}%`);
+
+    // 3. Nifty 50
     const nifty = data.indices.find(i => i.name === 'Nifty 50');
     if (nifty) {
       const niftySign = nifty.percentChange >= 0 ? '+' : '';
       items.push(`Nifty: ${formatNumber(nifty.currentPrice, 0, 0)} (${niftySign}${nifty.percentChange.toFixed(2)}%)`);
     }
 
-    // 3. Breadth
+    // 4. Breadth
     items.push(`${data.advances}↑ | ${data.declines}↓`);
 
     return items.length > 0 ? items : [DEFAULT_TITLE];
-  }, [data, isLivePage, showDynamicTitle, isMobile]);
+  }, [data, isLivePage, showDynamicTitle, isMobile, privacyMode]);
 
   // Effect to cycle through indices
   useEffect(() => {

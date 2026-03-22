@@ -86,7 +86,7 @@ export default function MonthlySnapshotTable({ snapshots, privacyMode = false }:
                                     <span className="text-blue-300 font-mono">{privacyMode ? '****' : (row.nav != null ? row.nav.toFixed(2) : '-')}</span>
                                 </StyledTableCell>
                                 <StyledTableCell align="right">
-                                    {privacyMode ? <span className="text-gray-500">****</span> : <ReturnChip value={row.monthlyReturn} period="monthly" />}
+                                    <ReturnChip value={row.monthlyReturn} period="monthly" />
                                 </StyledTableCell>
                                 <StyledTableCell align="center">
                                     <span className="text-gray-300">

@@ -296,7 +296,7 @@ export default function DailySnapshotTable({ snapshots, privacyMode = false }: {
                                 <span className="text-blue-300 font-mono">{privacyMode ? '****' : (row.portfolioNAV != null ? row.portfolioNAV.toFixed(2) : '-')}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                {privacyMode ? <span className="text-gray-500">****</span> : <ReturnChip value={row.dailyReturn} period="daily" />}
+                                <ReturnChip value={row.dailyReturn} period="daily" />
                             </StyledTableCell>
                             <StyledTableCell align="right">
                                 <span className={`text-sm ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>

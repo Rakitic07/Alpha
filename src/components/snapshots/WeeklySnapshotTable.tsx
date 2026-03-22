@@ -144,7 +144,7 @@ export default function WeeklySnapshotTable({ snapshots, privacyMode = false }: 
                                     <span className="text-blue-300 font-mono">{privacyMode ? '****' : (row.nav != null ? row.nav.toFixed(2) : '-')}</span>
                                 </StyledTableCell>
                                 <StyledTableCell align="right">
-                                    {privacyMode ? <span className="text-gray-500">****</span> : <ReturnChip value={row.weeklyReturn} period="weekly" />}
+                                    <ReturnChip value={row.weeklyReturn} period="weekly" />
                                 </StyledTableCell>
                                 <StyledTableCell align="right">
                                     <span className="text-gray-300">

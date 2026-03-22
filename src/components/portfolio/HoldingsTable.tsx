@@ -187,7 +187,7 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
             <StyledTableCell align="center">
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <Chip
-                        label={privacyMode ? '****' : `${isProfit ? '▲' : '▼'} ${Math.abs(h.pnlPercent).toFixed(2)}%`}
+                        label={`${isProfit ? '▲' : '▼'} ${Math.abs(h.pnlPercent).toFixed(2)}%`}
                         size="small"
                         sx={{
                             fontWeight: 'bold',
@@ -199,9 +199,11 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
                             boxShadow: isProfit ? '0 1px 2px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(239, 68, 68, 0.2)'
                         }}
                     />
-                    <span className={`text-xs mt-1 ${isProfit ? 'text-emerald-400/70' : 'text-red-400/70'}`}>
-                        {privacyMode ? '****' : (isProfit ? '+' : '') + formatCurrency(h.pnl)}
-                    </span>
+                    {!privacyMode && (
+                        <span className={`text-xs mt-1 ${isProfit ? 'text-emerald-400/70' : 'text-red-400/70'}`}>
+                            {(isProfit ? '+' : '') + formatCurrency(h.pnl)}
+                        </span>
+                    )}
                 </Box>
             </StyledTableCell>
         </StyledTableRow>
