@@ -171,7 +171,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                   tick={{ fill: '#6b7280', fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(value) => `${value.toFixed(precision)}%`}
+                  tickFormatter={(value) => `${value.toFixed(1)}%`}
                 />
                 <Tooltip 
                   content={<CustomTooltip precision={precision} privacyMode={privacyMode} isMobile={isMobile} />} 
