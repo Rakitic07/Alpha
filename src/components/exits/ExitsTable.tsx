@@ -150,9 +150,9 @@ export default function ExitsTable({ exits }: ExitsTableProps) {
                         <button
                             key={cat}
                             onClick={() => setFilterCategory(cat)}
-                            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                                filterCategory === cat 
-                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
+                            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all cursor-pointer ${
+                                filterCategory === cat
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
                                 : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
                             }`}
                         >

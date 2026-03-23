@@ -22,32 +22,10 @@ interface PortfolioHeatmapProps {
 export default function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
     if (!data.allHoldings || data.allHoldings.length === 0) return null;
 
-  const colorScale = [
-    { color: '#b91c1c', label: '<-10%' },
-    { color: '#ef4444', label: '-10' },
-    { color: '#f87171', label: '-5' },
-    { color: '#fca5a5', label: '-3' },
-    { color: '#fee2e2', label: '-1.5' },
-    { color: '#64748b', label: '0' },
-    { color: '#d1fae5', label: '+1.5' },
-    { color: '#6ee7b7', label: '+3' },
-    { color: '#34d399', label: '+5' },
-    { color: '#10b981', label: '+10' },
-    { color: '#059669', label: '>+10%' },
-  ];
-
   return (
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 h-[500px] flex flex-col">
-      <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0">
+      <div className="px-5 pt-4 pb-2 shrink-0">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Portfolio Heatmap</h3>
-        <div className="flex items-center gap-0.5">
-          {colorScale.map(({ color, label }) => (
-            <div key={label} className="flex flex-col items-center gap-0.5">
-              <div style={{ backgroundColor: color, width: 14, height: 10, borderRadius: 2 }} />
-              <span style={{ fontSize: 7, color: '#6b7280', lineHeight: 1 }}>{label}</span>
-            </div>
-          ))}
-        </div>
       </div>
       <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>
         <ResponsiveTreeMap

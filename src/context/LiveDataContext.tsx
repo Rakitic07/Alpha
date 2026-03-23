@@ -53,21 +53,26 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [hasAnimatedInitial, setHasAnimatedInitial] = useState(false);
-  const [showDynamicTitle, setShowDynamicTitleState] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try { return JSON.parse(localStorage.getItem('showDynamicTitle') ?? 'false'); }
-    catch { return false; }
-  });
-  const [streamingEnabled, setStreamingEnabledState] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    try { return JSON.parse(localStorage.getItem('streamingEnabled') ?? 'true'); }
-    catch { return true; }
-  });
-  const [privacyMode, setPrivacyModeState] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try { return JSON.parse(localStorage.getItem('privacyMode') ?? 'false'); }
-    catch { return false; }
-  });
+  const [showDynamicTitle, setShowDynamicTitleState] = useState(false);
+  const [streamingEnabled, setStreamingEnabledState] = useState(true);
+  const [privacyMode, setPrivacyModeState] = useState(false);
+
+  // Hydrate preferences from localStorage after mount to avoid SSR/client mismatch (React #418)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('showDynamicTitle');
+      if (stored !== null) setShowDynamicTitleState(JSON.parse(stored));
+    } catch {}
+    try {
+      const stored = localStorage.getItem('streamingEnabled');
+      if (stored !== null) setStreamingEnabledState(JSON.parse(stored));
+    } catch {}
+    try {
+      const stored = localStorage.getItem('privacyMode');
+      if (stored !== null) setPrivacyModeState(JSON.parse(stored));
+    } catch {}
+  }, []);
+
   const [connectionError, setConnectionError] = useState<ConnectionError | null>(null);
   const [pnlHistory, setPnlHistory] = useState<PnLHistoryPoint[]>([]);
   const isFetchingBus = useRef(false);
