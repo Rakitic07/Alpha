@@ -5,8 +5,11 @@ import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { recalculatePortfolioHistory } from '@/lib/finance';
 import { getLTP, hasValidToken } from '@/lib/upstox-client';
 import { getInstrumentKeys, isValidSymbol, getInstrumentKeyByISIN, getSymbolFromKey } from '@/lib/instrument-service';
-import { getSymbolResolver } from '@/lib/amfi-service';
+import { getSymbolResolver } from '@/lib/amfi';
 import { fetchNSEHistory } from '@/lib/nse-api';
+import { logger } from '@/lib/logger';
+
+const actionsLogger = logger.scope('Actions');
 
 export interface SymbolValidationResult {
   symbol: string;
@@ -95,7 +98,7 @@ export async function validateSymbols(inputs: (string | { symbol: string, isin?:
                         }
                     }
                 } catch (err) {
-                    console.warn(`[validateSymbols] ISIN lookup failed for ${symbol} (${isin}):`, err);
+                    actionsLogger.warn(`ISIN lookup failed for ${symbol} (${isin}):`, err);
                 }
             }
 
@@ -121,7 +124,7 @@ export async function validateSymbols(inputs: (string | { symbol: string, isin?:
                         resolved = true;
                     }
                 } catch (nseErr) {
-                    console.warn(`[validateSymbols] NSE fallback failed for ${symbol}:`, nseErr);
+                    actionsLogger.warn(`NSE fallback failed for ${symbol}:`, nseErr);
                 }
             }
             
@@ -133,7 +136,7 @@ export async function validateSymbols(inputs: (string | { symbol: string, isin?:
       
       return results;
     } catch (error) {
-      console.warn('[validateSymbols] Upstox validation failed:', error);
+      actionsLogger.warn('Upstox validation failed:', error);
     }
   }
 
@@ -197,7 +200,7 @@ export async function validateSymbols(inputs: (string | { symbol: string, isin?:
                     resolved = true;
                 }
             } catch (nseErr) {
-                console.warn(`[validateSymbols] NSE fallback failed for ${symbol}:`, nseErr);
+                actionsLogger.warn(`NSE fallback failed for ${symbol}:`, nseErr);
             }
          }
          
@@ -206,7 +209,7 @@ export async function validateSymbols(inputs: (string | { symbol: string, isin?:
          }
       }
     } catch (error) {
-           console.error(`[validateSymbols] Fallback failed for ${symbol}:`, error);
+           actionsLogger.error(`Fallback failed for ${symbol}:`, error);
            results.push({ symbol, isValid: false, error: 'Validation failed' });
     }
   }
@@ -237,7 +240,7 @@ export async function processZerodhaTrades(
     // Progress Callback
     const onProgress = async (msg: string, progress: number) => {
         if (jobId) {
-            await updateJob(jobId, progress, msg).catch(console.error);
+            await updateJob(jobId, progress, msg).catch((e: unknown) => actionsLogger.error('Job update failed:', e));
         }
     };
 
@@ -263,7 +266,7 @@ export async function processZerodhaUpload(
 ) {
      const onProgress = async (msg: string, progress: number) => {
         if (jobId) {
-            await updateJob(jobId, progress, msg).catch(console.error);
+            await updateJob(jobId, progress, msg).catch((e: unknown) => actionsLogger.error('Job update failed:', e));
         }
     };
 
@@ -572,7 +575,7 @@ async function getSnapshotHoldingsInternal(dateStr: string): Promise<HistoricalH
                 // In this case, we don't need to unadjust
                 if (Math.abs(priceRatio - ratio) < 0.5) {
                     // Data is RAW - no adjustment needed for this symbol
-                    console.log(`[Holdings] ${sym}: RAW data detected (price drop ${priceRatio.toFixed(2)} ~ ratio ${ratio})`);
+                    actionsLogger.info(`${sym}: RAW data detected (price drop ${priceRatio.toFixed(2)} ~ ratio ${ratio})`);
                     continue;
                 }
             }
@@ -743,7 +746,7 @@ export async function recordSymbolChanges(mappings: Record<string, string>): Pro
             }
         });
 
-        console.log(`Recorded SYMBOL_CHANGE & MAPPING: ${normalizedOld} → ${normalizedNew}`);
+        actionsLogger.info(`Recorded SYMBOL_CHANGE & MAPPING: ${normalizedOld} → ${normalizedNew}`);
     }
     
     revalidateApp();
@@ -869,7 +872,7 @@ function parseSplitBonusRatio(subject: string): { type: 'SPLIT' | 'BONUS' | null
     
     // Check if it mentions split or bonus but we couldn't parse ratio
     if (subjectLower.includes('split') || subjectLower.includes('bonus')) {
-        console.log(`[Corp Action] Could not parse ratio from: ${subject}`);
+        actionsLogger.info(`Could not parse ratio from: ${subject}`);
     }
     
     return { type: null, ratio: 1 };
@@ -902,7 +905,7 @@ export async function processNSECorporateActionsClient(
         const portfolioSymbols = await getPortfolioSymbols();
         const portfolioSet = new Set(portfolioSymbols.map(s => s.toUpperCase()));
         
-        console.log(`[Client Corp Action Sync] Processing ${nseActions.length} NSE actions for ${portfolioSymbols.length} portfolio symbols`);
+        actionsLogger.info(`Processing ${nseActions.length} NSE actions for ${portfolioSymbols.length} portfolio symbols`);
         
         // Get existing corporate actions to avoid duplicates
         const existingActions = await prisma.transaction.findMany({
@@ -933,7 +936,7 @@ export async function processNSECorporateActionsClient(
             
             // Skip if already exists
             if (existingSet.has(key)) {
-                console.log(`[Client Corp Action Sync] Skipping duplicate: ${key}`);
+                actionsLogger.info(`Skipping duplicate: ${key}`);
                 continue;
             }
             
@@ -946,7 +949,7 @@ export async function processNSECorporateActionsClient(
                 description: `Auto-synced from NSE: ${action.subject}`
             });
             actionsAdded++;
-            console.log(`[Client Corp Action Sync] Added: ${action.symbol} ${type} ${ratio}:1 on ${dateStr}`);
+            actionsLogger.info(`Added: ${action.symbol} ${type} ${ratio}:1 on ${dateStr}`);
         }
         
         if (actionsAdded > 0) {
@@ -964,7 +967,7 @@ export async function processNSECorporateActionsClient(
         };
         
     } catch (error) {
-        console.error('[Client Corp Action Sync] Error:', error);
+        actionsLogger.error('Corp action sync error:', error);
         return {
             success: false,
             message: `Sync failed: ${error instanceof Error ? error.message : String(error)}`,

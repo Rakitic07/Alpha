@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processNSECorporateActions } from '@/lib/corporate-actions';
 import { verifyCronSecret } from '@/lib/cron-auth';
+import { apiLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -23,12 +24,12 @@ export async function GET(request: NextRequest) {
     if (authError) return authError;
 
     const startTime = Date.now();
-    console.log('[Corporate Actions Cron] Starting daily sync...');
+    apiLogger.info('Starting daily sync...');
     
     try {
         const result = await processNSECorporateActions();
         
-        console.log(`[Corporate Actions Cron] Completed: ${result.message}`);
+        apiLogger.info(`Completed: ${result.message}`);
         
         return NextResponse.json({
             ...result,
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
         }, { status: result.success ? 200 : 500 });
         
     } catch (error) {
-        console.error('[Corporate Actions Cron] Error:', error);
+        apiLogger.error('Error:', error);
         return NextResponse.json({
             success: false,
             error: 'Corporate actions sync failed',

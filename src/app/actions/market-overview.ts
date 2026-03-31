@@ -11,6 +11,9 @@ import { getIndexConstituentData, INDEX_CONFIG } from '@/lib/index-constituents'
 import { getInstrumentKeys } from '@/lib/instrument-service';
 import { getFullQuotes, getLiveQuotes } from '@/lib/upstox/client';
 import { hasValidToken } from '@/lib/upstox-client';
+import { logger } from '@/lib/logger';
+
+const marketLogger = logger.scope('Market');
 
 // ============================================================================
 // Types
@@ -60,7 +63,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
   try {
     const config = INDEX_CONFIG[indexName];
     if (!config) {
-      console.error(`[MarketOverview] Unknown index: ${indexName}`);
+      marketLogger.error(`Unknown index: ${indexName}`);
       return null;
     }
 
@@ -72,7 +75,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
     };
     
     if (!hasToken) {
-      console.warn('[MarketOverview] No valid Upstox token');
+      marketLogger.warn('No valid Upstox token');
       return {
         indexName,
         indexValue: 0,
@@ -92,18 +95,18 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
     // 1. Get constituent symbols and weights
     const { symbols, weights } = await getIndexConstituentData(indexName);
     if (symbols.length === 0) {
-      console.warn(`[MarketOverview] No constituents found for ${indexName}`);
+      marketLogger.warn(`No constituents found for ${indexName}`);
       return null;
     }
 
-    console.log(`[MarketOverview] Fetching data for ${symbols.length} constituents of ${indexName}`);
+    marketLogger.info(`Fetching data for ${symbols.length} constituents of ${indexName}`);
 
     // 2. Map symbols to Upstox instrument keys
     const symbolToKey = await getInstrumentKeys(symbols);
     const instrumentKeys = Array.from(symbolToKey.values());
     
     if (instrumentKeys.length === 0) {
-      console.error(`[MarketOverview] No instrument keys found for ${indexName}`);
+      marketLogger.error(`No instrument keys found for ${indexName}`);
       return null;
     }
 
@@ -134,16 +137,16 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
         }
       } else {
         failedBatches++;
-        console.error(`[MarketOverview] Batch ${i + 1}/${batches.length} failed for ${indexName}:`, result.reason);
+        marketLogger.error(`Batch ${i + 1}/${batches.length} failed for ${indexName}:`, result.reason);
       }
     }
 
     if (failedBatches > 0) {
-      console.warn(`[MarketOverview] ${failedBatches}/${batches.length} batches failed for ${indexName}. Got ${fullQuotesMap.size}/${instrumentKeys.length} quotes.`);
+      marketLogger.warn(`${failedBatches}/${batches.length} batches failed for ${indexName}. Got ${fullQuotesMap.size}/${instrumentKeys.length} quotes.`);
     }
 
     if (fullQuotesMap.size === 0) {
-      console.error(`[MarketOverview] All batches failed for ${indexName}`);
+      marketLogger.error(`All batches failed for ${indexName}`);
       return null;
     }
 
@@ -236,7 +239,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
     };
 
   } catch (error) {
-    console.error(`[MarketOverview] Error fetching data for ${indexName}:`, error);
+    marketLogger.error(`Error fetching data for ${indexName}:`, error);
     return null;
   }
 }
@@ -302,7 +305,7 @@ export async function fetchAllIndexSummaries(): Promise<{
 
     return { summaries, tokenStatus: { hasToken: true } };
   } catch (error) {
-    console.error('[MarketOverview] Error fetching index summaries:', error);
+    marketLogger.error('Error fetching index summaries:', error);
     return { summaries: [] };
   }
 }

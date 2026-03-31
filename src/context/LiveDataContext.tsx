@@ -3,6 +3,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useTransition } from 'react';
 import { getLiveDashboardData, LiveDashboardData, LiveStockData, BreadthByCategory, saveIntradayPnL, getIntradayPnLHistory, IntradayPnLPoint } from '@/app/actions/live';
 import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
+import { logger } from '@/lib/logger';
+
+const liveLogger = logger.scope('LiveData');
 
 // Update interval in milliseconds (5 seconds)
 const UPDATE_INTERVAL_MS = 5000;
@@ -103,10 +106,10 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         .then(history => {
           if (history.length > 0) {
             setPnlHistory(history);
-            console.log(`[LiveData] Loaded ${history.length} P/L history points from server`);
+            liveLogger.info(`Loaded ${history.length} P/L history points from server`);
           }
         })
-        .catch(err => console.error('[LiveData] Failed to load P/L history:', err));
+        .catch(err => liveLogger.error('Failed to load P/L history:', err));
       return true;
     });
   }, []);
@@ -154,7 +157,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
             };
             setPnlHistory(prev => [...prev, newPoint]);
           })
-          .catch(err => console.error('[LiveData] Failed to save P/L:', err));
+          .catch(err => liveLogger.error('Failed to save P/L:', err));
       }
     }
   }, [data?.dayGain, data?.dayGainPercent]);
@@ -382,7 +385,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       try {
         callback(updates);
       } catch (err) {
-        console.error('[LiveData] Error in price subscriber:', err);
+        liveLogger.error('Error in price subscriber:', err);
       }
     });
   }, [applyBatchedUpdates]);
@@ -398,7 +401,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
   // Handle stream status changes
   const handleStreamStatusChange = useCallback((status: StreamStatus) => {
-    console.log('[LiveData] Stream status:', status);
+    liveLogger.info('Stream status:', status);
     
     // Clear error when connected
     if (status === 'connected') {
@@ -412,7 +415,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     // Don't log 403 errors repeatedly - they're expected when market is closed or token issues
     const is403Error = errorMsg.includes('403');
     if (!is403Error) {
-      console.error('[LiveData] Stream error:', errorMsg);
+      liveLogger.error('Stream error:', errorMsg);
     }
     
     // Only show error once per session to avoid spam
@@ -487,7 +490,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         errorShownRef.current = false;
       }
     } catch (error) {
-      console.error('Failed to fetch live data:', error);
+      liveLogger.error('Failed to fetch live data:', error);
       
       // Show error toast for fetch failures
       if (!errorShownRef.current) {

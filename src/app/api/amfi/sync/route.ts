@@ -12,13 +12,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-    fullAMFISync, 
-    getCurrentAMFIPeriod, 
+import {
+    fullAMFISync,
+    getCurrentAMFIPeriod,
     hasAMFIData,
     getAvailableAMFIPeriods,
-    AMFIPeriod 
-} from '@/lib/amfi-service';
+    AMFIPeriod
+} from '@/lib/amfi';
+import { apiLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for download and processing
@@ -39,7 +40,7 @@ export async function GET() {
                 : 'No AMFI data for current period. Use POST to sync.'
         });
     } catch (error) {
-        console.error('[AMFI Sync] Error checking status:', error);
+        apiLogger.error('Error checking status:', error);
         return NextResponse.json(
             { error: 'Failed to check AMFI status', details: String(error) },
             { status: 500 }
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
             period = { year, halfYear };
         }
         
-        console.log(`[AMFI Sync] Starting sync for period: ${period ? `${period.year}_${period.halfYear}` : 'current'}`);
+        apiLogger.info(`Starting sync for period: ${period ? `${period.year}_${period.halfYear}` : 'current'}`);
         
         const result = await fullAMFISync(period);
         
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
             message: `Successfully synced ${result.total} stock classifications for period ${result.period}`
         });
     } catch (error) {
-        console.error('[AMFI Sync] Error:', error);
+        apiLogger.error('Error:', error);
         return NextResponse.json(
             { 
                 error: 'Failed to sync AMFI data', 

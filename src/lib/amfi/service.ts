@@ -18,15 +18,18 @@
  * - Micro Cap: Ranks 501 and above (not in SEBI definition, our addition)
  */
 
-import * as XLSX from 'xlsx';
 import { prisma, chunkArray } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import type {
   AMFICategory,
   AMFIPeriod,
   AMFIStockClassification,
   AMFIPeriodStatus,
   AMFISyncResult,
+  MarketCapCategory,
 } from './types';
+
+const amfiLogger = logger.scope('AMFI');
 
 // ============================================================================
 // Period Calculation - Rolling System
@@ -326,6 +329,7 @@ function getCategoryFromRank(rank: number): AMFICategory {
  * Parse AMFI Excel file
  */
 export async function parseExcel(buffer: ArrayBuffer): Promise<AMFIStockClassification[]> {
+  const XLSX = await import('xlsx');
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
@@ -337,7 +341,7 @@ export async function parseExcel(buffer: ArrayBuffer): Promise<AMFIStockClassifi
   });
 
   if (rawRows.length < 3) {
-    console.error('[AMFI] Excel file too short');
+    amfiLogger.error('Excel file too short');
     return [];
   }
 
@@ -417,11 +421,11 @@ export async function parseExcel(buffer: ArrayBuffer): Promise<AMFIStockClassifi
 
   classifications.sort((a, b) => a.rank - b.rank);
 
-  console.log(`[AMFI] Parsed ${classifications.length} classifications`);
-  console.log(`[AMFI] Large: ${classifications.filter((c) => c.category === 'Large').length}`);
-  console.log(`[AMFI] Mid: ${classifications.filter((c) => c.category === 'Mid').length}`);
-  console.log(`[AMFI] Small: ${classifications.filter((c) => c.category === 'Small').length}`);
-  console.log(`[AMFI] Micro: ${classifications.filter((c) => c.category === 'Micro').length}`);
+  amfiLogger.info(`Parsed ${classifications.length} classifications`);
+  amfiLogger.info(`Large: ${classifications.filter((c) => c.category === 'Large').length}`);
+  amfiLogger.info(`Mid: ${classifications.filter((c) => c.category === 'Mid').length}`);
+  amfiLogger.info(`Small: ${classifications.filter((c) => c.category === 'Small').length}`);
+  amfiLogger.info(`Micro: ${classifications.filter((c) => c.category === 'Micro').length}`);
 
   return classifications;
 }
@@ -440,7 +444,7 @@ export async function syncToDatabase(
   const periodStr = periodToString(period);
   const validClassifications = classifications.filter((c) => c.symbol);
 
-  console.log(`[AMFI] Syncing ${validClassifications.length} classifications for ${periodStr}`);
+  amfiLogger.info(`Syncing ${validClassifications.length} classifications for ${periodStr}`);
 
   // Get existing count
   const existingCount = await prisma.aMFIClassification.count({
@@ -472,7 +476,7 @@ export async function syncToDatabase(
     insertedCount += batch.length;
   }
 
-  console.log(`[AMFI] Sync complete: ${insertedCount} created`);
+  amfiLogger.info(`Sync complete: ${insertedCount} created`);
   return { created: insertedCount, updated: existingCount };
 }
 
@@ -509,7 +513,7 @@ export async function recalculateAffectedSnapshots(period: AMFIPeriod): Promise<
     endDate = today;
   }
 
-  console.log(`[AMFI] Recalculating weekly snapshots from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+  amfiLogger.info(`Recalculating weekly snapshots from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
   // Get weekly snapshots in the affected range using the date field
   const affectedSnapshots = await prisma.weeklyPortfolioSnapshot.findMany({
@@ -523,11 +527,11 @@ export async function recalculateAffectedSnapshots(period: AMFIPeriod): Promise<
   });
 
   if (affectedSnapshots.length === 0) {
-    console.log(`[AMFI] No weekly snapshots found in the affected range`);
+    amfiLogger.info(`No weekly snapshots found in the affected range`);
     return 0;
   }
 
-  console.log(`[AMFI] Found ${affectedSnapshots.length} weekly snapshots to recalculate`);
+  amfiLogger.info(`Found ${affectedSnapshots.length} weekly snapshots to recalculate`);
 
   // Note: Weekly snapshots store market cap percentages directly (largeCapPercent, etc.)
   // Since they don't store holdings data, we need to trigger a full portfolio recalculation
@@ -537,8 +541,8 @@ export async function recalculateAffectedSnapshots(period: AMFIPeriod): Promise<
   // recalculatePortfolioHistory is called. The AMFI upload action should trigger this.
   //
   // For now, we return the count of affected snapshots to indicate what would be recalculated.
-  console.log(`[AMFI] ${affectedSnapshots.length} weekly snapshots in the affected date range would benefit from recalculation`);
-  console.log(`[AMFI] To apply new AMFI classifications, run a full portfolio recalculation`);
+  amfiLogger.info(`${affectedSnapshots.length} weekly snapshots in the affected date range would benefit from recalculation`);
+  amfiLogger.info(`To apply new AMFI classifications, run a full portfolio recalculation`);
   
   return affectedSnapshots.length;
 }
@@ -593,9 +597,173 @@ export async function getAvailablePeriods(): Promise<string[]> {
 /**
  * Check if data exists for a period
  */
-export async function hasPeriodData(period: AMFIPeriod): Promise<boolean> {
-  const count = await prisma.aMFIClassification.count({
-    where: { period: periodToString(period) },
-  });
+export async function hasPeriodData(period?: AMFIPeriod): Promise<boolean> {
+  if (period) {
+    const count = await prisma.aMFIClassification.count({
+      where: { period: periodToString(period) },
+    });
+    return count > 0;
+  }
+  const count = await prisma.aMFIClassification.count();
   return count > 0;
+}
+
+// ============================================================================
+// Utility Functions (migrated from amfi-service.ts)
+// ============================================================================
+
+/**
+ * Map AMFI category to MarketCapCategory
+ * AMFI only has Large/Mid/Small, we treat unlisted stocks as 'Micro'
+ */
+export function mapAMFIToMarketCapCategory(amfiCategory: AMFICategory): MarketCapCategory {
+  switch (amfiCategory) {
+    case 'Large': return 'Large';
+    case 'Mid': return 'Mid';
+    case 'Small': return 'Small';
+    default: return 'Micro';
+  }
+}
+
+/**
+ * Returns a function that resolves symbols based on a pre-fetched mapping list.
+ * Handles mapping chains (e.g., A -> B -> C will resolve A to C).
+ */
+export function getSymbolResolver(mappings: { oldSymbol: string; newSymbol: string }[]) {
+  const mappingMap = new Map<string, string>();
+  for (const m of mappings) {
+    mappingMap.set(m.oldSymbol.toUpperCase().trim(), m.newSymbol.toUpperCase().trim());
+  }
+
+  return (symbol: string) => {
+    let current = symbol.toUpperCase().trim();
+    const visited = new Set<string>();
+    while (mappingMap.has(current) && !visited.has(current)) {
+      visited.add(current);
+      const next = mappingMap.get(current);
+      if (!next) break;
+      current = next;
+    }
+    return current;
+  };
+}
+
+// ============================================================================
+// Download & Full Sync
+// ============================================================================
+
+const AMFI_BASE_URL = 'https://www.amfiindia.com/Themes/Theme1/downloads/';
+
+/**
+ * Generate possible AMFI Excel download URLs for a given period
+ */
+export function getAMFIPossibleUrls(period: AMFIPeriod): string[] {
+  const { year, halfYear } = period;
+  const month = halfYear === 'H1' ? 'Jun' : 'Dec';
+  const day = halfYear === 'H1' ? '30' : '31';
+
+  return [
+    `${AMFI_BASE_URL}AverageMarketCapitalizationoflistedcompaniesduringthesixmonthsended${day}${month}${year}.xlsx`,
+    `${AMFI_BASE_URL}AverageMarketCapitalization${day}${month}${year}.xlsx`,
+  ];
+}
+
+/**
+ * Legacy wrapper for backward compatibility
+ */
+export function getAMFIDownloadUrl(period: AMFIPeriod): string {
+  return getAMFIPossibleUrls(period)[0];
+}
+
+/**
+ * Download AMFI Excel file for a given period
+ */
+export async function downloadAMFIData(period: AMFIPeriod): Promise<ArrayBuffer> {
+  const urls = getAMFIPossibleUrls(period);
+  let lastError: Error | null = null;
+
+  for (const url of urls) {
+    try {
+      amfiLogger.info(`Attempting download from: ${url}`);
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
+        },
+      });
+
+      if (response.ok) {
+        amfiLogger.info(`Download successful from: ${url}`);
+        return await response.arrayBuffer();
+      }
+
+      amfiLogger.warn(`Download failed from ${url}: ${response.status} ${response.statusText}`);
+      lastError = new Error(`Failed to download AMFI data: ${response.status} ${response.statusText}`);
+    } catch (error) {
+      amfiLogger.error(`Fetch error for ${url}:`, error);
+      lastError = error as Error;
+    }
+  }
+
+  throw lastError || new Error(`Failed to download AMFI data for period ${period.year}_${period.halfYear}`);
+}
+
+/**
+ * Get all AMFI classifications for a period
+ */
+export async function getAMFIClassifications(period?: AMFIPeriod): Promise<AMFIStockClassification[]> {
+  let periodStr: string | undefined;
+
+  if (period) {
+    periodStr = periodToString(period);
+  } else {
+    const latest = await prisma.aMFIClassification.findFirst({
+      orderBy: { period: 'desc' },
+      select: { period: true },
+    });
+    periodStr = latest?.period;
+  }
+
+  if (!periodStr) return [];
+
+  const classifications = await prisma.aMFIClassification.findMany({
+    where: { period: periodStr },
+    orderBy: { rank: 'asc' },
+  });
+
+  return classifications.map((c) => ({
+    rank: c.rank,
+    companyName: c.companyName,
+    symbol: c.symbol,
+    isin: c.isin,
+    category: c.category as AMFICategory,
+    avgMarketCap: c.avgMarketCap,
+  }));
+}
+
+/**
+ * Full sync: Download and store AMFI data for a period
+ */
+export async function fullAMFISync(period?: AMFIPeriod): Promise<AMFISyncResult> {
+  const targetPeriod = period || getApplicablePeriod();
+  const periodStr = periodToString(targetPeriod);
+
+  amfiLogger.info(`Starting full sync for period: ${periodStr}`);
+
+  const buffer = await downloadAMFIData(targetPeriod);
+  const classifications = await parseExcel(buffer);
+
+  if (classifications.length === 0) {
+    throw new Error('No classifications parsed from AMFI Excel');
+  }
+
+  const { created, updated } = await syncToDatabase(classifications, targetPeriod);
+
+  return {
+    period: periodStr,
+    created,
+    updated,
+    total: classifications.length,
+  };
 }

@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { recordSymbolChanges } from '@/app/actions';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import { logger } from '@/lib/logger';
+
+const importLogger = logger.scope('Import');
 
 
 
@@ -83,7 +86,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
                           throw new Error(data.error);
                       }
                   } catch (e) {
-                      console.error("Failed to parse SSE message", e);
+                      importLogger.error("Failed to parse SSE message", e);
                   }
               }
           }
@@ -105,12 +108,12 @@ export function ImportProvider({ children }: { children: ReactNode }) {
                   throw new Error(data.error);
               }
           } catch (e) {
-              console.error("Failed to parse final SSE message", e);
+              importLogger.error("Failed to parse final SSE message", e);
           }
       }
       
       if (!importCompleted) {
-          console.warn('Import stream ended without receiving done signal');
+          importLogger.warn('Import stream ended without receiving done signal');
       }
 
       // 2. Record Symbol Changes (concurrently or after?)
@@ -129,7 +132,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         severity: 'success',
       });
     } catch (error: unknown) {
-      console.error('Import process failed:', error);
+      importLogger.error('Import process failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       setSnackbar({
         open: true,

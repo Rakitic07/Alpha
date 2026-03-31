@@ -1,19 +1,7 @@
 import { prisma } from '@/lib/db';
 import { differenceInCalendarDays } from 'date-fns';
-import { MarketCapCategory } from './finance';
-import { getAMFICategory, AMFICategory } from './amfi-service';
-
-/**
- * Map AMFI category to MarketCapCategory
- */
-function mapAMFIToMarketCapCategory(amfiCategory: AMFICategory): MarketCapCategory {
-    switch (amfiCategory) {
-        case 'Large': return 'Large';
-        case 'Mid': return 'Mid';
-        case 'Small': return 'Small';
-        default: return 'Micro';
-    }
-}
+import type { MarketCapCategory } from './amfi';
+import { getCategory as getAMFICategory, mapAMFIToMarketCapCategory } from './amfi';
 
 export interface ExitRecord {
     id: string; // Composite ID

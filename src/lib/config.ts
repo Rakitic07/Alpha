@@ -4,6 +4,9 @@
  */
 
 import { prisma } from './db';
+import { logger } from '@/lib/logger';
+
+const configLogger = logger.scope('Config');
 
 // Cache for the lock date to avoid repeated DB calls during a single request
 let cachedLockDate: Date | null | undefined = undefined;
@@ -24,7 +27,7 @@ export async function getDataLockDate(): Promise<Date | null> {
         
         if (config?.value) {
             cachedLockDate = new Date(config.value + 'T00:00:00.000Z');
-            console.log(`[Config] Data Lock Active (DB): Protecting data before ${cachedLockDate.toISOString().split('T')[0]}`);
+            configLogger.info(`Data Lock Active (DB): Protecting data before ${cachedLockDate.toISOString().split('T')[0]}`);
             return cachedLockDate;
         }
     } catch {
@@ -34,7 +37,7 @@ export async function getDataLockDate(): Promise<Date | null> {
     // Fallback to environment variable
     if (process.env.DATA_LOCK_DATE) {
         cachedLockDate = new Date(process.env.DATA_LOCK_DATE + 'T00:00:00.000Z');
-        console.log(`[Config] Data Lock Active (ENV): Protecting data before ${cachedLockDate.toISOString().split('T')[0]}`);
+        configLogger.info(`Data Lock Active (ENV): Protecting data before ${cachedLockDate.toISOString().split('T')[0]}`);
         return cachedLockDate;
     }
     

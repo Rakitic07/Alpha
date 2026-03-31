@@ -6,9 +6,12 @@ import { prisma, chunkArray } from '@/lib/db';
 import { SectorAllocation } from '@/lib/types';
 import { getLiveQuoteV3, hasValidToken, UpstoxLiveQuoteV3 } from '@/lib/upstox-client';
 import { getInstrumentKeys } from '@/lib/instrument-service';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '@/lib/amfi-service';
+import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '@/lib/amfi';
 import { isMarketOpenAsync } from '@/lib/marketHours';
 import { subDays } from 'date-fns';
+import { logger } from '@/lib/logger';
+
+const liveActionsLogger = logger.scope('LiveActions');
 
 export interface LiveStockData {
   symbol: string;
@@ -151,7 +154,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     // 1. Get current holdings
     const engine = await computePortfolioState(new Date()); // Today's state
     const holdings = Array.from(engine.holdings.values()).filter(h => h.qty > 0.01);
-    console.log(`[LiveDashboard] computed ${holdings.length} holdings`);
+    liveActionsLogger.info(`computed ${holdings.length} holdings`);
 
     // Check market status
     const isMarketOpen = await isMarketOpenAsync();
@@ -162,7 +165,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   const useHistoricalData = !isMarketOpen && preMarket;
   
   if (useHistoricalData) {
-    console.log(`[LiveDashboard] Market closed and pre-market hours - using last trading day's data`);
+    liveActionsLogger.info(`Market closed and pre-market hours - using last trading day's data`);
   }
 
   const emptyBreadth: BreadthByCategory = {
@@ -216,7 +219,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   
   if (useHistoricalData) {
     historicalPrices = await getLastTradingDayPrices(holdingSymbols);
-    console.log(`[LiveDashboard] Fetched historical prices for ${historicalPrices.lastDayPrices.size} symbols, last trading date: ${historicalPrices.lastTradingDate?.toISOString().split('T')[0]}`);
+    liveActionsLogger.info(`Fetched historical prices for ${historicalPrices.lastDayPrices.size} symbols, last trading date: ${historicalPrices.lastTradingDate?.toISOString().split('T')[0]}`);
   }
   
   if (hasToken && !useHistoricalData) {
@@ -226,7 +229,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       
       if (instrumentKeys.length > 0) {
         const quotes = await getLiveQuoteV3(instrumentKeys);
-        console.log(`[LiveDashboard] Fetched ${quotes.size} Upstox quotes for ${instrumentKeys.length} instruments`);
+        liveActionsLogger.info(`Fetched ${quotes.size} Upstox quotes for ${instrumentKeys.length} instruments`);
         
         // Map instrument keys back to symbols
         for (const [symbol, key] of instrumentKeyMap.entries()) {
@@ -245,10 +248,10 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
         }
       }
     } catch (error) {
-      console.error("[LiveDashboard] Error fetching Upstox quotes:", error);
+      liveActionsLogger.error("Error fetching Upstox quotes:", error);
     }
   } else if (!useHistoricalData) {
-    console.warn("[LiveDashboard] No valid Upstox token - using fallback prices");
+    liveActionsLogger.warn("No valid Upstox token - using fallback prices");
   }
 
   // Fetch AMFI market cap classifications for all holdings
@@ -298,7 +301,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       }
     }
   } catch (error) {
-    console.warn('[LiveDashboard] Sector lookup failed:', (error as Error).message);
+    liveActionsLogger.warn('Sector lookup failed:', (error as Error).message);
   }
 
   // 4. Match holdings with quotes and calculate metrics
@@ -470,7 +473,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   if (indicesData && indicesData.length > 0) {
     result.indices = indicesData;
   } else {
-    console.log("[LiveDashboard] Index fetch failed or empty.");
+    liveActionsLogger.info("Index fetch failed or empty.");
     result.indices = [];
   }
 
@@ -478,10 +481,10 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   } catch (error: any) {
     const errorMessage = error?.message || '';
     if (errorMessage.includes('no such table')) {
-        console.error('[LiveDashboard] Database initialization error: Missing tables. Run "npx prisma db push".');
+        liveActionsLogger.error('Database initialization error: Missing tables. Run "npx prisma db push".');
         throw new Error('DATABASE_NOT_INITIALIZED: Missing database tables. Please run "npx prisma db push" to initialize your database.');
     }
-    console.error("[LiveDashboard] Error fetching dashboard data:", error);
+    liveActionsLogger.error("Error fetching dashboard data:", error);
     throw error;
   }
 }
@@ -523,10 +526,10 @@ export async function saveIntradayPnL(pnl: number, percent: number): Promise<voi
   } catch (error: any) {
     const errorMessage = error?.message || '';
     if (errorMessage.includes('no such table')) {
-        console.error('[IntradayPnL] Database initialization error: Missing tables. Run "npx prisma db push".');
+        liveActionsLogger.error('IntradayPnL: Database initialization error: Missing tables. Run "npx prisma db push".');
         return; // Silent fail for cron/background tasks but log is there
     }
-    console.error('[IntradayPnL] Error saving P/L point:', error);
+    liveActionsLogger.error('IntradayPnL: Error saving P/L point:', error);
   }
 }
 
@@ -552,7 +555,7 @@ export async function getIntradayPnLHistory(): Promise<IntradayPnLPoint[]> {
       }
     });
     
-    console.log(`[IntradayPnL] Found ${records.length} records for date range ${todayStart.toISOString()} to ${tomorrowStart.toISOString()}`);
+    liveActionsLogger.info(`IntradayPnL: Found ${records.length} records for date range ${todayStart.toISOString()} to ${tomorrowStart.toISOString()}`);
     
     return records.map(r => ({
       time: r.timestamp,
@@ -562,10 +565,10 @@ export async function getIntradayPnLHistory(): Promise<IntradayPnLPoint[]> {
   } catch (error: any) {
     const errorMessage = error?.message || '';
     if (errorMessage.includes('no such table')) {
-        console.error('[IntradayPnL] Database initialization error: Missing tables. Run "npx prisma db push".');
+        liveActionsLogger.error('IntradayPnL: Database initialization error: Missing tables. Run "npx prisma db push".');
         return [];
     }
-    console.error('[IntradayPnL] Error fetching P/L history:', error);
+    liveActionsLogger.error('IntradayPnL: Error fetching P/L history:', error);
     return [];
   }
 }

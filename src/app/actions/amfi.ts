@@ -1,6 +1,6 @@
 'use server';
 
-import { parseAMFIExcel, syncAMFIClassifications, AMFIPeriod, getCurrentAMFIPeriod } from '@/lib/amfi-service';
+import { parseAMFIExcel, syncAMFIClassifications, AMFIPeriod, getCurrentAMFIPeriod } from '@/lib/amfi';
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 

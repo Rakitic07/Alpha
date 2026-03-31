@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
+
+const cronLogger = logger.scope('Cron');
 
 /**
  * Verify that a cron/admin API request has the correct secret.
@@ -32,7 +35,7 @@ export function verifyCronSecret(request: Request): NextResponse | null {
         return null;
     }
 
-    console.warn(`[CronAuth] Unauthorized request to ${url.pathname}`);
+    cronLogger.warn(`Unauthorized request to ${url.pathname}`);
     return NextResponse.json(
         { error: 'Unauthorized. Provide ?secret= or Authorization: Bearer header.' },
         { status: 401 }

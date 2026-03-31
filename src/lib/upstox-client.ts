@@ -9,6 +9,7 @@ import {
     getAccessToken,
     clearTokenCache,
 } from './upstox/auth';
+import { upstoxLogger } from '@/lib/logger';
 
 const CONFIG = {
     baseUrl: 'https://api.upstox.com/v2',
@@ -153,7 +154,7 @@ export async function getHistoricalCandles(
     // V3 URL: /v3/historical-candle/{instrumentKey}/{unit}/{interval}/{to_date}/{from_date}
     const url = `${CONFIG.baseUrlV3}/historical-candle/${encodedKey}/${unit}/${intervalValue}/${toDate}/${fromDate}`;
     
-    console.log(`[Upstox] Historical candle request: ${url}`);
+    upstoxLogger.info(`Historical candle request: ${url}`);
     
     const response = await fetch(url, {
         headers: {
@@ -165,7 +166,7 @@ export async function getHistoricalCandles(
 
     if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[Upstox] Historical fetch failed for ${instrumentKey}:`, errorText);
+        upstoxLogger.error(`Historical fetch failed for ${instrumentKey}:`, errorText);
         throw new Error(`Upstox Historical Fetch Failed: ${response.status} - ${errorText}`);
     }
 
@@ -183,7 +184,7 @@ export async function getHistoricalCandles(
         oi: c[6] as number,
     }));
 
-    console.log(`[Upstox] Got ${candles.length} candles for ${instrumentKey}`);
+    upstoxLogger.info(`Got ${candles.length} candles for ${instrumentKey}`);
 
     return { candles };
 }
@@ -242,11 +243,11 @@ export async function getLiveQuoteV3(instrumentKeys: string[], retryOnAuth = tru
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`[Upstox] LTP V3 fetch failed:`, errorText);
+                upstoxLogger.error(`LTP V3 fetch failed:`, errorText);
                 
                 // If we get a 401 and haven't retried yet, clear cache and retry once
                 if (response.status === 401 && retryOnAuth) {
-                    console.log('[Upstox] Got 401, clearing cache and retrying with fresh token...');
+                    upstoxLogger.info('Got 401, clearing cache and retrying with fresh token...');
                     clearTokenCache();
                     // Retry once with fresh token from database
                     return getLiveQuoteV3(instrumentKeys, false);
@@ -296,7 +297,7 @@ export async function getLiveQuoteV3(instrumentKeys: string[], retryOnAuth = tru
                 }
             }
         } catch (error) {
-            console.error(`[Upstox] Batch fetch failed for ${batch.length} instruments:`, error);
+            upstoxLogger.error(`Batch fetch failed for ${batch.length} instruments:`, error);
             throw error;
         }
     }
@@ -320,7 +321,7 @@ export async function getLTP(instrumentKeys: string[]): Promise<Map<string, numb
         
         return result;
     } catch (error) {
-        console.error('[Upstox] getLTP fallback failed:', error);
+        upstoxLogger.error('getLTP fallback failed:', error);
         throw error;
     }
 }
@@ -355,7 +356,7 @@ export async function getFullQuote(instrumentKeys: string[]): Promise<Map<string
 
     if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[Upstox] Full quote fetch failed:`, errorText);
+        upstoxLogger.error(`Full quote fetch failed:`, errorText);
         throw new Error(`Upstox Quote Fetch Failed: ${response.status} - ${errorText}`);
     }
 
@@ -419,7 +420,7 @@ export async function getOHLC(
 
     if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[Upstox] OHLC V3 fetch failed:`, errorText);
+        upstoxLogger.error(`OHLC V3 fetch failed:`, errorText);
         throw new Error(`Upstox OHLC Fetch Failed: ${response.status} - ${errorText}`);
     }
 
@@ -494,15 +495,15 @@ export async function getIndexQuotes(): Promise<MarketIndex[]> {
     const indexKeys = indexNames.map(name => INDEX_KEYS[name]);
     
     try {
-        console.log('[Indices] Fetching quotes for:', indexNames);
-        console.log('[Indices] Using keys:', indexKeys);
+        upstoxLogger.info('Fetching quotes for:', indexNames);
+        upstoxLogger.info('Using keys:', indexKeys);
         
         // Use LTP V3 which provides both last_price and cp (previous close)
         const quotes = await getLiveQuoteV3(indexKeys);
         const results: MarketIndex[] = [];
 
-        console.log('[Indices] Response keys:', Array.from(quotes.keys()));
-        console.log('[Indices] Got', quotes.size, 'quotes');
+        upstoxLogger.info('Response keys:', Array.from(quotes.keys()));
+        upstoxLogger.info(`Got ${quotes.size} quotes`);
 
         // Track which quotes we've already used to avoid duplicates
         const usedQuotes = new Set<string>();
@@ -555,15 +556,15 @@ export async function getIndexQuotes(): Promise<MarketIndex[]> {
                     currentPrice: lastPrice,
                     percentChange,
                 });
-                console.log(`[Indices] ${name}: ${lastPrice} (${percentChange.toFixed(2)}%) [matched: ${matchedKey}]`);
+                upstoxLogger.info(`${name}: ${lastPrice} (${percentChange.toFixed(2)}%) [matched: ${matchedKey}]`);
             } else {
-                console.warn(`[Indices] No quote found for ${name} (key: ${key})`);
+                upstoxLogger.warn(`No quote found for ${name} (key: ${key})`);
             }
         }
 
         return results;
     } catch (error) {
-        console.error('[Upstox] Failed to fetch index quotes:', error);
+        upstoxLogger.error('Failed to fetch index quotes:', error);
         return [];
     }
 }
@@ -641,7 +642,7 @@ export async function isMarketHoliday(date: string): Promise<boolean> {
         
         return false;
     } catch (error) {
-        console.error('[Upstox] Error checking market holiday:', error);
+        upstoxLogger.error('Error checking market holiday:', error);
         // On error, assume not a holiday (fail open to time-based logic)
         return false;
     }

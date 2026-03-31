@@ -1,4 +1,4 @@
-import { getCurrentAMFIPeriod, hasAMFIData } from '@/lib/amfi-service';
+import { getCurrentAMFIPeriod, hasAMFIData } from '@/lib/amfi';
 import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
 import Link from 'next/link';

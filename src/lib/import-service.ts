@@ -4,7 +4,10 @@ import { recalculatePortfolioHistory } from './finance';
 import { prisma } from '@/lib/db';
 import { revalidateApp } from '@/app/actions';
 import { parseFlexibleDate } from '@/lib/format';
-import { getSymbolResolver } from './amfi-service';
+import { getSymbolResolver } from './amfi';
+import { logger } from '@/lib/logger';
+
+const importLogger = logger.scope('Import');
 
 // Zerodha Tradebook has columns: symbol, isin, trade_date, exchange, segment, series, trade_type, auction, quantity, price, trade_id, order_id, order_execution_time
 export type ZerodhaTrade = {
@@ -80,7 +83,7 @@ export async function ingestZerodhaTradesWithProgress(
         return await processZerodhaTradesCore(records, filename, onProgress, mappings);
         
     } catch (error) {
-        console.error('Error parsing CSV:', error);
+        importLogger.error('Error parsing CSV:', error);
         throw new Error('Failed to parse CSV file. Ensure it is a valid Zerodha Tradebook.');
     }
 }
@@ -116,7 +119,7 @@ export async function processZerodhaTradesCore(
         const date = parseFlexibleDate(record.trade_date);
 
         if (isNaN(date.getTime())) {
-             console.error(`Failed to parse date for ${record.symbol}: ${record.trade_date}`);
+             importLogger.error(`Failed to parse date for ${record.symbol}: ${record.trade_date}`);
              continue;
         }
         
@@ -214,7 +217,7 @@ export async function processZerodhaTradesCore(
                       newSymbol: normalizedNew
                   }
               }).then(() => {
-                  console.log(`[Import] Recorded Symbol Mapping: ${normalizedOld} → ${normalizedNew}`);
+                  importLogger.info(`Recorded Symbol Mapping: ${normalizedOld} → ${normalizedNew}`);
               });
           });
           await Promise.all(mappingPromises);

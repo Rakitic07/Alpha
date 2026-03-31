@@ -6,6 +6,7 @@
  */
 
 import { formatDateDMY } from './format';
+import { apiLogger } from '@/lib/logger';
 
 // ============================================================================
 // Types
@@ -92,7 +93,7 @@ export async function fetchNSEHistory(
     const symbolClean = symbol.replace(/\.(NS|BO)$/i, '');
 
     try {
-        console.log(`[NSE] Initializing session for ${symbolClean}...`);
+        apiLogger.info(`[NSE] Initializing session for ${symbolClean}...`);
 
         // 1. Get Cookies
         const cookies = await getNSECookies();
@@ -115,7 +116,7 @@ export async function fetchNSEHistory(
             current.setDate(current.getDate() + 1);
         }
 
-        console.log(`[NSE] Fetching history for ${symbolClean} in ${chunks.length} chunks...`);
+        apiLogger.info(`[NSE] Fetching history for ${symbolClean} in ${chunks.length} chunks...`);
 
         const apiHeaders = {
             ...NSE_HEADERS,
@@ -135,34 +136,34 @@ export async function fetchNSEHistory(
             // Sequential fetch with delay to be polite
             await new Promise(r => setTimeout(r, 1000));
 
-            console.log(`[NSE] Fetching chunk: ${chunkFrom} to ${chunkTo}`);
+            apiLogger.info(`[NSE] Fetching chunk: ${chunkFrom} to ${chunkTo}`);
             const apiRes = await fetch(chunkUrl, { headers: apiHeaders });
 
             if (!apiRes.ok) {
                 const txt = await apiRes.text();
-                console.warn(`[NSE] Chunk failed ${apiRes.status}: ${txt.substring(0, 100)}`);
+                apiLogger.warn(`[NSE] Chunk failed ${apiRes.status}: ${txt.substring(0, 100)}`);
                 continue;
             }
 
             try {
                 const json = await apiRes.json() as NSEHistoricalData;
-                console.log(`[NSE] Chunk Response for ${symbolClean}:`, JSON.stringify(json).substring(0, 1000));
+                apiLogger.info(`[NSE] Chunk Response for ${symbolClean}:`, JSON.stringify(json).substring(0, 1000));
                 if (json.data && Array.isArray(json.data)) {
                     allData.push(...json.data);
                 }
             } catch (e) {
-                console.warn(`[NSE] Failed to parse chunk JSON`, e);
+                apiLogger.warn(`[NSE] Failed to parse chunk JSON`, e);
             }
         }
 
         if (allData.length === 0) return null;
 
-        console.log(`[NSE] Success: ${allData.length} records found for ${symbolClean} (Total)`);
+        apiLogger.info(`[NSE] Success: ${allData.length} records found for ${symbolClean} (Total)`);
         return { data: allData };
 
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
-        console.error(`[NSE] Fetch failed for ${symbolClean}:`, message);
+        apiLogger.error(`[NSE] Fetch failed for ${symbolClean}:`, message);
         return null;
     }
 }
@@ -183,7 +184,7 @@ export async function fetchNSEIndexHistory(
     endDate: Date
 ): Promise<NSEIndexHistoricalData | null> {
     try {
-        console.log(`[NSE Index] Initializing session for ${indexName}...`);
+        apiLogger.info(`[NSE Index] Initializing session for ${indexName}...`);
 
         // 1. Get Cookies
         const cookies = await getNSECookies();
@@ -206,7 +207,7 @@ export async function fetchNSEIndexHistory(
             current.setDate(current.getDate() + 1);
         }
 
-        console.log(`[NSE Index] Fetching history for ${indexName} in ${chunks.length} chunks...`);
+        apiLogger.info(`[NSE Index] Fetching history for ${indexName} in ${chunks.length} chunks...`);
 
         let apiHeaders = {
             ...NSE_HEADERS,
@@ -226,12 +227,12 @@ export async function fetchNSEIndexHistory(
             // Sequential fetch
             await new Promise(r => setTimeout(r, 1000));
 
-            console.log(`[NSE Index] Fetching chunk: ${chunkFrom} to ${chunkTo}`);
+            apiLogger.info(`[NSE Index] Fetching chunk: ${chunkFrom} to ${chunkTo}`);
             let apiRes = await fetch(chunkUrl, { headers: apiHeaders });
 
             // Handle session refresh if needed
             if (apiRes.status === 401 || apiRes.status === 403) {
-                console.log(`[NSE Index] Refreshing session for chunk...`);
+                apiLogger.info(`[NSE Index] Refreshing session for chunk...`);
                 const newCookies = await getNSECookies();
                 if (newCookies) {
                     apiHeaders = { ...apiHeaders, 'Cookie': newCookies };
@@ -241,7 +242,7 @@ export async function fetchNSEIndexHistory(
 
             if (!apiRes.ok) {
                 const txt = await apiRes.text();
-                console.warn(`[NSE Index] Chunk failed ${apiRes.status}: ${txt.substring(0, 100)}`);
+                apiLogger.warn(`[NSE Index] Chunk failed ${apiRes.status}: ${txt.substring(0, 100)}`);
                 continue;
             }
 
@@ -256,18 +257,18 @@ export async function fetchNSEIndexHistory(
                     allData.push(...json.data);
                 }
             } catch (e) {
-                console.warn(`[NSE Index] Failed to parse chunk JSON`, e);
+                apiLogger.warn(`[NSE Index] Failed to parse chunk JSON`, e);
             }
         }
 
         if (allData.length === 0) return null;
 
-        console.log(`[NSE Index] Success: ${allData.length} records found for ${indexName} (Total)`);
+        apiLogger.info(`[NSE Index] Success: ${allData.length} records found for ${indexName} (Total)`);
         return { data: { indexCloseOnlineRecords: allData } };
 
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
-        console.error(`[NSE Index] Fetch failed for ${indexName}:`, message);
+        apiLogger.error(`[NSE Index] Fetch failed for ${indexName}:`, message);
         return null;
     }
 }
@@ -290,7 +291,7 @@ export async function fetchNSECorporateActions(
         const fromDateStr = formatDateDMY(fromDate);
         const toDateStr = formatDateDMY(toDate);
         
-        console.log(`[NSE] Fetching corporate actions from ${fromDateStr} to ${toDateStr}...`);
+        apiLogger.info(`[NSE] Fetching corporate actions from ${fromDateStr} to ${toDateStr}...`);
 
         // 1. Get Cookies
         const cookies = await getNSECookies();
@@ -310,17 +311,17 @@ export async function fetchNSECorporateActions(
 
         if (!apiRes.ok) {
             const txt = await apiRes.text();
-            console.warn(`[NSE] Corporate actions fetch failed ${apiRes.status}: ${txt.substring(0, 100)}`);
+            apiLogger.warn(`[NSE] Corporate actions fetch failed ${apiRes.status}: ${txt.substring(0, 100)}`);
             return null;
         }
 
         const json = await apiRes.json() as NSECorporateAction[];
-        console.log(`[NSE] Successfully fetched ${json.length} corporate actions`);
+        apiLogger.info(`[NSE] Successfully fetched ${json.length} corporate actions`);
         return json;
 
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
-        console.error(`[NSE] Error fetching corporate actions:`, message);
+        apiLogger.error(`[NSE] Error fetching corporate actions:`, message);
         return null;
     }
 }

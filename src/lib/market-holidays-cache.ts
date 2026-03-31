@@ -8,6 +8,9 @@
  */
 
 import { getMarketHolidays, getMarketTimings, hasValidToken, type MarketHoliday, type MarketTiming } from './upstox-client';
+import { logger } from '@/lib/logger';
+
+const marketLogger = logger.scope('Market');
 
 // Cache structure
 interface HolidaysCache {
@@ -60,7 +63,7 @@ async function getCachedHolidays(): Promise<MarketHoliday[]> {
                 }
             }
         } catch (error) {
-            console.warn('[MarketHolidays] Failed to read localStorage cache:', error);
+            marketLogger.warn('Failed to read localStorage cache:', error);
         }
     }
     
@@ -89,13 +92,13 @@ async function getCachedHolidays(): Promise<MarketHoliday[]> {
             try {
                 localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
             } catch (error) {
-                console.warn('[MarketHolidays] Failed to write localStorage cache:', error);
+                marketLogger.warn('Failed to write localStorage cache:', error);
             }
         }
         
         return holidays;
     } catch (error) {
-        console.error('[MarketHolidays] Failed to fetch holidays:', error);
+        marketLogger.error('Failed to fetch holidays:', error);
         return [];
     }
 }
@@ -140,7 +143,7 @@ export async function isTradingHoliday(date: Date | string): Promise<boolean> {
         
         return false;
     } catch (error) {
-        console.error('[MarketHolidays] Error checking if trading holiday:', error);
+        marketLogger.error('Error checking if trading holiday:', error);
         // On error, assume not a holiday (fail safe)
         return false;
     }
@@ -159,7 +162,7 @@ export async function getTodayHoliday(): Promise<MarketHoliday | null> {
         const holidays = await getCachedHolidays();
         return holidays.find(h => h.date === today) || null;
     } catch (error) {
-        console.error('[MarketHolidays] Error getting today\'s holiday:', error);
+        marketLogger.error('Error getting today\'s holiday:', error);
         return null;
     }
 }
@@ -192,7 +195,7 @@ export async function getMarketTimingsCached(date: string): Promise<MarketTiming
                 }
             }
         } catch (error) {
-            console.warn('[MarketTimings] Failed to read localStorage cache:', error);
+            marketLogger.warn('Failed to read localStorage cache:', error);
         }
     }
     
@@ -229,13 +232,13 @@ export async function getMarketTimingsCached(date: string): Promise<MarketTiming
             try {
                 localStorage.setItem(CACHE_KEY_TIMINGS, JSON.stringify(cacheData));
             } catch (error) {
-                console.warn('[MarketTimings] Failed to write localStorage cache:', error);
+                marketLogger.warn('Failed to write localStorage cache:', error);
             }
         }
         
         return timings;
     } catch (error) {
-        console.error('[MarketTimings] Failed to fetch timings:', error);
+        marketLogger.error('Failed to fetch timings:', error);
         return [];
     }
 }
@@ -306,7 +309,7 @@ export async function getMarketStatus(): Promise<MarketStatus> {
             }
         }
     } catch (e) {
-        console.warn('Failed to get market timings, falling back to holidays API', e);
+        marketLogger.warn('Failed to get market timings, falling back to holidays API', e);
     }
     
     // 2b. FALLBACK: Check Holidays API for special sessions (Budget Day on Sunday, etc.)
@@ -319,7 +322,7 @@ export async function getMarketStatus(): Promise<MarketStatus> {
             );
             
             if (nseOpen && nseOpen.start_time && nseOpen.end_time) {
-                console.log(`[MarketStatus] Using holidays API for special session: ${holiday.description}`);
+                marketLogger.info(`Using holidays API for special session: ${holiday.description}`);
                 const startTime = new Date(nseOpen.start_time);
                 const endTime = new Date(nseOpen.end_time);
                 const nowTs = Date.now();
@@ -347,7 +350,7 @@ export async function getMarketStatus(): Promise<MarketStatus> {
             }
         }
     } catch (e) {
-        console.warn('Failed to check holidays API for special sessions', e);
+        marketLogger.warn('Failed to check holidays API for special sessions', e);
     }
     
     // 3. Check Weekend AFTER timings API check

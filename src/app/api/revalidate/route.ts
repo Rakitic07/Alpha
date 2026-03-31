@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidateApp } from '@/app/actions';
 import { verifyCronSecret } from '@/lib/cron-auth';
+import { apiLogger } from '@/lib/logger';
 
 /**
  * POST /api/revalidate
@@ -15,10 +16,10 @@ export async function POST(request: Request) {
 
     try {
         await revalidateApp();
-        console.log('[Revalidate] Successfully revalidated all pages and cache tags');
+        apiLogger.info('Successfully revalidated all pages and cache tags');
         return NextResponse.json({ revalidated: true, timestamp: new Date().toISOString() });
     } catch (error) {
-        console.error('[Revalidate] Error:', error);
+        apiLogger.error('Error:', error);
         return NextResponse.json(
             { error: 'Revalidation failed', details: String(error) },
             { status: 500 }

@@ -4,6 +4,7 @@ import protobuf from 'protobufjs';
 import path from 'path';
 import { EventEmitter } from 'events';
 import { UpstoxFeedResponse } from '@/types/upstox-feed';
+import { upstoxLogger } from '@/lib/logger';
 
 // Configuration
 const UPSTOX_PROD_AUTH_URL = "https://api.upstox.com/v3/feed/market-data-feed/authorize";
@@ -38,11 +39,11 @@ export class UpstoxStreamerClient extends EventEmitter {
             await this.initProtobuf();
             
             const authorizedUrl = await this.authorize();
-            console.log('[UpstoxStreamer] Authorized URL obtained. Connecting WS...');
+            upstoxLogger.info('Authorized URL obtained. Connecting WS...');
             
             await this.connectWebSocket(authorizedUrl);
         } catch (error) {
-            console.error('[UpstoxStreamer] Connection failed:', error);
+            upstoxLogger.error('Connection failed:', error);
             this.emit('error', error);
             this.handleReconnect();
         }
@@ -66,9 +67,9 @@ export class UpstoxStreamerClient extends EventEmitter {
         
         try {
             this.protobufRoot = await protobuf.load(protoPath);
-            console.log('[UpstoxStreamer] Protobuf loaded from:', protoPath);
+            upstoxLogger.info('Protobuf loaded from:', protoPath);
         } catch (error) {
-            console.error('[UpstoxStreamer] Failed to load Protobuf:', error);
+            upstoxLogger.error('Failed to load Protobuf:', error);
             throw error;
         }
     }
@@ -96,14 +97,14 @@ export class UpstoxStreamerClient extends EventEmitter {
             });
 
             this.ws.on('open', () => {
-                console.log('[UpstoxStreamer] WebSocket Connected');
+                upstoxLogger.info('WebSocket Connected');
                 this.emit('open');
                 this.subscribe();
                 resolve();
             });
 
             this.ws.on('close', (code, reason) => {
-                console.log(`[UpstoxStreamer] WebSocket Closed: ${code} ${reason}`);
+                upstoxLogger.info(`WebSocket Closed: ${code} ${reason}`);
                 this.emit('close');
                 if (!this.isManuallyClosed) {
                     this.handleReconnect();
@@ -111,7 +112,7 @@ export class UpstoxStreamerClient extends EventEmitter {
             });
 
             this.ws.on('error', (err) => {
-                console.error('[UpstoxStreamer] WebSocket Error:', err);
+                upstoxLogger.error('WebSocket Error:', err);
                 this.emit('error', err);
                 reject(err);
             });
@@ -123,7 +124,7 @@ export class UpstoxStreamerClient extends EventEmitter {
                         this.emit('message', decoded);
                     }
                 } catch (err) {
-                    console.error('[UpstoxStreamer] Message decoding failed:', err);
+                    upstoxLogger.error('Message decoding failed:', err);
                 }
             });
         });
@@ -132,7 +133,7 @@ export class UpstoxStreamerClient extends EventEmitter {
     private subscribe() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-        console.log(`[UpstoxStreamer] Subscribing to ${this.config.instrumentKeys.length} instruments`);
+        upstoxLogger.info(`Subscribing to ${this.config.instrumentKeys.length} instruments`);
 
         const request = {
             guid: "dashboard-live-" + Date.now(),
@@ -159,11 +160,11 @@ export class UpstoxStreamerClient extends EventEmitter {
     private handleReconnect() {
         if (this.isManuallyClosed) return;
         
-        console.log('[UpstoxStreamer] Scheduling reconnect in 3s...');
+        upstoxLogger.info('Scheduling reconnect in 3s...');
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         
         this.reconnectTimer = setTimeout(() => {
-            console.log('[UpstoxStreamer] Reconnecting...');
+            upstoxLogger.info('Reconnecting...');
             this.connect();
         }, 3000);
     }

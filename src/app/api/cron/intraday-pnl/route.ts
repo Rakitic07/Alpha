@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getLiveDashboardData, saveIntradayPnL } from '@/app/actions/live';
 import { isMarketOpenAsync } from '@/lib/marketHours';
 import { verifyCronSecret } from '@/lib/cron-auth';
+import { apiLogger } from '@/lib/logger';
 
 /**
  * Intraday P/L Recording Cron Job
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         const isMarketOpen = await isMarketOpenAsync();
         
         if (!isMarketOpen) {
-            console.log('[IntradayPnL Cron] Market is closed, skipping');
+            apiLogger.info('Market is closed, skipping');
             return NextResponse.json({
                 status: 'skipped',
                 reason: 'Market is closed'
@@ -29,13 +30,13 @@ export async function GET(request: NextRequest) {
         }
 
         // Fetch current portfolio data
-        console.log('[IntradayPnL Cron] Fetching live dashboard data...');
+        apiLogger.info('Fetching live dashboard data...');
         const dashboardData = await getLiveDashboardData();
         
         // Save P/L to database
         await saveIntradayPnL(dashboardData.dayGain, dashboardData.dayGainPercent);
         
-        console.log(`[IntradayPnL Cron] Recorded P/L: ₹${dashboardData.dayGain.toFixed(2)} (${dashboardData.dayGainPercent.toFixed(2)}%)`);
+        apiLogger.info(`Recorded P/L: ₹${dashboardData.dayGain.toFixed(2)} (${dashboardData.dayGainPercent.toFixed(2)}%)`);
 
         return NextResponse.json({
             status: 'success',
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
         });
 
     } catch (error) {
-        console.error('[IntradayPnL Cron] Error:', error);
+        apiLogger.error('Error:', error);
         return NextResponse.json(
             { error: 'Internal server error', details: (error as Error).message },
             { status: 500 }

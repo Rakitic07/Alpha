@@ -14,14 +14,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-    fullAMFISync, 
-    getCurrentAMFIPeriod, 
+import {
+    fullAMFISync,
+    getCurrentAMFIPeriod,
     hasAMFIData,
     getAvailableAMFIPeriods,
-    AMFIPeriod 
-} from '@/lib/amfi-service';
+    AMFIPeriod
+} from '@/lib/amfi';
 import { verifyCronSecret } from '@/lib/cron-auth';
+import { apiLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
     if (authError) return authError;
 
     const startTime = Date.now();
-    console.log('[AMFI Cron] Starting weekly sync check...');
+    apiLogger.info('Starting weekly sync check...');
     
     try {
         // Check what periods we already have
@@ -61,13 +62,13 @@ export async function GET(request: NextRequest) {
         const currentPeriod = getCurrentAMFIPeriod();
         const hasCurrentData = await hasAMFIData(currentPeriod);
         
-        console.log(`[AMFI Cron] Current expected period: ${currentPeriod.year}_${currentPeriod.halfYear}`);
-        console.log(`[AMFI Cron] Has current data: ${hasCurrentData}`);
-        console.log(`[AMFI Cron] Available periods: ${availablePeriods.join(', ') || 'none'}`);
+        apiLogger.info(`Current expected period: ${currentPeriod.year}_${currentPeriod.halfYear}`);
+        apiLogger.info(`Has current data: ${hasCurrentData}`);
+        apiLogger.info(`Available periods: ${availablePeriods.join(', ') || 'none'}`);
         
         // If we already have current period data, skip sync
         if (hasCurrentData) {
-            console.log('[AMFI Cron] Data is up to date, skipping sync');
+            apiLogger.info('Data is up to date, skipping sync');
             return NextResponse.json({
                 success: true,
                 action: 'skipped',
@@ -88,19 +89,19 @@ export async function GET(request: NextRequest) {
             
             // Skip if we already have this period
             if (availablePeriods.includes(periodStr)) {
-                console.log(`[AMFI Cron] Already have period ${periodStr}, skipping`);
+                apiLogger.info(`Already have period ${periodStr}, skipping`);
                 continue;
             }
             
-            console.log(`[AMFI Cron] Attempting to sync period: ${periodStr}`);
+            apiLogger.info(`Attempting to sync period: ${periodStr}`);
             
             try {
                 syncResult = await fullAMFISync(period);
-                console.log(`[AMFI Cron] Successfully synced ${syncResult.total} classifications for ${periodStr}`);
+                apiLogger.info(`Successfully synced ${syncResult.total} classifications for ${periodStr}`);
                 break; // Success, stop trying
             } catch (error) {
                 lastError = error;
-                console.warn(`[AMFI Cron] Failed to sync ${periodStr}: ${(error as Error).message}`);
+                apiLogger.warn(`Failed to sync ${periodStr}: ${(error as Error).message}`);
                 // Continue to try next period
             }
         }
@@ -123,7 +124,7 @@ export async function GET(request: NextRequest) {
             });
         }
     } catch (error) {
-        console.error('[AMFI Cron] Error:', error);
+        apiLogger.error('Error:', error);
         return NextResponse.json({
             success: false,
             error: 'AMFI sync failed',

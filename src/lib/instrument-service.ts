@@ -9,6 +9,9 @@ import os from 'os';
 import { createGunzip } from 'zlib';
 import { pipeline } from 'stream/promises';
 import { createWriteStream, createReadStream } from 'fs';
+import { logger } from '@/lib/logger';
+
+const instrumentLogger = logger.scope('Instruments');
 
 const NSE_INSTRUMENT_URL = 'https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz';
 const BSE_INSTRUMENT_URL = 'https://assets.upstox.com/market-quote/instruments/exchange/BSE.json.gz';
@@ -144,7 +147,7 @@ export async function ensureInstrumentMaster(includeBSE: boolean = false) {
         }
 
         if (nseNeedsUpdate) {
-            console.log('[InstrumentService] Downloading fresh NSE instrument master...');
+            instrumentLogger.info('Downloading fresh NSE instrument master...');
             await downloadAndExtractInstruments(NSE_INSTRUMENT_URL, NSE_CACHE_FILE);
         }
 
@@ -167,7 +170,7 @@ export async function ensureInstrumentMaster(includeBSE: boolean = false) {
             }
 
             if (bseNeedsUpdate) {
-                console.log('[InstrumentService] Downloading fresh BSE instrument master...');
+                instrumentLogger.info('Downloading fresh BSE instrument master...');
                 await downloadAndExtractInstruments(BSE_INSTRUMENT_URL, BSE_CACHE_FILE);
             }
 
@@ -217,7 +220,7 @@ async function loadInstruments(exchange: 'NSE' | 'BSE') {
     const cacheFile = exchange === 'NSE' ? NSE_CACHE_FILE : BSE_CACHE_FILE;
     const map = new Map<string, InstrumentData>();
     
-    console.log(`[InstrumentService] Loading ${exchange} instruments into memory...`);
+    instrumentLogger.info(`Loading ${exchange} instruments into memory...`);
     
     try {
         const data = await fs.readFile(cacheFile, 'utf-8');
@@ -260,9 +263,9 @@ async function loadInstruments(exchange: 'NSE' | 'BSE') {
             bseInstrumentMap = map;
         }
         
-        console.log(`[InstrumentService] Loaded ${map.size} ${exchange} instruments.`);
+        instrumentLogger.info(`Loaded ${map.size} ${exchange} instruments.`);
     } catch (error) {
-        console.error(`[InstrumentService] Failed to load ${exchange} instruments:`, error);
+        instrumentLogger.error(`Failed to load ${exchange} instruments:`, error);
         // Do NOT assign global map, allowing retry on next call
     }
 }

@@ -5,6 +5,7 @@ import { getMarketStatus } from '@/lib/market-holidays-cache';
 import { addMinutes, isAfter, startOfDay } from 'date-fns';
 import { prisma } from '@/lib/db';
 import { verifyCronSecret } from '@/lib/cron-auth';
+import { apiLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
                 if (todayPriceExists) {
                     // Stock prices exist for today = trading happened
                     // Assume default 3:30 PM close time
-                    console.log('[Snapshot] DB fallback: Found stock prices for today, treating as trading day');
+                    apiLogger.info('DB fallback: Found stock prices for today, treating as trading day');
                     const defaultCloseTime = new Date();
                     defaultCloseTime.setHours(10, 0, 0, 0); // 3:30 PM IST = 10:00 UTC
                     const triggerTime = addMinutes(defaultCloseTime, 15);
@@ -124,7 +125,7 @@ export async function GET(request: Request) {
             }
         }
     } catch (error: unknown) {
-        console.error('Snapshot error:', error);
+        apiLogger.error('Snapshot error:', error);
         const details = error instanceof Error ? error.message : String(error);
         return NextResponse.json({ error: 'Failed to capture snapshot', details }, { status: 500 });
     }
@@ -147,7 +148,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: 'Daily history recalculated' });
         }
     } catch (error: unknown) {
-        console.error('Snapshot error:', error);
+        apiLogger.error('Snapshot error:', error);
         const details = error instanceof Error ? error.message : String(error);
         return NextResponse.json({ error: 'Failed to capture snapshot', details }, { status: 500 });
     }

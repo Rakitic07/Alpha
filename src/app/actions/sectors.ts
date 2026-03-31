@@ -2,6 +2,9 @@
 
 import { prisma } from '@/lib/db';
 import { revalidateTag } from 'next/cache';
+import { logger } from '@/lib/logger';
+
+const sectorsLogger = logger.scope('Sectors');
 
 
 
@@ -61,7 +64,7 @@ async function fetchSectorPage(slug: string, sectorName: string): Promise<StockS
     });
 
     if (!response.ok) {
-      console.error(`[${sectorName}] HTTP ${response.status}`);
+      sectorsLogger.error(`[${sectorName}] HTTP ${response.status}`);
       return [];
     }
 
@@ -92,7 +95,7 @@ async function fetchSectorPage(slug: string, sectorName: string): Promise<StockS
 
     return stocks;
   } catch (error) {
-    console.error(`[${sectorName}] Fetch error:`, error);
+    sectorsLogger.error(`[${sectorName}] Fetch error:`, error);
     return [];
   }
 }
@@ -105,10 +108,10 @@ export async function refreshSectorMappings(): Promise<{ success: boolean; count
   const startTime = Date.now();
   
   try {
-    console.log('='.repeat(60));
-    console.log('[Sectors] Starting sector data refresh from Zerodha');
-    console.log(`[Sectors] Fetching ${SECTORS.length} sectors...`);
-    console.log('='.repeat(60));
+    sectorsLogger.info('='.repeat(60));
+    sectorsLogger.info('Starting sector data refresh from Zerodha');
+    sectorsLogger.info(`Fetching ${SECTORS.length} sectors...`);
+    sectorsLogger.info('='.repeat(60));
     
     const allStocks: StockSector[] = [];
     const sectorStats: { name: string; count: number; time: number }[] = [];
@@ -117,7 +120,7 @@ export async function refreshSectorMappings(): Promise<{ success: boolean; count
       const sector = SECTORS[i];
       const sectorStart = Date.now();
       
-      console.log(`[Sectors] [${i + 1}/${SECTORS.length}] Fetching: ${sector.name}...`);
+      sectorsLogger.info(`[${i + 1}/${SECTORS.length}] Fetching: ${sector.name}...`);
       
       const stocks = await fetchSectorPage(sector.slug, sector.name);
       const elapsed = Date.now() - sectorStart;
@@ -125,14 +128,14 @@ export async function refreshSectorMappings(): Promise<{ success: boolean; count
       sectorStats.push({ name: sector.name, count: stocks.length, time: elapsed });
       allStocks.push(...stocks);
       
-      console.log(`[Sectors] [${i + 1}/${SECTORS.length}] ✓ ${sector.name}: ${stocks.length} stocks (${elapsed}ms)`);
+      sectorsLogger.info(`[${i + 1}/${SECTORS.length}] ${sector.name}: ${stocks.length} stocks (${elapsed}ms)`);
       
       // Rate limiting
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    console.log('-'.repeat(60));
-    console.log('[Sectors] Deduplicating stocks (preferring NSE over BSE)...');
+    sectorsLogger.info('-'.repeat(60));
+    sectorsLogger.info('Deduplicating stocks (preferring NSE over BSE)...');
 
 const MANUAL_SECTOR_MAPPINGS: StockSector[] = [
   { symbol: 'MANGCHEFER', sector: 'Fertilizers', exchange: 'NSE' },
@@ -152,20 +155,20 @@ const MANUAL_SECTOR_MAPPINGS: StockSector[] = [
     }
 
     // Apply Manual Mappings (Overrides/Additions)
-    console.log(`[Sectors] Applying ${MANUAL_SECTOR_MAPPINGS.length} manual sector mappings...`);
+    sectorsLogger.info(`Applying ${MANUAL_SECTOR_MAPPINGS.length} manual sector mappings...`);
     for (const manual of MANUAL_SECTOR_MAPPINGS) {
         symbolMap.set(manual.symbol, manual);
         // We don't bother updating counts strictly as they are just for logging
     }
     
     const uniqueStocks = Array.from(symbolMap.values());
-    console.log(`[Sectors] Total raw: ${allStocks.length} | Unique: ${uniqueStocks.length} (NSE: ${nseCount}, BSE: ${bseCount})`);
+    sectorsLogger.info(`Total raw: ${allStocks.length} | Unique: ${uniqueStocks.length} (NSE: ${nseCount}, BSE: ${bseCount})`);
     
     // Clear and insert
-    console.log('[Sectors] Clearing existing sector mappings...');
+    sectorsLogger.info('Clearing existing sector mappings...');
     await prisma.sectorMapping.deleteMany({});
     
-    console.log('[Sectors] Inserting new sector mappings...');
+    sectorsLogger.info('Inserting new sector mappings...');
     const batchSize = 100;
     for (let i = 0; i < uniqueStocks.length; i += batchSize) {
       const batch = uniqueStocks.slice(i, i + batchSize);
@@ -176,25 +179,25 @@ const MANUAL_SECTOR_MAPPINGS: StockSector[] = [
           exchange: s.exchange,
         })),
       });
-      console.log(`[Sectors] Inserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueStocks.length / batchSize)}`);
+      sectorsLogger.info(`Inserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueStocks.length / batchSize)}`);
     }
 
     // All stocks are now covered by the scraper!
-    console.log('[Sectors] All portfolio stocks covered by scraper logic. No manual fixes needed.');
+    sectorsLogger.info('All portfolio stocks covered by scraper logic. No manual fixes needed.');
     
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
     
     // Summary
-    console.log('='.repeat(60));
-    console.log('[Sectors] ✅ REFRESH COMPLETE');
-    console.log(`[Sectors] Total stocks mapped: ${uniqueStocks.length}`);
-    console.log(`[Sectors] Total time: ${totalTime}s`);
-    console.log('[Sectors] Top 5 sectors by stock count:');
+    sectorsLogger.info('='.repeat(60));
+    sectorsLogger.info('REFRESH COMPLETE');
+    sectorsLogger.info(`Total stocks mapped: ${uniqueStocks.length}`);
+    sectorsLogger.info(`Total time: ${totalTime}s`);
+    sectorsLogger.info('Top 5 sectors by stock count:');
     sectorStats.sort((a, b) => b.count - a.count);
     sectorStats.slice(0, 5).forEach((s, i) => {
-      console.log(`[Sectors]   ${i + 1}. ${s.name}: ${s.count} stocks`);
+      sectorsLogger.info(`  ${i + 1}. ${s.name}: ${s.count} stocks`);
     });
-    console.log('='.repeat(60));
+    sectorsLogger.info('='.repeat(60));
     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (revalidateTag as any)('portfolio-data', 'max');
@@ -202,10 +205,10 @@ const MANUAL_SECTOR_MAPPINGS: StockSector[] = [
     return { success: true, count: uniqueStocks.length };
   } catch (error) {
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error('='.repeat(60));
-    console.error(`[Sectors] ❌ REFRESH FAILED after ${totalTime}s`);
-    console.error('[Sectors] Error:', error);
-    console.error('='.repeat(60));
+    sectorsLogger.error('='.repeat(60));
+    sectorsLogger.error(`REFRESH FAILED after ${totalTime}s`);
+    sectorsLogger.error('Error:', error);
+    sectorsLogger.error('='.repeat(60));
     return { success: false, count: 0, error: (error as Error).message };
   }
 }
@@ -226,7 +229,7 @@ export async function initializeSectorsIfEmpty(): Promise<{ initialized: boolean
   const count = await prisma.sectorMapping.count();
   
   if (count === 0) {
-    console.log('[Sectors] No sector mappings found, initializing from Zerodha...');
+    sectorsLogger.info('No sector mappings found, initializing from Zerodha...');
     const result = await refreshSectorMappings();
     return { initialized: true, count: result.count };
   }

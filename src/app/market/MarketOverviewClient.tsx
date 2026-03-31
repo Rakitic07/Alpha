@@ -11,6 +11,9 @@ import TopMovers from '@/components/market/TopMovers';
 import IndexSidebar from '@/components/market/IndexSidebar';
 import { useLiveData } from '@/context/LiveDataContext';
 import { PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
+import { logger } from '@/lib/logger';
+
+const marketLogger = logger.scope('Market');
 
 const SectoralHeatmap = dynamic(() => import('@/components/market/SectoralHeatmap'), {
   loading: () => <div className="h-[400px] bg-slate-800/50 rounded-2xl animate-pulse" />,
@@ -112,7 +115,7 @@ export default function MarketOverviewClient({
         setTokenStatus(res.tokenStatus);
       }
     } catch (err) {
-      console.error('Failed to load index summaries:', err);
+      marketLogger.error('Failed to load index summaries:', err);
     } finally {
       if (showLoading) setSummariesLoading(false);
     }
@@ -135,11 +138,11 @@ export default function MarketOverviewClient({
       } else {
         // fetchMarketOverview returned null — likely constituent CSV failed to load
         // or all Upstox API batches failed. Show error but keep old data visible.
-        console.warn(`[MarketOverview] fetchMarketOverview returned null for ${indexName}`);
+        marketLogger.warn(`fetchMarketOverview returned null for ${indexName}`);
         setLoadError(`Could not load data for ${indexName}. Constituent list may be unavailable.`);
       }
     } catch (err) {
-      console.error(`Failed to load market data for ${indexName}:`, err);
+      marketLogger.error(`Failed to load market data for ${indexName}:`, err);
       setLoadError(`Failed to load ${indexName} data. Please retry.`);
     } finally {
       if (showLoading) setLoading(false);
@@ -301,7 +304,7 @@ export default function MarketOverviewClient({
 
   // Stream Status
   const handleStreamStatusChange = useCallback((status: StreamStatus) => {
-    console.log('[MarketOverview] Stream status:', status);
+    marketLogger.info('Stream status:', status);
   }, []);
 
   const [isVisible, setIsVisible] = useState(true);

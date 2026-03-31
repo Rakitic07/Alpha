@@ -1,6 +1,7 @@
 import 'server-only';
 import { PrismaClient } from '@prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { dbLogger } from '@/lib/logger';
 
 const globalForPrisma = global as unknown as { prisma_v2: PrismaClient };
 
@@ -75,7 +76,7 @@ function createPrismaClient(): PrismaClient {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   }
 
-  console.log('[Database] Connected to Turso (Serverless SQLite)');
+  dbLogger.info('Connected to Turso (Serverless SQLite)');
 
   const adapter = new PrismaLibSql({
     url: cleanUrl,

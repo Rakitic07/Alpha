@@ -39,6 +39,9 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { searchStocks, getStockPrice, StockSearchResult } from '@/app/actions/stocks';
+import { logger } from '@/lib/logger';
+
+const rebalanceLogger = logger.scope('Rebalance');
 import {
   RebalanceState,
   RebalanceInputHolding,
@@ -309,7 +312,7 @@ export default function RebalanceModal({
         setIsWithdrawal(parsed.state.cashflow < 0);
       }
     } catch (err) {
-      console.warn('[Rebalance] Failed to load saved state', err);
+      rebalanceLogger.warn('Failed to load saved state', err);
     } finally {
       savedStateLoaded.current = true;
     }
@@ -406,7 +409,7 @@ export default function RebalanceModal({
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (err) {
-      console.warn('[Rebalance] Failed to save state', err);
+      rebalanceLogger.warn('Failed to save state', err);
     }
   };
 
@@ -443,7 +446,7 @@ export default function RebalanceModal({
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
-      console.error('Failed to copy', err);
+      rebalanceLogger.error('Failed to copy', err);
     }
   };
 

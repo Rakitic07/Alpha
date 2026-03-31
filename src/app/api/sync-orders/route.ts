@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestOrdersWithDeduplication, type KiteOrder } from '@/lib/import-service';
 import { verifyCronSecret } from '@/lib/cron-auth';
+import { apiLogger } from '@/lib/logger';
 
 export const maxDuration = 300; // 5 minutes timeout for Vercel
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
                 );
             }
             
-            console.log(`[SyncOrders] Received ${orders.length} orders (source: ${source})`);
+            apiLogger.info(`Received ${orders.length} orders (source: ${source})`);
             
             const result = await ingestOrdersWithDeduplication(
                 orders,
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
                          await sendProgress('Orders will sync shortly.', 100, true);
                      } else {
                          const errorText = await response.text();
-                         console.error('GitHub API Error:', errorText);
+                         apiLogger.error('GitHub API Error:', errorText);
                          await sendProgress(`Failed to trigger: ${response.statusText}`, 90);
                          await sendProgress('See logs for details.', 100, true);
                      }
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
                     await sendProgress('Currently: Run workflow manually in GitHub.', 100, true);
                 }
             } catch (error) {
-                console.error('Background processing error:', error);
+                apiLogger.error('Background processing error:', error);
                 await sendProgress('Error during background processing.', 100, true, String(error));
             } finally {
                 await writer.close();
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (error) {
-        console.error('[SyncOrders] Error:', error);
+        apiLogger.error('Error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         return NextResponse.json({ error: errorMessage }, { status: 500 });
     }

@@ -11,6 +11,7 @@ import { getInstrumentKeys } from '@/lib/instrument-service';
 import { computePortfolioState } from '@/lib/finance';
 import { UpstoxStreamerClient } from '@/lib/upstox-streamer-client';
 import { UpstoxFeedResponse, UpstoxFeedData } from '@/types/upstox-feed';
+import { apiLogger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -64,7 +65,7 @@ async function ensureStreamer(instrumentKeys: string[], accessToken: string) {
 
     try {
         state.status = 'connecting';
-        console.log(`[MarketStream] Connecting with ${instrumentKeys.length} instruments...`);
+        apiLogger.info(`Connecting with ${instrumentKeys.length} instruments...`);
 
         const streamer = new UpstoxStreamerClient({
             accessToken,
@@ -76,7 +77,7 @@ async function ensureStreamer(instrumentKeys: string[], accessToken: string) {
         streamer.on('open', () => {
             state.status = 'connected';
             state.lastError = null;
-            console.log('[MarketStream] Connection established');
+            apiLogger.info('Connection established');
             
             notifyClients({ 
                 type: 'status', 
@@ -88,7 +89,7 @@ async function ensureStreamer(instrumentKeys: string[], accessToken: string) {
         // Event: Disconnected
         streamer.on('close', () => {
             state.status = 'disconnected';
-            console.log('[MarketStream] Connection closed');
+            apiLogger.info('Connection closed');
             state.instance = null; // Allow recreation
             
             notifyClients({ type: 'status', status: 'disconnected' });
@@ -99,7 +100,7 @@ async function ensureStreamer(instrumentKeys: string[], accessToken: string) {
         streamer.on('error', (err: any) => {
             state.status = 'error';
             state.lastError = err.message || 'Unknown stream error';
-            console.error('[MarketStream] Stream Error:', err.message);
+            apiLogger.error('Stream Error:', err.message);
             
             notifyClients({ type: 'error', message: err.message });
         });
@@ -142,9 +143,9 @@ async function ensureStreamer(instrumentKeys: string[], accessToken: string) {
                                 ltp: price,
                                 timestamp: ts
                             });
-                            console.log(`[StreamDebug] Pushing update: ${key} -> ${price}`);
+                            apiLogger.debug(`Pushing update: ${key} -> ${price}`);
                         } else {
-                            console.warn(`[StreamDebug] Ignoring zero/negative price for ${key}: ${price}`);
+                            apiLogger.warn(`Ignoring zero/negative price for ${key}: ${price}`);
                         }
 
                         // state.latestPrices.set(key, { price, timestamp: ts });
@@ -164,7 +165,7 @@ async function ensureStreamer(instrumentKeys: string[], accessToken: string) {
         state.status = 'error';
         state.lastError = e instanceof Error ? e.message : 'Unknown error';
         state.instance = null;
-        console.error('[MarketStream] Setup Failure:', e);
+        apiLogger.error('Setup Failure:', e);
     }
 }
 
@@ -195,7 +196,7 @@ export async function GET(request: NextRequest) {
         // Note: passing keys here only works for valid singleton init. 
         // If instruments change significantly, we might need logic to update subscription.
         // For now, simpler is better.
-        ensureStreamer(keys, accessToken).catch(e => console.error(e));
+        ensureStreamer(keys, accessToken).catch(e => apiLogger.error('Streamer error:', e));
     }
 
     // 3. Setup SSE Stream

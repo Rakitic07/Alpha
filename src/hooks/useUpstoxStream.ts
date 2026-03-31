@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import protobuf from 'protobufjs';
+import { upstoxLogger } from '@/lib/logger';
 
 // ============================================================================
 // Types
@@ -254,14 +255,14 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
   }, []);
 
   const handleError = useCallback((errorMsg: string) => {
-    console.error('[UpstoxStream] Error:', errorMsg);
+    upstoxLogger.error('Error:', errorMsg);
     onErrorRef.current?.(errorMsg);
   }, []);
 
   const decodeMessage = useCallback((data: ArrayBuffer): FeedResponse | null => {
     try {
       if (!protoRootRef.current) {
-        console.warn('[UpstoxStream] Protobuf root not initialized');
+        upstoxLogger.warn('Protobuf root not initialized');
         return null;
       }
 
@@ -269,7 +270,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
       const decoded = FeedResponseType.decode(new Uint8Array(data));
       return decoded as unknown as FeedResponse;
     } catch (error) {
-      console.error('[UpstoxStream] Failed to decode message:', error);
+      upstoxLogger.error('Failed to decode message:', error);
       return null;
     }
   }, []);
@@ -354,7 +355,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
     // Send as binary (required by Upstox V3)
     const encoder = new TextEncoder();
     ws.send(encoder.encode(JSON.stringify(subscribeMessage)));
-    console.log(`[UpstoxStream] Subscribed to ${allKeys.length} instruments`);
+    upstoxLogger.info(`Subscribed to ${allKeys.length} instruments`);
   }, []);
 
   const subscribeToInstruments = useCallback((instruments: {instrumentKey: string, symbol: string}[]) => {
@@ -405,14 +406,14 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
         }
       }
 
-      console.log(`[UpstoxStream] Connecting to Upstox WebSocket with ${auth.instrumentKeys.length} instruments`);
+      upstoxLogger.info(`Connecting to Upstox WebSocket with ${auth.instrumentKeys.length} instruments`);
 
       const ws = new WebSocket(auth.authorizedUrl);
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[UpstoxStream] WebSocket connected');
+        upstoxLogger.info('WebSocket connected');
         reconnectAttemptsRef.current = 0;
         updateStatus('connected');
         subscribe(ws);
@@ -428,17 +429,17 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
       };
 
       ws.onerror = (error) => {
-        console.error('[UpstoxStream] WebSocket error:', error);
+        upstoxLogger.error('WebSocket error:', error);
         handleError('WebSocket connection error');
       };
 
       ws.onclose = (event) => {
-        console.log(`[UpstoxStream] WebSocket closed: ${event.code} ${event.reason}`);
+        upstoxLogger.info(`WebSocket closed: ${event.code} ${event.reason}`);
         wsRef.current = null;
 
         if (enabledRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-          console.log(`[UpstoxStream] Reconnecting in ${delay}ms...`);
+          upstoxLogger.info(`Reconnecting in ${delay}ms...`);
           updateStatus('reconnecting');
 
           reconnectTimeoutRef.current = setTimeout(() => {

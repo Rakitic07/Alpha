@@ -5,6 +5,9 @@ import path from 'path';
 import os from 'os';
 import { unstable_cache } from 'next/cache';
 import { getIndexQuotes, hasValidToken } from '@/lib/upstox-client';
+import { logger } from '@/lib/logger';
+
+const nseLogger = logger.scope('NSE');
 
 // Re-define MarketIndex interface here to avoid Turbopack type export issues
 export interface MarketIndex {
@@ -31,16 +34,16 @@ async function fetchNseIndicesInternal(): Promise<MarketIndex[]> {
         
         // Check if we should use cache (outside market hours)
         if (!isMarketHours) {
-            console.log("[Indices] Outside market hours. Checking cache...");
+            nseLogger.info("Outside market hours. Checking cache...");
             try {
                 const cacheData = await fs.readFile(CACHE_FILE, 'utf-8');
                 const cachedIndices = JSON.parse(cacheData) as MarketIndex[];
                 if (cachedIndices && cachedIndices.length > 0) {
-                    console.log(`[Indices] Serving ${cachedIndices.length} indices from cache.`);
+                    nseLogger.info(`Serving ${cachedIndices.length} indices from cache.`);
                     return cachedIndices;
                 }
             } catch {
-                console.warn("[Indices] Cache miss or error, will try live fetch.");
+                nseLogger.warn("Cache miss or error, will try live fetch.");
             }
         }
 
@@ -48,44 +51,44 @@ async function fetchNseIndicesInternal(): Promise<MarketIndex[]> {
         const hasToken = await hasValidToken();
         
         if (!hasToken) {
-            console.warn("[Indices] No valid Upstox token. Trying cache...");
+            nseLogger.warn("No valid Upstox token. Trying cache...");
             try {
                 const cacheData = await fs.readFile(CACHE_FILE, 'utf-8');
                 const cachedIndices = JSON.parse(cacheData) as MarketIndex[];
                 if (cachedIndices && cachedIndices.length > 0) {
-                    console.log(`[Indices] Serving ${cachedIndices.length} indices from cache (no token).`);
+                    nseLogger.info(`Serving ${cachedIndices.length} indices from cache (no token).`);
                     return cachedIndices;
                 }
             } catch {
-                console.warn("[Indices] No cache available.");
+                nseLogger.warn("No cache available.");
             }
             return [];
         }
 
-        console.log("[Indices] Fetching live index data from Upstox...");
+        nseLogger.info("Fetching live index data from Upstox...");
         
         const indices = await getIndexQuotes();
         
         if (indices.length > 0) {
-            console.log(`[Indices] Success! Fetched ${indices.length} indices. Updating cache.`);
+            nseLogger.info(`Success! Fetched ${indices.length} indices. Updating cache.`);
             try {
                 await fs.writeFile(CACHE_FILE, JSON.stringify(indices, null, 2));
             } catch (err) {
-                console.error("[Indices] Failed to write cache:", err);
+                nseLogger.error("Failed to write cache:", err);
             }
         }
         
         return indices;
 
     } catch (error) {
-        console.error("[Indices Fetch Error]", error);
+        nseLogger.error("Indices fetch error:", error);
         
         // Try to return cached data on error
         try {
             const cacheData = await fs.readFile(CACHE_FILE, 'utf-8');
             const cachedIndices = JSON.parse(cacheData) as MarketIndex[];
             if (cachedIndices && cachedIndices.length > 0) {
-                console.log(`[Indices] Error fallback: serving ${cachedIndices.length} indices from cache.`);
+                nseLogger.info(`Error fallback: serving ${cachedIndices.length} indices from cache.`);
                 return cachedIndices;
             }
         } catch {

@@ -4,6 +4,9 @@ import { prisma } from '@/lib/db';
 import { fetchNSECorporateActions, NSECorporateAction } from '@/lib/nse-api';
 import { subDays, addDays, parse, format } from 'date-fns';
 import { triggerRecalculatePortfolio } from '@/app/actions';
+import { logger } from '@/lib/logger';
+
+const corpActionsLogger = logger.scope('CorpActions');
 
 // ============================================================================
 // Types
@@ -138,11 +141,11 @@ export async function addCorporateAction(
       }
     });
     
-    console.log(`[Corporate Action] Added ${type} ${ratio}:1 for ${normalizedSymbol} on ${date}`);
+    corpActionsLogger.info(`Added ${type} ${ratio}:1 for ${normalizedSymbol} on ${date}`);
     
     return { success: true };
   } catch (error) {
-    console.error('[Corporate Action] Error adding action:', error);
+    corpActionsLogger.error('Error adding action:', error);
     return { success: false, error: (error as Error).message };
   }
 }
@@ -189,7 +192,7 @@ export async function processNSECorporateActions(
       };
     }
     
-    console.log(`[Corporate Action Sync] Checking ${symbols.size} portfolio symbols`);
+    corpActionsLogger.info(`Checking ${symbols.size} portfolio symbols`);
     details.push(`Portfolio symbols: ${symbols.size}`);
     details.push(`Date range: ${format(startDate, 'yyyy-MM-dd')} to ${format(endDate, 'yyyy-MM-dd')}`);
     
@@ -203,7 +206,7 @@ export async function processNSECorporateActions(
       };
     }
     
-    console.log(`[Corporate Action Sync] Fetched ${nseActions.length} actions from NSE`);
+    corpActionsLogger.info(`Fetched ${nseActions.length} actions from NSE`);
     details.push(`NSE actions fetched: ${nseActions.length}`);
     
     // 3. Filter and process relevant actions
@@ -231,18 +234,18 @@ export async function processNSECorporateActions(
       if (result.success) {
         actionsAdded++;
         details.push(`Added: ${action.symbol} ${type} ${ratio}:1 on ${dateStr}`);
-        console.log(`[Corporate Action Sync] Added ${type} for ${action.symbol}: ${action.subject}`);
+        corpActionsLogger.info(`Added ${type} for ${action.symbol}: ${action.subject}`);
       } else if (result.error !== 'Corporate action already exists for this date') {
         details.push(`Failed: ${action.symbol} - ${result.error}`);
       }
     }
     
-    console.log(`[Corporate Action Sync] Found ${relevantActions.length} relevant actions, added ${actionsAdded} new`);
+    corpActionsLogger.info(`Found ${relevantActions.length} relevant actions, added ${actionsAdded} new`);
     details.push(`Relevant actions: ${relevantActions.length}, New: ${actionsAdded}`);
     
     // 4. Trigger portfolio recalculation if any actions were added
     if (actionsAdded > 0) {
-      console.log('[Corporate Action Sync] Triggering portfolio recalculation...');
+      corpActionsLogger.info('Triggering portfolio recalculation...');
       await triggerRecalculatePortfolio();
       details.push('Portfolio recalculation triggered');
     }
@@ -257,7 +260,7 @@ export async function processNSECorporateActions(
     };
     
   } catch (error) {
-    console.error('[Corporate Action Sync] Error:', error);
+    corpActionsLogger.error('Error:', error);
     return {
       success: false,
       message: `Error processing corporate actions: ${(error as Error).message}`,
