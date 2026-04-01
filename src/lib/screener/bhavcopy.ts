@@ -73,13 +73,20 @@ export async function fetchAndStoreBhavcopy(dateStr: string): Promise<{ updated:
         continue;
       }
 
+      // Deduplicate by symbol (CSV may list same symbol under multiple series)
+      const deduped = new Map<string, number>();
+      for (const r of rows) {
+        const existing = deduped.get(r.symbol);
+        if (!existing || r.marketCapCr > existing) deduped.set(r.symbol, r.marketCapCr);
+      }
+      const createRows = Array.from(deduped, ([symbol, marketCap]) => ({ symbol, marketCap }));
+
       // Batch upsert into StockMarketCap (delete + createMany for speed)
-      const symbols = rows.map(r => r.symbol);
+      const symbols = createRows.map(r => r.symbol);
       for (const chunk of chunkArray(symbols)) {
         await prisma.stockMarketCap.deleteMany({ where: { symbol: { in: chunk } } });
       }
       let updated = 0;
-      const createRows = rows.map(r => ({ symbol: r.symbol, marketCap: r.marketCapCr }));
       for (const chunk of chunkArray(createRows)) {
         await prisma.stockMarketCap.createMany({ data: chunk });
         updated += chunk.length;
