@@ -38,7 +38,12 @@ export async function withConcurrency<T>(
   return { successes, errors };
 }
 
-/** Retry with exponential backoff. Rate-limit responses (HTTP 429/1015) use a long backoff (30–45 s). */
+/** Retry with exponential backoff.
+ *  Rate-limit errors (HTTP 429/1015) are NOT retried — the stock is skipped
+ *  and the next daily run will pick it up once the IP ban expires.
+ *  Retrying during an active Cloudflare ban just blocks the worker for 30–45 s
+ *  without any chance of success.
+ */
 export async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelayMs = 1000): Promise<T> {
   let lastErr: Error | undefined;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -46,11 +51,11 @@ export async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDel
       return await fn();
     } catch (err) {
       lastErr = err as Error;
+      if (/429|1015|rate.?limit|too many requests/i.test(lastErr.message)) {
+        throw lastErr; // Skip immediately — ban is IP-wide, retrying won't help
+      }
       if (attempt < maxRetries) {
-        const isRateLimit = /429|1015|rate.?limit|too many requests/i.test(lastErr.message);
-        const delay = isRateLimit
-          ? 30_000 + Math.random() * 15_000                              // 30–45 s with jitter
-          : baseDelayMs * Math.pow(2, attempt) * (0.75 + Math.random() * 0.5); // exponential + jitter
+        const delay = baseDelayMs * Math.pow(2, attempt) * (0.75 + Math.random() * 0.5);
         await new Promise(r => setTimeout(r, delay));
       }
     }
