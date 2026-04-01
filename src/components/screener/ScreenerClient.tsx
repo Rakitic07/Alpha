@@ -1,0 +1,435 @@
+'use client';
+
+import { useState, useCallback, useMemo, memo } from 'react';
+import { motion } from 'framer-motion';
+import StatsBar from './StatsBar';
+import RulesInfoModal from './RulesInfoModal';
+import { getScreenerData, type ScreenerRow, type ScreenerStats } from '@/app/actions/screener';
+
+interface ScreenerClientProps {
+  initialData: { rows: ScreenerRow[]; stats: ScreenerStats };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatMcap(cr: number): string {
+  if (!cr || cr <= 0) return '—';
+  return Math.round(cr).toLocaleString('en-IN');
+}
+
+const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
+  'Large Cap': { label: 'L', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  'Large':     { label: 'L', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  'Mid Cap':   { label: 'M', cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  'Mid':       { label: 'M', cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  'Small Cap': { label: 'S', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+  'Small':     { label: 'S', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+  'Micro Cap': { label: 'μ', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  'Micro':     { label: 'μ', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+};
+
+function getRankAccent(rank: number, inPortfolio: boolean): string {
+  if (inPortfolio) return 'rgb(99,102,241)';
+  if (rank <= 50) return 'rgb(34,197,94)';
+  return 'rgba(239,68,68,0.6)';
+}
+
+function getRankTextColor(rank: number): string {
+  if (rank <= 50) return 'text-green-400';
+  return 'text-red-400';
+}
+
+// ─── Price Sparkline ─────────────────────────────────────────────────────────
+
+function buildSparklinePath(data: number[], w: number, h: number): string | null {
+  if (data.length < 2) return null;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const pad = 2;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * (w - pad * 2) + pad;
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return 'M ' + pts.join(' L ');
+}
+
+const Sparkline = memo(function Sparkline({ data }: { data: number[] }) {
+  const w = 240, h = 36;
+  const path = buildSparklinePath(data, w, h);
+  if (!path) return <span className="text-zinc-600 text-xs">—</span>;
+  const isUp = data[data.length - 1] >= data[0];
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
+      <path d={path} fill="none" stroke={isUp ? '#10b981' : '#f43f5e'} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+});
+
+// ─── DMA Swatches (5 dots: 10/20/50/100/200) ────────────────────────────────
+
+const DMA_PERIODS = [10, 20, 50, 100, 200] as const;
+
+const DMASwatches = memo(function DMASwatches({ swatches }: { swatches: ScreenerRow['dmaSwatches'] }) {
+  const vals = [swatches.above10, swatches.above20, swatches.above50, swatches.above100, swatches.above200];
+  return (
+    <div className="flex gap-0.5">
+      {DMA_PERIODS.map((period, i) => (
+        <div
+          key={period}
+          title={`${vals[i] ? 'Above' : 'Below'} ${period} DMA`}
+          className={`w-3.5 h-3.5 rounded-sm ${vals[i] ? 'bg-emerald-500' : 'bg-rose-500/70'}`}
+        />
+      ))}
+    </div>
+  );
+});
+
+// ─── ATH Swatches (5 dots: 10/15/20/25/30%) ────────────────────────────────
+
+const ATH_THRESHOLDS = [10, 15, 20, 25, 30];
+
+const ATHSwatches = memo(function ATHSwatches({ athProximity }: { athProximity: number }) {
+  const awayPct = (1 - athProximity) * 100;
+  return (
+    <div className="flex gap-0.5">
+      {ATH_THRESHOLDS.map(t => (
+        <div
+          key={t}
+          title={`${awayPct <= t ? 'Within' : 'Beyond'} ${t}% of ATH (${awayPct.toFixed(1)}% away)`}
+          className={`w-3.5 h-3.5 rounded-sm ${awayPct <= t ? 'bg-emerald-500' : 'bg-rose-500/70'}`}
+        />
+      ))}
+    </div>
+  );
+});
+
+// ─── Table skeleton row ──────────────────────────────────────────────────────
+
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-zinc-800/30 animate-pulse">
+      <td className="pl-5 pr-2 py-3">
+        <div className="h-7 w-7 bg-zinc-800 rounded" />
+      </td>
+      <td className="px-3 py-3">
+        <div className="flex flex-col gap-1.5">
+          <div className="h-4 w-24 bg-zinc-800 rounded" />
+          <div className="h-3 w-36 bg-zinc-800/50 rounded" />
+        </div>
+      </td>
+      <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
+      <td className="px-3 py-3"><div className="h-9 bg-zinc-800/50 rounded" /></td>
+      <td className="px-1 py-3"><div className="h-3.5 w-10 bg-zinc-800 rounded mx-auto" /></td>
+      <td className="px-2 py-3">
+        <div className="flex gap-0.5 justify-center">
+          {[...Array(5)].map((_, i) => <div key={i} className="w-3.5 h-3.5 bg-zinc-800 rounded-sm" />)}
+        </div>
+      </td>
+      <td className="px-2 py-3">
+        <div className="flex gap-0.5 justify-center">
+          {[...Array(5)].map((_, i) => <div key={i} className="w-3.5 h-3.5 bg-zinc-800 rounded-sm" />)}
+        </div>
+      </td>
+      <td className="px-1 py-3"><div className="h-3.5 w-12 bg-zinc-800 rounded mx-auto" /></td>
+    </tr>
+  );
+}
+
+// ─── Table header cell ────────────────────────────────────────────────────────
+
+const TH_BASE = 'px-3 py-4 text-sm font-bold text-zinc-300 uppercase tracking-wider select-none';
+
+function SortHeader({
+  field, current, dir, onClick, children, center, pl,
+}: {
+  field: string; current: string; dir: 'asc' | 'desc';
+  onClick: (f: string) => void; children: React.ReactNode; center?: boolean; pl?: string;
+}) {
+  return (
+    <th
+      className={`${TH_BASE} cursor-pointer hover:text-zinc-200 transition-colors${pl ? ` ${pl}` : ''}`}
+      onClick={() => onClick(field)}
+    >
+      <span className={`flex items-center gap-0.5 ${center ? 'justify-center' : ''}`}>
+        {children}
+        {current === field && <span className="text-emerald-400 ml-0.5">{dir === 'asc' ? '↑' : '↓'}</span>}
+      </span>
+    </th>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+export default function ScreenerClient({ initialData }: ScreenerClientProps) {
+  const [rows, setRows] = useState<ScreenerRow[]>(initialData.rows);
+  const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
+  const [activeTab, setActiveTab] = useState<'all' | 'portfolio' | 'others'>('all');
+  const [loading, setLoading] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [sortField, setSortField] = useState('rank');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleTabChange = useCallback(async (tab: 'all' | 'portfolio' | 'others') => {
+    setActiveTab(tab);
+    setLoading(true);
+    try {
+      const data = await getScreenerData(tab);
+      setRows(data.rows);
+      setStats(data.stats);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/cron/momentum-screener');
+      if (res.ok) {
+        const data = await getScreenerData(activeTab);
+        setRows(data.rows);
+        setStats(data.stats);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }, [activeTab]);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir(field === 'score' ? 'desc' : 'asc'); }
+  };
+
+  const displayRows = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'rank':   cmp = a.rank - b.rank; break;
+        case 'symbol': cmp = a.symbol.localeCompare(b.symbol); break;
+        case 'mcap':   cmp = a.marketCapCr - b.marketCapCr; break;
+        case 'dd':     cmp = a.athProximity - b.athProximity; break;
+        case 'score':  cmp = a.compositeScore - b.compositeScore; break;
+        default:       cmp = a.rank - b.rank;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [rows, sortField, sortDir]);
+
+  return (
+    <motion.div className="flex flex-col gap-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl md:text-3xl font-bold">
+          <span className="gradient-text">Momentum Screener</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="px-3 py-1.5 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/5 rounded-lg transition-all disabled:opacity-50"
+          >
+            {syncing ? (
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+                Syncing...
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                Sync
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setRulesOpen(true)}
+            className="px-2 py-1.5 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/5 rounded-lg transition-all"
+            title="Strategy Rules"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Bar */}
+      <StatsBar
+        stats={stats}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        filteredCount={rows.length}
+      />
+
+      {/* Table */}
+      <div
+        className="overflow-auto rounded-lg border border-zinc-800/60"
+        style={{ maxHeight: 'calc(100vh - 226px)' }}
+      >
+        <table className="w-full text-sm" style={{ tableLayout: 'fixed', minWidth: '1000px' }}>
+            <colgroup>
+              <col style={{ width: '4%',  minWidth: '60px' }} />
+              <col style={{ width: '20%', minWidth: '200px' }} />
+              <col style={{ width: '8%',  minWidth: '90px' }} />
+              <col style={{ width: '16%', minWidth: '160px' }} />
+              <col style={{ width: '7%',  minWidth: '70px' }} />
+              <col style={{ width: '9%',  minWidth: '100px' }} />
+              <col style={{ width: '9%',  minWidth: '100px' }} />
+              <col style={{ width: '6%',  minWidth: '60px' }} />
+            </colgroup>
+
+            <thead className="sticky top-0 z-10 bg-slate-900 border-b border-zinc-800/60">
+              <tr>
+                <SortHeader field="rank"   current={sortField} dir={sortDir} onClick={handleSort} pl="pl-5">#</SortHeader>
+                <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort}>Stock</SortHeader>
+                <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
+                <th className={`${TH_BASE}`}>Trend</th>
+                <SortHeader field="score"  current={sortField} dir={sortDir} onClick={handleSort} center>Score</SortHeader>
+                <th className={`${TH_BASE} text-center`} title="10 / 20 / 50 / 100 / 200 DMA">DMA</th>
+                <th className={`${TH_BASE} text-center`} title="Away from ATH: 10/15/20/25/30%">ATH</th>
+                <SortHeader field="dd" current={sortField} dir={sortDir} onClick={handleSort} center>DD</SortHeader>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-zinc-800/30">
+              {loading ? (
+                [...Array(12)].map((_, i) => <SkeletonRow key={i} />)
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-2 text-zinc-500 text-sm">
+                      <span>No rankings yet.</span>
+                      <span className="text-xs text-zinc-600">Trigger a sync to run the pipeline.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : displayRows.map(row => {
+                const isUnranked = row.isUnranked;
+                const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
+                const isExitCandidate = !!exit && !exit.protected;
+                const isProtected    = !!exit && exit.protected;
+                const accentColor = isExitCandidate
+                  ? 'rgb(239,68,68)'
+                  : isUnranked || isProtected
+                    ? 'rgb(63,63,70)'
+                    : getRankAccent(row.rank, row.inPortfolio);
+
+                return (
+                  <tr
+                    key={row.symbol}
+                    className={`transition-colors ${
+                      isExitCandidate ? 'bg-rose-950/30 hover:bg-rose-950/40' :
+                      isProtected     ? 'bg-zinc-950 hover:bg-zinc-800/60' :
+                      isUnranked      ? 'bg-zinc-950' :
+                      row.inPortfolio && activeTab !== 'portfolio' ? 'bg-indigo-950/30 hover:bg-indigo-950/40' :
+                                        'bg-zinc-950 hover:bg-zinc-800/60'
+                    }`}
+                  >
+                    {/* Rank — left accent bar */}
+                    <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 4px 0 0 ${accentColor}` }}>
+                      {isUnranked ? (
+                        <span className="text-zinc-600 text-xs">—</span>
+                      ) : (
+                        <span className={`font-mono text-xl font-black tabular-nums leading-none ${getRankTextColor(row.rank)}`}>
+                          {row.rank}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Stock info */}
+                    <td className="flex flex-col px-3 py-3 gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-bold text-base text-white truncate leading-none">{row.symbol}</span>
+                        {/* Exit signal badges */}
+                        {exit && activeTab === 'portfolio' && (
+                          <span
+                            className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-bold border tracking-wide ${
+                              exit.protected
+                                ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                            }`}
+                            title={[
+                              exit.byRank   ? '① Rank > 50' : '',
+                              exit.byFilter ? '② Below 200 DMA & outside 25% of ATH' : '',
+                              exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
+                            ].filter(Boolean).join('\n')}
+                          >
+                            {exit.protected ? 'LOCKED' : 'EXIT'}
+                          </span>
+                        )}
+                        {(() => {
+                          const b = MCAP_BADGE[row.marketCapCategory || ''];
+                          return b ? (
+                            <span className={`text-[9px] px-0.5 h-3.5 border rounded leading-none shrink-0 flex items-center ${b.cls}`}>
+                              {b.label}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                      <div className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">
+                        {row.companyName}
+                      </div>
+                    </td>
+
+                    {/* Mcap */}
+                    <td className="px-1 py-3 text-center">
+                      <span className="font-mono text-xs tabular-nums text-zinc-400">
+                        {formatMcap(row.marketCapCr)}
+                      </span>
+                    </td>
+
+                    {/* Price trend sparkline */}
+                    <td className="px-3 py-3">
+                      <Sparkline data={row.sparklineData} />
+                    </td>
+
+                    {/* Score */}
+                    <td className="px-1 py-3 text-center">
+                      {isUnranked && row.compositeScore === 0 ? (
+                        <span className="text-zinc-700 text-xs">—</span>
+                      ) : (
+                        <span className={`font-mono text-xs font-semibold tabular-nums ${isUnranked ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                          {row.compositeScore.toFixed(2)}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* DMA swatches (10/20/50/100/200) */}
+                    <td className="px-2 py-3">
+                      <div className="flex justify-center">
+                        <DMASwatches swatches={row.dmaSwatches} />
+                      </div>
+                    </td>
+
+                    {/* ATH swatches */}
+                    <td className="px-2 py-3">
+                      <div className="flex justify-center">
+                        {row.currentPrice > 0 ? (
+                          <ATHSwatches athProximity={row.athProximity} />
+                        ) : (
+                          <span className="text-zinc-700 text-xs">—</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* DD — drawdown from ATH */}
+                    <td className="px-1 py-3 text-center">
+                      {row.currentPrice > 0 ? (() => {
+                        const dd = -((1 - row.athProximity) * 100);
+                        const cls = dd >= -5 ? 'text-emerald-400' : dd >= -15 ? 'text-yellow-400' : dd >= -30 ? 'text-orange-400' : 'text-red-400';
+                        return <span className={`font-mono text-xs font-semibold tabular-nums ${cls}`}>{dd.toFixed(1)}%</span>;
+                      })() : (
+                        <span className="text-zinc-700 text-xs">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+      </div>
+
+      <RulesInfoModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
+    </motion.div>
+  );
+}

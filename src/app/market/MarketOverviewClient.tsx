@@ -48,22 +48,24 @@ interface IndexSummary {
 const UPDATE_INTERVAL_MS = 5000; // Batch UI updates every 5 seconds (matches Live page)
 
 interface MarketOverviewClientProps {
-  initialSummaries: IndexSummary[];
-  initialData: MarketOverviewData | null;
-  initialTokenStatus: { hasToken: boolean; message?: string } | null;
+  initialSummaries?: IndexSummary[];
+  initialData?: MarketOverviewData | null;
+  initialTokenStatus?: { hasToken: boolean; message?: string } | null;
+  embedded?: boolean;
 }
 
 export default function MarketOverviewClient({
-  initialSummaries,
-  initialData,
-  initialTokenStatus
+  initialSummaries = [],
+  initialData = null,
+  initialTokenStatus = null,
+  embedded = false,
 }: MarketOverviewClientProps) {
   const [selectedIndex, setSelectedIndex] = useState('NIFTY Total Market');
   const [indexSummaries, setIndexSummaries] = useState<IndexSummary[]>(initialSummaries);
   const [data, setData] = useState<MarketOverviewData | null>(initialData);
-  const [loading, setLoading] = useState(false); // Default false since we have SSR data
+  const [loading, setLoading] = useState(!initialData); // True when no SSR data
   const [loadError, setLoadError] = useState<string | null>(null); // Track fetch errors for display
-  const [summariesLoading, setSummariesLoading] = useState(false); // Default false
+  const [summariesLoading, setSummariesLoading] = useState(initialSummaries.length === 0);
   const [isMobile, setIsMobile] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -121,6 +123,10 @@ export default function MarketOverviewClient({
     }
   }, []);
 
+  // Auto-fetch summaries on mount when no SSR data provided (embedded mode)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initialSummaries.length === 0) loadSummaries(true); }, []);
+
   // Fetch data for selected index (REST)
   const loadData = useCallback(async (indexName: string, showLoading = true) => {
     try {
@@ -149,8 +155,8 @@ export default function MarketOverviewClient({
     }
   }, [updateTimestamp]);
 
-  // Load data when index changes (skip on first mount as we have SSR data)
-  const firstRender = useRef(true);
+  // Load data when index changes (skip on first mount only when SSR data was provided)
+  const firstRender = useRef(initialData !== null);
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
@@ -412,8 +418,9 @@ export default function MarketOverviewClient({
   // ... Loading Skeleton (full page initial load) ...
   if (summariesLoading && indexSummaries.length === 0) {
     return (
-      <div className="flex flex-col gap-4 md:gap-6 pb-8 min-h-screen pt-2 animate-pulse">
-        {/* Header */}
+      <div className={`flex flex-col gap-4 md:gap-6 ${embedded ? '' : 'pb-8 min-h-screen pt-2'} animate-pulse`}>
+        {/* Header - standalone only */}
+        {!embedded && (
         <div className="flex items-center justify-between">
           <div>
             <div className="h-7 w-44 bg-slate-800/60 rounded-lg" />
@@ -421,6 +428,7 @@ export default function MarketOverviewClient({
           </div>
           <div className="h-8 w-20 bg-slate-800/50 rounded-lg" />
         </div>
+        )}
         {/* Sidebar + Content Skeleton */}
         <div className="flex flex-col md:flex-row gap-4 md:gap-5">
           {/* Sidebar Skeleton */}
@@ -583,6 +591,7 @@ export default function MarketOverviewClient({
                   declining={data.declining}
                   unchanged={data.unchanged}
                   loading={loading}
+                  onRefresh={() => { loadData(selectedIndex); loadSummaries(false); }}
                 />
               )}
             </motion.div>
@@ -620,14 +629,17 @@ export default function MarketOverviewClient({
     );
   };
 
+  const Container = embedded ? motion.div : motion.main;
+
   return (
-    <motion.main
-      className="flex flex-col gap-4 md:gap-6 pb-24 md:pb-8"
+    <Container
+      className={`flex flex-col gap-4 md:gap-6 ${embedded ? '' : 'pb-24 md:pb-8'}`}
       variants={containerVariants}
-      initial="hidden"
+      initial={embedded ? false : "hidden"}
       animate="visible"
     >
-      {/* Header */}
+      {/* Header — standalone only */}
+      {!embedded && (
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -664,11 +676,11 @@ export default function MarketOverviewClient({
           ) : 'Refresh'}
         </button>
       </motion.div>
+      )}
 
       {/* Error Banner */}
       {loadError && (
         <motion.div variants={itemVariants} className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs flex items-center gap-2">
-          <span>⚠️</span>
           <span>{loadError}</span>
         </motion.div>
       )}
@@ -696,6 +708,6 @@ export default function MarketOverviewClient({
           />
         </motion.div>
       )}
-    </motion.main>
+    </Container>
   );
 }

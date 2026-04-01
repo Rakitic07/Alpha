@@ -81,7 +81,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const isFetchingBus = useRef(false);
   const errorShownRef = useRef(false); // Prevent duplicate error toasts
   const [initialized, setInitialized] = useState(false);
-  
+  const initializedRef = useRef(false);
+
   // Batched update refs - accumulate updates and apply every UPDATE_INTERVAL_MS
   const pendingUpdatesRef = useRef<Map<string, PriceUpdate>>(new Map());
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -99,19 +100,18 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
   // Lazy initialize method - pages call this when they need live data
   const initialize = useCallback(() => {
-    setInitialized(prev => {
-      if (prev) return prev;
-      // Load P/L history from server on first init
-      getIntradayPnLHistory()
-        .then(history => {
-          if (history.length > 0) {
-            setPnlHistory(history);
-            liveLogger.info(`Loaded ${history.length} P/L history points from server`);
-          }
-        })
-        .catch(err => liveLogger.error('Failed to load P/L history:', err));
-      return true;
-    });
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    setInitialized(true);
+    // Load P/L history from server on first init
+    getIntradayPnLHistory()
+      .then(history => {
+        if (history.length > 0) {
+          setPnlHistory(history);
+          liveLogger.info(`Loaded ${history.length} P/L history points from server`);
+        }
+      })
+      .catch(err => liveLogger.error('Failed to load P/L history:', err));
   }, []);
 
   const setShowDynamicTitle = useCallback((val: boolean) => {

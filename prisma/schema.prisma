@@ -220,6 +220,96 @@ model IntradayPnL {
   date      DateTime // Date only (for easy filtering/cleanup)
   pnl       Float    // Absolute P/L value
   percent   Float    // P/L percentage
-  
+
   @@index([date])
+}
+
+// ===== Momentum Screener Models =====
+
+// Daily OHLCV candles for all NSE stocks (for Sharpe/DMA/volume computation)
+model ScreenerPrice {
+  id            Int    @id @default(autoincrement())
+  symbol        String
+  instrumentKey String
+  date          String // YYYY-MM-DD
+  open          Float
+  high          Float
+  low           Float
+  close         Float
+  volume        Int    // Raw share volume. Turnover = close × volume.
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+}
+
+// Running all-time high per stock (seeded from monthly candles since 2000)
+model StockATH {
+  symbol        String   @id
+  instrumentKey String
+  ath           Float
+  athDate       String   // YYYY-MM-DD when ATH was reached
+  updatedAt     DateTime @default(now())
+}
+
+// Daily computed momentum scores (full scored universe)
+model MomentumScore {
+  id                Int      @id @default(autoincrement())
+  computedDate      String   // YYYY-MM-DD
+  symbol            String
+  instrumentKey     String
+  companyName       String
+  rank              Int
+  compositeScore    Float
+  avgSharpe         Float
+  sharpe12m         Float
+  sharpe6m          Float
+  sharpe3m          Float
+  athProximity      Float    // currentClose / ATH (0 to 1.0)
+  ath               Float    // ATH price
+  currentPrice      Float
+  dma200            Float    // 200-day simple moving average
+  aboveDma200Pct    Float    // % above/below 200 DMA
+  aboveDma10        Boolean  @default(false)
+  aboveDma20        Boolean  @default(false)
+  aboveDma50        Boolean  @default(false)
+  aboveDma100       Boolean  @default(false)
+  medianTurnoverCr  Float    // Median daily turnover in Crores
+  marketCapCr       Float    // Market cap in Crores (from NSE bhavcopy)
+  marketCapCategory String?  // Large/Mid/Small/Micro (from AMFI)
+  sparklineData     String?  // JSON: last 50 closes, oldest-first
+  circuitBandPct    Float?   // Circuit band width %
+  // Denormalized from RankingHistory (avoids JOINs on page load)
+  prevRank          Int?     // Previous day's rank (for change indicator)
+  avgRank50d        Float?   // Average rank over last 50 trading days
+  bestRank          Int?     // Best (lowest) rank in last 50 days
+  appearances       Int      @default(0)  // Days ranked in last 50 trading days
+  t50Pct            Float    @default(0)  // % of last 50 days in top 50
+  t100Pct           Float    @default(0)  // % of last 50 days in top 100
+  isActive          Boolean  @default(true)
+
+  @@unique([computedDate, symbol])
+  @@index([computedDate, isActive])
+  @@index([isActive, rank])
+  @@index([symbol])
+}
+
+// Daily rank snapshots (retained for 50 trading days)
+model RankingHistory {
+  id             Int    @id @default(autoincrement())
+  symbol         String
+  date           String // YYYY-MM-DD
+  rank           Int
+  compositeScore Float
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+}
+
+// Market cap from NSE bhavcopy (updated daily by cron)
+model StockMarketCap {
+  symbol    String   @id
+  marketCap Float    // in Crores
+  updatedAt DateTime @default(now())
 }

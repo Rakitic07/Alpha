@@ -21,6 +21,7 @@ interface MarketHeatmapProps {
   declining?: number;
   unchanged?: number;
   loading?: boolean;
+  onRefresh?: () => void;
 }
 
 export default memo(function MarketHeatmap({
@@ -33,6 +34,7 @@ export default memo(function MarketHeatmap({
   declining,
   unchanged,
   loading,
+  onRefresh,
 }: MarketHeatmapProps) {
   if (!constituents || constituents.length === 0) return null;
 
@@ -91,37 +93,51 @@ export default memo(function MarketHeatmap({
                 </div>
               )}
             </div>
-            {/* Right: Advance / Decline bar */}
-            {total > 0 && (
-              <div className="flex flex-col gap-1.5 shrink-0 min-w-[200px] max-w-[340px] flex-1">
-                <div className="flex justify-between items-end px-0.5 font-mono tracking-tight">
-                  <span className="text-sm font-bold text-emerald-400">{advancing}</span>
-                  <span className="text-sm font-bold text-rose-500">{declining}</span>
-                </div>
-                <div className="relative h-2.5 w-full rounded-full overflow-hidden flex bg-slate-800 shadow-inner">
-                  <motion.div
-                    className="h-full bg-emerald-400"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${advPct}%` }}
-                    transition={{ duration: 0.8, ease: 'easeOut' }}
-                  />
-                  {unchPct > 0 && (
+            {/* Right: Advance / Decline bar + Refresh */}
+            <div className="flex items-center gap-3 shrink-0 flex-1 min-w-[200px] max-w-[380px]">
+              {total > 0 && (
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <div className="flex justify-between items-end px-0.5 font-mono tracking-tight">
+                    <span className="text-sm font-bold text-emerald-400">{advancing}</span>
+                    <span className="text-sm font-bold text-rose-500">{declining}</span>
+                  </div>
+                  <div className="relative h-2.5 w-full rounded-full overflow-hidden flex bg-slate-800 shadow-inner">
                     <motion.div
-                      className="h-full bg-slate-600/80"
+                      className="h-full bg-emerald-400"
                       initial={{ width: 0 }}
-                      animate={{ width: `${unchPct}%` }}
-                      transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+                      animate={{ width: `${advPct}%` }}
+                      transition={{ duration: 0.8, ease: 'easeOut' }}
                     />
-                  )}
-                  <motion.div
-                    className="h-full bg-rose-500"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${decPct}%` }}
-                    transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
-                  />
+                    {unchPct > 0 && (
+                      <motion.div
+                        className="h-full bg-slate-600/80"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${unchPct}%` }}
+                        transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+                      />
+                    )}
+                    <motion.div
+                      className="h-full bg-rose-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${decPct}%` }}
+                      transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+              {onRefresh && (
+                <button
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className="ml-1 p-1.5 text-gray-500 hover:text-white bg-slate-800/50 hover:bg-slate-700/50 border border-white/5 rounded-lg transition-all disabled:opacity-50 shrink-0"
+                  title="Refresh"
+                >
+                  <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           /* Fallback: plain label */

@@ -69,3 +69,7 @@ android/.gradle/
 android/build/
 *.apk
 *.aab
+
+.claude/
+screener/*
+backtest/*

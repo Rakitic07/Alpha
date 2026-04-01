@@ -13,6 +13,7 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 ## ✨ Features
 
 - **Real-time Dashboard** — Live portfolio P&L with WebSocket price streaming from Upstox
+- **Momentum Screener** — Daily-ranked NSE universe using composite Sharpe + ATH-proximity scoring, with exit signal detection for portfolio holdings
 - **Privacy Mode** — Toggle to hide monetary values on desktop (great for screen sharing)
 - **Performance Analytics** — NAV tracking, XIRR, drawdown, benchmark comparisons (NIFTY 50, NIFTY 500 MOMENTUM 50, etc.)
 - **Market Cap Classification** — Automatic Large/Mid/Small/Micro cap breakdown using AMFI data
@@ -229,6 +230,7 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
 | 5 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE automatically. |
 | 6 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Scrapes latest stock-to-sector mappings. |
 | 7 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Weekly check for new market cap classifications. |
+| 8 | Momentum Screener | `/api/cron/momentum-screener` | `0 11 * * 1-5` | 4:30 PM Mon-Fri | Fetches candles, scores all stocks, updates rankings. |
 
 > [!TIP]
 > After setting up all 6 jobs, you should see them listed in your cron-job.org dashboard. You can manually trigger any job by clicking "Run now" to test it.
@@ -311,6 +313,57 @@ Click the **eye icon** in the live dashboard header to toggle privacy mode:
 
 ---
 
+## 📈 Momentum Screener
+
+Scores the full NSE equity universe daily after market close. Mirrors the backtest engine exactly.
+
+### Formula
+
+```
+Composite Score = 0.5 × avgSharpe + 0.5 × athProximity
+```
+
+- **avgSharpe** = mean of Sharpe(12m), Sharpe(6m), Sharpe(3m) — annualized, sample std, risk-free = 0
+- **Sharpe windows**: 12m (252 days), 6m (126 days), 3m (62 days ending 21 days ago)
+- **athProximity** = currentClose / allTimeHigh — range [0, 1]
+
+### Filters (all must pass)
+
+| Filter | Threshold |
+|--------|-----------|
+| Market cap | ≥ ₹1,000 Cr (NSE Bhavcopy) |
+| Price | ≥ ₹50 (ETFs GOLDBEES/SILVERBEES exempt) |
+| 200 DMA | Close ≥ 200-day SMA |
+| ATH proximity | Within 30% of all-time high |
+| Volume | Median daily turnover ≥ ₹1 Cr (126-day lookback) |
+| Circuit band | ≥ 15% (excludes 2%/5% circuit stocks) |
+| History | ≥ 269 trading days of data |
+
+### One-Time Setup (first deploy)
+
+```bash
+# Backfill ~18 months of daily candles (~2000 stocks, ~30 mins)
+npx ts-node -e "require('./scripts/seed-screener-prices.ts')"
+
+# Seed all-time highs from monthly candles since 2000 (~7 mins)
+npx ts-node -e "require('./scripts/seed-ath.ts')"
+
+# Backfill 50 days of ranking history
+npx ts-node -e "require('./scripts/backfill-rankings.ts')"
+```
+
+After backfill, the daily cron (`/api/cron/momentum-screener`, weekdays 4:30 PM IST) keeps everything up to date incrementally.
+
+### Exit Signals
+
+Portfolio holdings get an exit signal when:
+- **Rank > 50** or **unranked** (fell out of screener filters), OR
+- **Below 200 DMA** AND **> 25% from ATH** simultaneously
+
+Holdings held < 14 days are **LOCKED** (min hold protection, displayed in yellow).
+
+---
+
 ## 🏗️ Architecture
 
 <details>
@@ -363,18 +416,21 @@ src/
 ├── app/                    # Next.js App Router pages
 │   ├── actions/           # Server Actions
 │   │   ├── actions.ts     # Core portfolio actions
+│   │   ├── screener.ts    # Screener data & exit signal detection
 │   │   ├── auth.ts        # Authentication actions
 │   │   ├── amfi.ts        # AMFI classification actions
 │   │   ├── live.ts        # Live dashboard data
 │   │   └── sectors.ts     # Sector mapping actions
 │   ├── api/               # API Routes
-│   │   ├── cron/          # Scheduled jobs (snapshot, sector, corporate actions)
+│   │   ├── cron/          # Scheduled jobs (snapshot, screener, sector, corp actions)
 │   │   ├── stream/        # WebSocket authorization
 │   │   └── portfolio/     # Snapshot generation
+│   ├── screener/          # Momentum screener page
 │   ├── dashboard/         # Historical dashboard page
 │   ├── settings/          # Settings page (auth, AMFI, corp actions)
 │   └── trades/            # Trade management & import
 ├── components/            # React components
+│   ├── screener/          # ScreenerClient, StatsBar, RulesInfoModal
 │   ├── live/              # LiveHeader, LiveStatsCards, LiveMovers, IntradayPnLChart
 │   └── portfolio/         # PortfolioTable, Heatmap, SectorAllocation
 ├── context/
@@ -382,6 +438,15 @@ src/
 ├── hooks/
 │   └── useUpstoxStream.ts # WebSocket connection to Upstox (Protobuf V3)
 └── lib/                   # Core library code
+    ├── screener/          # Momentum screener pipeline
+    │   ├── pipeline.ts    # Daily orchestrator (candles → score → rank → store)
+    │   ├── scoring.ts     # Sharpe + composite score (mirrors backtest engine.py)
+    │   ├── prices.ts      # Incremental candle ingestion from Upstox
+    │   ├── ath.ts         # All-time high tracking
+    │   ├── bhavcopy.ts    # NSE market cap from daily ZIP archives
+    │   ├── corporate-actions.ts # Split/bonus detection via price anomalies
+    │   ├── dates.ts       # IST date utilities
+    │   └── utils.ts       # Shared withConcurrency / withRetry helpers
     ├── upstox/            # Upstox API client & token management
     ├── amfi/              # AMFI classification service
     ├── finance/           # Portfolio valuation engine

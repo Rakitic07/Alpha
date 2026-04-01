@@ -13,7 +13,7 @@ import Image from 'next/image';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faChartLine,
-  faChartBar,
+  faFilter,
   faBriefcase,
   faBolt,
   faRightFromBracket,
@@ -29,7 +29,7 @@ import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
 const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMobile?: boolean }[] = [
   { text: 'Live', path: '/', icon: faSignal },
-  { text: 'Market', path: '/market', icon: faChartBar },
+  { text: 'Screener', path: '/screener', icon: faFilter },
   { text: 'Dashboard', path: '/dashboard', icon: faChartLine },
 
   { text: 'Portfolio', path: '/portfolio', icon: faBriefcase },
@@ -147,7 +147,6 @@ export default function Header() {
             opacity: 1
           });
         }
-      setIndicatorStyle(prev => ({ ...prev, opacity: 0 }));
     }
     
     // Close mobile menu when path changes

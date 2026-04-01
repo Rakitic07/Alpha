@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Global pointer cursor for all interactive elements */
+@layer base {
+  button,
+  [role="button"],
+  summary {
+    cursor: pointer;
+  }
+}
 
 /* ===== Modern Vibrant Color Palette (Professional) ===== */
 :root {

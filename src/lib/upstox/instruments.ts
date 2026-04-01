@@ -136,7 +136,6 @@ async function downloadInstruments(): Promise<void> {
   const gzPath = `${NSE_CACHE_FILE}.gz`;
   const fileStream = createWriteStream(gzPath);
   
-  // @ts-expect-error - Node.js stream compatibility
   await pipeline(response.body, fileStream);
 
   // Decompress using zlib

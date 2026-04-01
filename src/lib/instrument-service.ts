@@ -197,7 +197,6 @@ async function downloadAndExtractInstruments(url: string, cacheFile: string) {
         }
         
         const fileStream = createWriteStream(gzPath);
-        // @ts-expect-error - native fetch body is readable stream
         await pipeline(response.body, fileStream);
 
         // Extract to temp json file (atomic: write to temp, then rename)
@@ -381,6 +380,21 @@ export async function getInstrumentData(symbol: string): Promise<InstrumentData 
     }
     
     return undefined;
+}
+
+/**
+ * Batch get instrument data for multiple symbols.
+ * Single ensureInstrumentMaster() call + synchronous map lookups.
+ */
+export async function getAllInstrumentData(symbols: string[]): Promise<Map<string, InstrumentData>> {
+    await ensureInstrumentMaster();
+    const result = new Map<string, InstrumentData>();
+    for (const symbol of symbols) {
+        const cleanSymbol = symbol.replace(/\.(NS|BO)$/i, '').toUpperCase();
+        const data = nseInstrumentMap?.get(cleanSymbol) ?? bseInstrumentMap?.get(cleanSymbol);
+        if (data) result.set(symbol, data);
+    }
+    return result;
 }
 
 /**
