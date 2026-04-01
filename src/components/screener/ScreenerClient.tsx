@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import StatsBar from './StatsBar';
 import RulesInfoModal from './RulesInfoModal';
-import { getScreenerData, type ScreenerRow, type ScreenerStats } from '@/app/actions/screener';
+import { getScreenerData, syncScreener, type ScreenerRow, type ScreenerStats } from '@/app/actions/screener';
 
 interface ScreenerClientProps {
   initialData: { rows: ScreenerRow[]; stats: ScreenerStats };
@@ -187,8 +187,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const handleSync = useCallback(async () => {
     setSyncing(true);
     try {
-      const res = await fetch('/api/cron/momentum-screener');
-      if (res.ok) {
+      const result = await syncScreener();
+      if (result.success) {
         const data = await getScreenerData(activeTab);
         setRows(data.rows);
         setStats(data.stats);

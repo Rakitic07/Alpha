@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/db';
 import { computePortfolioState } from '@/lib/finance/recalculation';
 import { computeReturns, sharpeRatio, PARAMS } from '@/lib/screener/scoring';
+import { runScreenerPipeline } from '@/lib/screener/pipeline';
+import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
 
 // ── Types ──
 
@@ -294,4 +296,15 @@ function computeStats(rows: ScreenerRow[], totalPortfolioCount?: number): Screen
     mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0 },
     dataDate: null,
   };
+}
+
+/** Trigger the screener pipeline server-side (used by the Sync button). */
+export async function syncScreener(): Promise<{ success: boolean; ranked: number; error?: string }> {
+  try {
+    const result = await runScreenerPipeline();
+    try { await detectAndFlushAnomalies(); } catch { /* non-fatal */ }
+    return { success: true, ranked: result.ranked };
+  } catch (err) {
+    return { success: false, ranked: 0, error: (err as Error).message };
+  }
 }
