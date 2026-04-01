@@ -4,7 +4,7 @@
  */
 
 import { prisma, chunkArray, SQLITE_IN_CLAUSE_LIMIT } from '@/lib/db';
-import { getHistoricalCandles } from '@/lib/upstox-client';
+import { getHistoricalCandles, getOHLC } from '@/lib/upstox-client';
 import { toDateStr, daysAgo, todayIST } from './dates';
 import { withConcurrency, withRetry } from './utils';
 import { logger } from '@/lib/logger';
@@ -14,6 +14,54 @@ const priceLogger = logger.scope('ScreenerPrices');
 interface InstrumentInfo {
   symbol: string;
   instrumentKey: string;
+}
+
+/**
+ * Patch today's prices for all instruments using the batch market-quote OHLC endpoint.
+ * ~4 API calls for 2000 stocks (vs 2000 individual historical-candle calls).
+ * Deletes and re-inserts today's row so it's safe to call multiple times.
+ */
+export async function patchTodayPrices(
+  instruments: InstrumentInfo[],
+  forDate: string,
+): Promise<{ patched: number; errors: string[] }> {
+  const instrumentKeys = instruments.map(i => i.instrumentKey);
+  const ohlcMap = await getOHLC(instrumentKeys, '1d');
+
+  const rows: Array<{
+    symbol: string; instrumentKey: string; date: string;
+    open: number; high: number; low: number; close: number; volume: number;
+  }> = [];
+
+  for (const inst of instruments) {
+    const ohlc = ohlcMap.get(inst.instrumentKey);
+    if (!ohlc?.close) continue;
+    rows.push({
+      symbol: inst.symbol,
+      instrumentKey: inst.instrumentKey,
+      date: forDate,
+      open: ohlc.open,
+      high: ohlc.high,
+      low: ohlc.low,
+      close: ohlc.close,
+      volume: Math.round(ohlc.volume ?? 0),
+    });
+  }
+
+  if (rows.length === 0) {
+    return { patched: 0, errors: ['No OHLC data returned — market may be closed'] };
+  }
+
+  // Delete then re-insert today's rows (idempotent)
+  for (const chunk of chunkArray(rows.map(r => r.symbol), SQLITE_IN_CLAUSE_LIMIT)) {
+    await prisma.screenerPrice.deleteMany({ where: { symbol: { in: chunk }, date: forDate } });
+  }
+  for (const chunk of chunkArray(rows, 100)) {
+    await prisma.screenerPrice.createMany({ data: chunk });
+  }
+
+  priceLogger.info(`Patched ${rows.length} stocks with today's OHLC (${forDate})`);
+  return { patched: rows.length, errors: [] };
 }
 
 /**

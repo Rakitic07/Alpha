@@ -9,7 +9,7 @@ import { ensureInstrumentMaster, getAllSymbols, getAllInstrumentData } from '@/l
 import { getFullQuote } from '@/lib/upstox-client';
 import { getCategoriesBatch } from '@/lib/amfi/service';
 import { fetchAndStoreBhavcopy } from './bhavcopy';
-import { fetchAndStoreCandles } from './prices';
+import { fetchAndStoreCandles, patchTodayPrices } from './prices';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
 import { todayIST, effectiveTradingDay, isMarketHours } from './dates';
@@ -77,13 +77,27 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
   }
   pipelineLogger.info(`Loaded ${instruments.length} instruments`);
 
-  // Step 3: Fetch candles (incremental)
+  // Step 3a: Patch today's prices via batch OHLC (~4 API calls for 2000 stocks)
+  // This ensures scoring can run regardless of historical backfill status.
+  // After patch, fetchAndStoreCandles sees lastDate===today and skips all stocks in steady state.
   let candlesFetched = 0;
   let candlesInserted = 0;
   try {
+    const patchResult = await patchTodayPrices(instruments, today);
+    candlesInserted += patchResult.patched;
+    if (patchResult.errors.length > 0) {
+      pipelineLogger.warn('Today price patch:', patchResult.errors[0]);
+    }
+  } catch (err) {
+    errors.push(`Today price patch: ${(err as Error).message}`);
+    pipelineLogger.error('Today price patch failed:', err);
+  }
+
+  // Step 3b: Incremental historical backfill (no-op in steady state once today is patched)
+  try {
     const priceResult = await fetchAndStoreCandles(instruments, today);
     candlesFetched = priceResult.fetched;
-    candlesInserted = priceResult.inserted;
+    candlesInserted += priceResult.inserted;
     if (priceResult.errors.length > 0) {
       errors.push(...priceResult.errors.slice(0, 10)); // Cap error log
     }
