@@ -11,8 +11,9 @@ export async function withConcurrency<T>(
   fn: (item: T) => Promise<void>,
   limit: number,
   staggerMs = 0,
-): Promise<{ successes: number; errors: string[] }> {
+): Promise<{ successes: number; errors: string[]; rateLimited: T[] }> {
   const errors: string[] = [];
+  const rateLimited: T[] = [];
   let successes = 0;
   let idx = 0;
 
@@ -23,7 +24,12 @@ export async function withConcurrency<T>(
         await fn(items[i]);
         successes++;
       } catch (err) {
-        errors.push(`${items[i]}: ${(err as Error).message}`);
+        const msg = (err as Error).message;
+        if (/429|1015|rate.?limit|too many requests/i.test(msg)) {
+          rateLimited.push(items[i]); // collect for cool-off retry, not a hard error
+        } else {
+          errors.push(`${items[i]}: ${msg}`);
+        }
       }
     }
   }
@@ -35,7 +41,7 @@ export async function withConcurrency<T>(
       : worker()
   );
   await Promise.all(workers);
-  return { successes, errors };
+  return { successes, errors, rateLimited };
 }
 
 /** Retry with exponential backoff.

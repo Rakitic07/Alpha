@@ -48,50 +48,63 @@ export async function fetchAndStoreCandles(
 
   priceLogger.info(`Fetching candles for ${instrumentsToFetch.length} stocks (${instruments.length - instrumentsToFetch.length} already up to date)`);
 
-  const result = await withConcurrency(
-    instrumentsToFetch,
-    async ({ inst, fromDate }) => {
-      const candles = await withRetry(() =>
-        getHistoricalCandles(inst.instrumentKey, 'day', fromDate, today)
-      );
+  const fetchStock = async ({ inst, fromDate }: { inst: InstrumentInfo; fromDate: string }) => {
+    const candles = await withRetry(() =>
+      getHistoricalCandles(inst.instrumentKey, 'day', fromDate, today)
+    );
 
-      if (!candles?.candles || candles.candles.length === 0) return;
+    if (!candles?.candles || candles.candles.length === 0) return;
 
-      // Transform Upstox candles to ScreenerPrice rows
-      const rows = candles.candles.map(c => ({
-        symbol: inst.symbol,
-        instrumentKey: inst.instrumentKey,
-        date: toDateStr(new Date(c.timestamp)),
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-        volume: Math.round(c.volume),
-      }));
+    const rows = candles.candles.map(c => ({
+      symbol: inst.symbol,
+      instrumentKey: inst.instrumentKey,
+      date: toDateStr(new Date(c.timestamp)),
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: Math.round(c.volume),
+    }));
 
-      // Get existing dates to avoid unique constraint violations
-      const existingDates = new Set(
-        (await prisma.screenerPrice.findMany({
-          where: { symbol: inst.symbol, date: { in: rows.map(r => r.date) } },
-          select: { date: true },
-        })).map(r => r.date)
-      );
+    const existingDates = new Set(
+      (await prisma.screenerPrice.findMany({
+        where: { symbol: inst.symbol, date: { in: rows.map(r => r.date) } },
+        select: { date: true },
+      })).map(r => r.date)
+    );
 
-      const newRows = rows.filter(r => !existingDates.has(r.date));
-      if (newRows.length === 0) return;
+    const newRows = rows.filter(r => !existingDates.has(r.date));
+    if (newRows.length === 0) return;
 
-      // Batch insert in chunks of 100
-      for (const chunk of chunkArray(newRows, 100)) {
-        await prisma.screenerPrice.createMany({ data: chunk });
-      }
-      totalInserted += newRows.length;
-    },
-    5,   // 5 concurrent; staggered 200ms apart to avoid simultaneous burst hitting Cloudflare WAF
-    200, // staggerMs — workers start at t=0,200,400,600,800ms instead of all at once
-  );
+    for (const chunk of chunkArray(newRows, 100)) {
+      await prisma.screenerPrice.createMany({ data: chunk });
+    }
+    totalInserted += newRows.length;
+  };
 
-  priceLogger.info(`Candle ingestion complete: ${result.successes} stocks, ${totalInserted} rows inserted, ${result.errors.length} errors`);
-  return { fetched: result.successes, inserted: totalInserted, errors: result.errors };
+  // Phase 1: fetch all stocks with concurrency + stagger
+  const phase1 = await withConcurrency(instrumentsToFetch, fetchStock, 5, 200);
+
+  let allErrors = [...phase1.errors];
+  let totalSuccesses = phase1.successes;
+
+  // Phase 2: cool-off retry for rate-limited stocks
+  if (phase1.rateLimited.length > 0) {
+    const coolOffMs = 2 * 60_000; // 2 minutes
+    priceLogger.warn(`${phase1.rateLimited.length} stocks rate-limited — cooling off ${coolOffMs / 1000}s then retrying serially`);
+    await new Promise(r => setTimeout(r, coolOffMs));
+    priceLogger.info('Cool-off complete, retrying rate-limited stocks...');
+    const phase2 = await withConcurrency(phase1.rateLimited, fetchStock, 1, 0);
+    totalSuccesses += phase2.successes;
+    allErrors = allErrors.concat(phase2.errors);
+    if (phase2.rateLimited.length > 0) {
+      priceLogger.warn(`${phase2.rateLimited.length} stocks still rate-limited after cool-off — will retry on next run`);
+      allErrors = allErrors.concat(phase2.rateLimited.map(({ inst }) => `${inst.symbol}: rate-limited`));
+    }
+  }
+
+  priceLogger.info(`Candle ingestion complete: ${totalSuccesses} stocks, ${totalInserted} rows inserted, ${allErrors.length} errors`);
+  return { fetched: totalSuccesses, inserted: totalInserted, errors: allErrors };
 }
 
 /**
