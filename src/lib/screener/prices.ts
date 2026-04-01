@@ -86,7 +86,7 @@ export async function fetchAndStoreCandles(
       }
       totalInserted += newRows.length;
     },
-    3, // 3 concurrent Upstox calls — Cloudflare WAF limits higher concurrency (error 1015)
+    10, // 10 concurrent — Upstox allows 50 req/s for standard APIs; 10 concurrent ≈ 20 req/s
   );
 
   priceLogger.info(`Candle ingestion complete: ${result.successes} stocks, ${totalInserted} rows inserted, ${result.errors.length} errors`);
