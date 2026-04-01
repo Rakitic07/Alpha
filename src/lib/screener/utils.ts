@@ -28,7 +28,7 @@ export async function withConcurrency<T>(
   return { successes, errors };
 }
 
-/** Retry with exponential backoff */
+/** Retry with exponential backoff. Rate-limit responses (HTTP 429/1015) use a long backoff (30–45 s). */
 export async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelayMs = 1000): Promise<T> {
   let lastErr: Error | undefined;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -37,7 +37,10 @@ export async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDel
     } catch (err) {
       lastErr = err as Error;
       if (attempt < maxRetries) {
-        const delay = baseDelayMs * Math.pow(2, attempt);
+        const isRateLimit = /429|1015|rate.?limit|too many requests/i.test(lastErr.message);
+        const delay = isRateLimit
+          ? 30_000 + Math.random() * 15_000                              // 30–45 s with jitter
+          : baseDelayMs * Math.pow(2, attempt) * (0.75 + Math.random() * 0.5); // exponential + jitter
         await new Promise(r => setTimeout(r, delay));
       }
     }
