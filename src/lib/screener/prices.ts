@@ -86,7 +86,8 @@ export async function fetchAndStoreCandles(
       }
       totalInserted += newRows.length;
     },
-    10, // 10 concurrent — Upstox allows 50 req/s for standard APIs; 10 concurrent ≈ 20 req/s
+    5,   // 5 concurrent; staggered 200ms apart to avoid simultaneous burst hitting Cloudflare WAF
+    200, // staggerMs — workers start at t=0,200,400,600,800ms instead of all at once
   );
 
   priceLogger.info(`Candle ingestion complete: ${result.successes} stocks, ${totalInserted} rows inserted, ${result.errors.length} errors`);

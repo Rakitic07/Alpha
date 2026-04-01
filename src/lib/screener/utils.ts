@@ -2,11 +2,15 @@
  * Shared utilities for the momentum screener pipeline.
  */
 
-/** Lightweight concurrency limiter (no external dependency) */
+/** Lightweight concurrency limiter (no external dependency).
+ *  staggerMs: delay between each worker's initial start — prevents simultaneous burst
+ *  that triggers Cloudflare WAF (Error 1015) even when total req/s is within API limits.
+ */
 export async function withConcurrency<T>(
   items: T[],
   fn: (item: T) => Promise<void>,
   limit: number,
+  staggerMs = 0,
 ): Promise<{ successes: number; errors: string[] }> {
   const errors: string[] = [];
   let successes = 0;
@@ -24,7 +28,13 @@ export async function withConcurrency<T>(
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  const count = Math.min(limit, items.length);
+  const workers = Array.from({ length: count }, (_, i) =>
+    staggerMs > 0
+      ? new Promise<void>(r => setTimeout(r, i * staggerMs)).then(() => worker())
+      : worker()
+  );
+  await Promise.all(workers);
   return { successes, errors };
 }
 
