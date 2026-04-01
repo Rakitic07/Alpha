@@ -29,8 +29,8 @@ import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
 const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMobile?: boolean }[] = [
   { text: 'Live', path: '/', icon: faSignal },
-  { text: 'Screener', path: '/screener', icon: faFilter },
   { text: 'Dashboard', path: '/dashboard', icon: faChartLine },
+  { text: 'Screener', path: '/screener', icon: faFilter },
 
   { text: 'Portfolio', path: '/portfolio', icon: faBriefcase },
   { text: 'Snapshots', path: '/snapshots', icon: faCamera },
@@ -151,7 +151,7 @@ export default function Header() {
     
     // Close mobile menu when path changes
     setIsMobileMenuOpen(false);
-  }, [pathname]);
+  }, [pathname, statusLabel]);
 
   return (
     <>
