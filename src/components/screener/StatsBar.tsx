@@ -11,14 +11,14 @@ interface StatsBarProps {
 }
 
 export default memo(function StatsBar({ stats, activeTab, onTabChange, filteredCount }: StatsBarProps) {
-  const { total, allTotal, rankedPortfolioCount, rankBuckets, mcapBreakdown } = stats;
+  const { total, allTotal, portfolioCount, rankedPortfolioCount, rankBuckets, mcapBreakdown } = stats;
   const othersCount = total - rankedPortfolioCount;
   const totalMcap = mcapBreakdown.large + mcapBreakdown.mid + mcapBreakdown.small + mcapBreakdown.micro;
 
   const tabs = [
     { key: 'all' as const,         label: 'All',          count: allTotal },
     { key: 'prefiltered' as const, label: 'Pre-filtered', count: total },
-    { key: 'portfolio' as const,   label: 'Portfolio',    count: rankedPortfolioCount },
+    { key: 'portfolio' as const,   label: 'Portfolio',    count: portfolioCount },
     { key: 'others' as const,      label: 'Others',       count: othersCount },
   ];
 
@@ -41,9 +41,8 @@ export default memo(function StatsBar({ stats, activeTab, onTabChange, filteredC
         ))}
       </div>
 
-      {/* Portfolio rank distribution + Market cap breakdown — only on portfolio tab */}
-      {activeTab === 'portfolio' && (
-        <div className="flex items-center gap-4 text-[11px]">
+      {/* Portfolio rank distribution + Market cap breakdown — always rendered to prevent layout jump */}
+      <div className={`flex items-center gap-4 text-[11px] transition-opacity duration-150 ${activeTab !== 'portfolio' ? 'opacity-0 pointer-events-none' : ''}`}>
           {/* Portfolio rank buckets */}
           <div className="flex items-center gap-2 bg-slate-800/30 border border-white/5 rounded-lg px-3 py-1.5">
             <StatPill label="TOP 25" value={rankBuckets.top25} color="text-emerald-400" />
@@ -58,8 +57,7 @@ export default memo(function StatsBar({ stats, activeTab, onTabChange, filteredC
             <McapPill label="SMALL" value={mcapBreakdown.small} total={totalMcap} color="text-green-400" />
             <McapPill label="MICRO" value={mcapBreakdown.micro} total={totalMcap} color="text-purple-400" />
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 });

@@ -239,7 +239,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
   const handleSort = (field: string) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir(field === 'score' ? 'desc' : 'asc'); }
+    else { setSortField(field); setSortDir(field === 'score' || field === 'rankChange' ? 'desc' : 'asc'); }
   };
 
   const handleExportCSV = () => {
@@ -380,7 +380,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
             <thead className="sticky top-0 z-10 bg-slate-900 border-b border-zinc-800/60">
               <tr>
                 <SortHeader field="rank"   current={sortField} dir={sortDir} onClick={handleSort} pl="pl-5">#</SortHeader>
-                <th className={`${TH_BASE} text-center`}>Chg</th>
+                <SortHeader field="rankChange" current={sortField} dir={sortDir} onClick={handleSort} center>Δ</SortHeader>
                 <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort}>Stock</SortHeader>
                 <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
                 <th className={`${TH_BASE}`}>Trend</th>

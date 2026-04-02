@@ -238,7 +238,7 @@ export async function getScreenerData(
     }
   }
 
-  const stats = await computeStats(allRows, portfolioSymbols.size);
+  const stats = await computeStats(allRows, portfolioSymbols.size, portfolioSymbols);
 
   // Mcap breakdown by actual portfolio position value (qty × currentPrice)
   let mcLarge = 0, mcMid = 0, mcSmall = 0, mcMicro = 0;
@@ -284,29 +284,37 @@ export async function getScreenerData(
 
 // ── Helpers ──
 
-async function computeStats(rows: ScreenerRow[], totalPortfolioCount?: number): Promise<ScreenerStats> {
-  let top25 = 0, top50 = 0, rankedInPortfolio = 0;
-
+async function computeStats(
+  rows: ScreenerRow[],
+  portfolioCount: number = 0,
+  portfolioSymbols?: Set<string>,
+): Promise<ScreenerStats> {
+  // Rank-bucket pills — derived from current rows (only meaningful on portfolio tab)
+  let top25 = 0, top50 = 0;
   for (const r of rows) {
     if (r.inPortfolio && !r.isUnranked) {
-      rankedInPortfolio++;
       if (r.rank <= 25) top25++;
       else if (r.rank <= 50) top50++;
     }
   }
+  const above50 = Math.max(0, portfolioCount - top25 - top50);
 
-  const portfolioCount = totalPortfolioCount ?? rows.filter(r => r.inPortfolio).length;
-  // above50 = everything not in top25/top50, including unranked holdings
-  const above50 = portfolioCount - top25 - top50;
-
-  const allTotal = await prisma.momentumScore.count({ where: { isActive: true, rankType: 'all' } });
+  // Always query canonical counts regardless of which tab's rows we received
+  const symList = portfolioSymbols && portfolioSymbols.size > 0 ? [...portfolioSymbols] : [];
+  const [allTotal, filteredTotal, rankedPortfolioCount] = await Promise.all([
+    prisma.momentumScore.count({ where: { isActive: true, rankType: 'all' } }),
+    prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered' } }),
+    symList.length > 0
+      ? prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered', symbol: { in: symList } } })
+      : Promise.resolve(0),
+  ]);
 
   return {
-    total: rows.filter(r => !r.isUnranked).length,
-    allTotal,
-    portfolioCount,
-    rankedPortfolioCount: rankedInPortfolio,
-    rankBuckets: { top25, top50, above50: Math.max(0, above50) },
+    total: filteredTotal,          // always pre-filtered count, tab-independent
+    allTotal,                      // always all-universe count
+    portfolioCount,                // always total portfolio size (holdings)
+    rankedPortfolioCount,          // portfolio stocks in pre-filtered set
+    rankBuckets: { top25, top50, above50 },
     mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0 },
     dataDate: null,
   };

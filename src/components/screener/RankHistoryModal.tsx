@@ -19,170 +19,162 @@ function RankChart({ data }: { data: HistoryEntry[] }) {
   if (data.length === 0) return null;
 
   const width = 380;
-  const height = 180;
-  const padding = { top: 20, right: 20, bottom: 30, left: 40 };
-  const plotW = width - padding.left - padding.right;
-  const plotH = height - padding.top - padding.bottom;
+  const height = 190;
+  const pad = { top: 16, right: 24, bottom: 28, left: 36 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
 
   const ranks = data.map(d => d.rank);
   const minRank = 1;
-  const maxRank = Math.max(...ranks, 50) + 10;
+  const maxRank = Math.max(...ranks, 50) + 15;
 
   const xScale = (i: number) =>
-    data.length === 1
-      ? padding.left + plotW / 2
-      : padding.left + (i / (data.length - 1)) * plotW;
-
-  // Inverted: rank 1 maps to top (padding.top), higher ranks map downward
+    data.length === 1 ? pad.left + plotW / 2 : pad.left + (i / (data.length - 1)) * plotW;
+  // Inverted Y: rank 1 = top
   const yScale = (rank: number) =>
-    padding.top + ((rank - minRank) / (maxRank - minRank)) * plotH;
+    pad.top + ((rank - minRank) / (maxRank - minRank)) * plotH;
 
-  const points = data.map((d, i) => ({ x: xScale(i), y: yScale(d.rank) }));
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+  const pts = data.map((d, i) => ({ x: xScale(i), y: yScale(d.rank), rank: d.rank, date: d.date }));
 
+  // Smooth bezier path
+  function smoothPath(points: { x: number; y: number }[]): string {
+    if (points.length < 2) return points.length === 1 ? `M ${points[0].x} ${points[0].y}` : '';
+    let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpx = (prev.x + curr.x) / 2;
+      d += ` C ${cpx.toFixed(2)} ${prev.y.toFixed(2)}, ${cpx.toFixed(2)} ${curr.y.toFixed(2)}, ${curr.x.toFixed(2)} ${curr.y.toFixed(2)}`;
+    }
+    return d;
+  }
+
+  const linePath = smoothPath(pts);
   const rank50Y = yScale(50);
-  const firstDate = formatDateShort(data[0].date);
-  const lastDate = formatDateShort(data[data.length - 1].date);
+  const top50Y = Math.max(pad.top, Math.min(rank50Y, pad.top + plotH));
+  const yTicks = Array.from(new Set([1, 25, 50, Math.round(maxRank * 0.75)])).filter(t => t <= maxRank);
 
-  // Y-axis tick values
-  const yTicks = [1, 25, 50, maxRank - 10];
+  // Colour each segment by whether rank ≤ 50
+  const isTop50 = (rank: number) => rank <= 50;
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width="100%"
-      style={{ display: 'block' }}
-      aria-label={`Rank history chart`}
-    >
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ display: 'block' }}>
       <defs>
-        <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <linearGradient id="rhLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#6366f1" />
           <stop offset="100%" stopColor="#818cf8" />
         </linearGradient>
-        <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
+        <linearGradient id="rhAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.18" />
           <stop offset="100%" stopColor="#6366f1" stopOpacity="0.01" />
         </linearGradient>
+        {/* Green zone clip (rank ≤ 50 = top of chart) */}
+        <clipPath id="rhTopClip">
+          <rect x={pad.left} y={pad.top} width={plotW} height={top50Y - pad.top} />
+        </clipPath>
+        <clipPath id="rhBotClip">
+          <rect x={pad.left} y={top50Y} width={plotW} height={pad.top + plotH - top50Y} />
+        </clipPath>
       </defs>
+
+      {/* Top-50 green zone background */}
+      <rect
+        x={pad.left} y={pad.top}
+        width={plotW} height={Math.max(0, top50Y - pad.top)}
+        fill="rgba(34,197,94,0.04)"
+        rx={2}
+      />
 
       {/* Grid lines */}
       {yTicks.map(tick => {
         const y = yScale(tick);
-        if (y < padding.top || y > padding.top + plotH) return null;
+        if (y < pad.top - 1 || y > pad.top + plotH + 1) return null;
         return (
-          <line
-            key={tick}
-            x1={padding.left}
-            x2={padding.left + plotW}
-            y1={y}
-            y2={y}
-            stroke="rgba(255,255,255,0.06)"
-            strokeWidth={1}
+          <line key={tick}
+            x1={pad.left} x2={pad.left + plotW} y1={y} y2={y}
+            stroke="rgba(255,255,255,0.06)" strokeWidth={1}
           />
         );
       })}
 
       {/* Rank-50 reference line */}
-      {rank50Y >= padding.top && rank50Y <= padding.top + plotH && (
-        <line
-          x1={padding.left}
-          x2={padding.left + plotW}
-          y1={rank50Y}
-          y2={rank50Y}
-          stroke="#f59e0b"
-          strokeWidth={1}
-          strokeDasharray="4 3"
-          opacity={0.6}
-        />
-      )}
+      <line
+        x1={pad.left} x2={pad.left + plotW} y1={top50Y} y2={top50Y}
+        stroke="#f59e0b" strokeWidth={1} strokeDasharray="5 3" opacity={0.55}
+      />
 
       {/* Area fill */}
-      {points.length > 1 && (
+      {pts.length > 1 && (
         <path
-          d={`${pathD} L ${points[points.length - 1].x.toFixed(2)} ${(padding.top + plotH).toFixed(2)} L ${points[0].x.toFixed(2)} ${(padding.top + plotH).toFixed(2)} Z`}
-          fill="url(#areaGrad)"
+          d={`${linePath} L ${pts[pts.length - 1].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} L ${pts[0].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} Z`}
+          fill="url(#rhAreaGrad)"
         />
       )}
 
-      {/* Main line */}
-      {points.length > 1 && (
-        <path
-          d={pathD}
-          fill="none"
-          stroke="url(#lineGrad)"
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
+      {/* Line — green above rank-50 line, indigo below */}
+      {pts.length > 1 && (
+        <>
+          <path d={linePath} fill="none" stroke="#22c55e" strokeWidth={2.5}
+            strokeLinejoin="round" strokeLinecap="round" clipPath="url(#rhTopClip)" />
+          <path d={linePath} fill="none" stroke="url(#rhLineGrad)" strokeWidth={2.5}
+            strokeLinejoin="round" strokeLinecap="round" clipPath="url(#rhBotClip)" />
+        </>
       )}
 
-      {/* Dots */}
-      {points.map((p, i) => {
-        const isLast = i === points.length - 1;
+      {/* Dots + tooltips */}
+      {pts.map((p, i) => {
+        const isLast = i === pts.length - 1;
+        const color = isTop50(p.rank) ? '#22c55e' : '#818cf8';
         return (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r={isLast ? 4.5 : 2.5}
-            fill={isLast ? '#818cf8' : '#6366f1'}
-            stroke={isLast ? 'rgba(129,140,248,0.35)' : 'none'}
-            strokeWidth={isLast ? 4 : 0}
-          />
+          <g key={i}>
+            <title>{`${formatDateShort(p.date)}: #${p.rank}`}</title>
+            {isLast && (
+              <circle cx={p.x} cy={p.y} r={10}
+                fill={color} fillOpacity={0.12} />
+            )}
+            <circle cx={p.x} cy={p.y} r={isLast ? 4 : 2.5}
+              fill={color}
+              stroke={isLast ? 'rgba(255,255,255,0.2)' : 'none'}
+              strokeWidth={isLast ? 1.5 : 0}
+            />
+            {/* Rank label on last dot */}
+            {isLast && (
+              <text x={p.x} y={p.y - 9} textAnchor="middle" fontSize={9} fontWeight="600" fill={color}>
+                #{p.rank}
+              </text>
+            )}
+          </g>
         );
       })}
 
       {/* Y-axis labels */}
       {yTicks.map(tick => {
         const y = yScale(tick);
-        if (y < padding.top - 2 || y > padding.top + plotH + 2) return null;
+        if (y < pad.top - 2 || y > pad.top + plotH + 2) return null;
         return (
-          <text
-            key={tick}
-            x={padding.left - 6}
-            y={y + 4}
-            textAnchor="end"
-            fontSize={9}
-            fill="rgba(156,163,175,0.8)"
-          >
+          <text key={tick} x={pad.left - 5} y={y + 4}
+            textAnchor="end" fontSize={9} fill="rgba(156,163,175,0.7)">
             {tick}
           </text>
         );
       })}
 
-      {/* X-axis labels */}
-      <text
-        x={padding.left}
-        y={height - 4}
-        textAnchor="middle"
-        fontSize={9}
-        fill="rgba(156,163,175,0.7)"
-      >
-        {firstDate}
-      </text>
-      {data.length > 1 && (
-        <text
-          x={padding.left + plotW}
-          y={height - 4}
-          textAnchor="middle"
-          fontSize={9}
-          fill="rgba(156,163,175,0.7)"
-        >
-          {lastDate}
-        </text>
-      )}
+      {/* X-axis date labels — first, mid, last */}
+      {[0, Math.floor((data.length - 1) / 2), data.length - 1]
+        .filter((v, i, a) => a.indexOf(v) === i && v < data.length)
+        .map(idx => (
+          <text key={idx} x={xScale(idx)} y={height - 6}
+            textAnchor={idx === 0 ? 'start' : idx === data.length - 1 ? 'end' : 'middle'}
+            fontSize={9} fill="rgba(156,163,175,0.65)">
+            {formatDateShort(data[idx].date)}
+          </text>
+        ))}
 
       {/* Rank-50 label */}
-      {rank50Y >= padding.top && rank50Y <= padding.top + plotH && (
-        <text
-          x={padding.left + plotW + 2}
-          y={rank50Y + 3}
-          fontSize={8}
-          fill="rgba(245,158,11,0.7)"
-        >
-          50
-        </text>
-      )}
+      <text x={pad.left + plotW + 3} y={top50Y + 4}
+        fontSize={8} fill="rgba(245,158,11,0.65)">
+        50
+      </text>
     </svg>
   );
 }
