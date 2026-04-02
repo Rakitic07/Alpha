@@ -418,8 +418,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                   : null;
 
                 const accentColor = isAllTab
-                  ? allTier === 'portfolio'   ? 'rgb(99,102,241)'
-                  : allTier === 'prefiltered' ? 'rgb(34,197,94)'
+                  ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'rgb(34,197,94)'
                   : 'rgb(39,39,42)'
                   : isExitCandidate
                     ? 'rgb(239,68,68)'
@@ -428,8 +427,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       : getRankAccent(row.rank, row.inPortfolio);
 
                 const rowBg = isAllTab
-                  ? allTier === 'portfolio'   ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
-                  : allTier === 'prefiltered' ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
+                  ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
                   : 'bg-zinc-950 hover:bg-zinc-800/40'
                   : isExitCandidate           ? 'bg-rose-950/30 hover:bg-rose-950/40'
                   : isProtected               ? 'bg-zinc-950 hover:bg-zinc-800/60'
@@ -455,8 +453,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       ) : (
                         <span className={`font-mono text-xl font-black tabular-nums leading-none ${
                           isAllTab
-                            ? allTier === 'portfolio'   ? 'text-indigo-400'
-                            : allTier === 'prefiltered' ? 'text-emerald-400'
+                            ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'text-emerald-400'
                             : 'text-zinc-400'
                             : getRankTextColor(row.rank)
                         }`}>
@@ -497,14 +494,11 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             {exit.protected ? 'LOCKED' : 'EXIT'}
                           </span>
                         )}
-                        {/* Pre-filtered badge — only on All tab for stocks passing pre-filter */}
-                        {isAllTab && row.isPreFiltered && !row.inPortfolio && (
-                          <span
-                            className="text-[9px] px-1 h-3.5 border rounded leading-none shrink-0 flex items-center font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-                            title="Passes pre-filter criteria"
-                          >
-                            PRE
-                          </span>
+                        {/* Holding icon — portfolio stock in All tab */}
+                        {isAllTab && row.inPortfolio && (
+                          <svg className="w-3 h-3 shrink-0 text-emerald-400" viewBox="0 0 16 16" fill="currentColor" aria-label="In portfolio">
+                            <path d="M6 2a1 1 0 0 0-1 1v1H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-2V3a1 1 0 0 0-1-1H6zm0 1h4v1H6V3zm-3 3h10v2H3V6zm0 3h4v3H3V9zm5 0h5v3H8V9z"/>
+                          </svg>
                         )}
                         {(() => {
                           const b = MCAP_BADGE[row.marketCapCategory || ''];
