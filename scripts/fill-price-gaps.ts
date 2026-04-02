@@ -19,7 +19,11 @@ config({ path: '.env.local' });
 config({ path: '.env' });
 
 import { prisma, chunkArray } from './lib/db';
-import { getAccessToken } from '../src/lib/upstox/auth';
+function getAccessToken(): string {
+  const token = process.env.UPSTOX_ANALYTICS_TOKEN;
+  if (!token) throw new Error("Missing UPSTOX_ANALYTICS_TOKEN in env");
+  return token;
+}
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const CONCURRENCY = 5;
@@ -87,7 +91,7 @@ async function main() {
   `;
   console.log(`\n🔍 ${instruments.length} instruments to check\n`);
 
-  const token = await getAccessToken();
+  const token = getAccessToken();
   const today = new Date().toISOString().slice(0, 10);
 
   let totalInserted = 0;
