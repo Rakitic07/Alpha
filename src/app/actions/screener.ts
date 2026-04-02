@@ -26,6 +26,7 @@ export interface ScreenerRow {
   prevRank: number | null;
   rankChange: number | null;
   inPortfolio: boolean;
+  isPreFiltered?: boolean;  // only set for 'all' tab — stock also passes pre-filter
   isUnranked?: boolean;
   exitSignal?: {
     byRank: boolean;    // rank > 50
@@ -103,6 +104,16 @@ export async function getScreenerData(
     };
   }
 
+  // For All tab: fetch which symbols also pass pre-filtering — used for row highlights
+  let filteredSymbols = new Set<string>();
+  if (tab === 'all') {
+    const filteredScores = await prisma.momentumScore.findMany({
+      where: { isActive: true, rankType: 'filtered' },
+      select: { symbol: true },
+    });
+    filteredSymbols = new Set(filteredScores.map(s => s.symbol));
+  }
+
   const rankedSymbols = new Set<string>();
   const allRows: ScreenerRow[] = scores.map(s => {
     rankedSymbols.add(s.symbol);
@@ -132,6 +143,7 @@ export async function getScreenerData(
       prevRank: s.prevRank,
       rankChange,
       inPortfolio,
+      isPreFiltered: filteredSymbols.size > 0 ? filteredSymbols.has(s.symbol) : undefined,
     };
   });
 

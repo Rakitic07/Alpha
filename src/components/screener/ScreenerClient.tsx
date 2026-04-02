@@ -408,11 +408,34 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
                 const isExitCandidate = !!exit && !exit.protected;
                 const isProtected    = !!exit && exit.protected;
-                const accentColor = isExitCandidate
-                  ? 'rgb(239,68,68)'
-                  : isUnranked || isProtected
-                    ? 'rgb(63,63,70)'
-                    : getRankAccent(row.rank, row.inPortfolio);
+
+                // All-tab tier: portfolio > pre-filtered > universe-only
+                const isAllTab = activeTab === 'all';
+                const allTier = isAllTab
+                  ? row.inPortfolio ? 'portfolio'
+                  : row.isPreFiltered ? 'prefiltered'
+                  : 'normal'
+                  : null;
+
+                const accentColor = isAllTab
+                  ? allTier === 'portfolio'   ? 'rgb(99,102,241)'
+                  : allTier === 'prefiltered' ? 'rgb(34,197,94)'
+                  : 'rgb(39,39,42)'
+                  : isExitCandidate
+                    ? 'rgb(239,68,68)'
+                    : isUnranked || isProtected
+                      ? 'rgb(63,63,70)'
+                      : getRankAccent(row.rank, row.inPortfolio);
+
+                const rowBg = isAllTab
+                  ? allTier === 'portfolio'   ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
+                  : allTier === 'prefiltered' ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
+                  : 'bg-zinc-950 hover:bg-zinc-800/40'
+                  : isExitCandidate           ? 'bg-rose-950/30 hover:bg-rose-950/40'
+                  : isProtected               ? 'bg-zinc-950 hover:bg-zinc-800/60'
+                  : isUnranked                ? 'bg-zinc-950'
+                  : row.inPortfolio && activeTab !== 'portfolio' ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
+                  : 'bg-zinc-950 hover:bg-zinc-800/60';
 
                 return (
                   <tr
@@ -423,20 +446,20 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         setSelectedCompany(row.companyName);
                       }
                     }}
-                    className={`transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${
-                      isExitCandidate ? 'bg-rose-950/30 hover:bg-rose-950/40' :
-                      isProtected     ? 'bg-zinc-950 hover:bg-zinc-800/60' :
-                      isUnranked      ? 'bg-zinc-950' :
-                      row.inPortfolio && activeTab !== 'portfolio' ? 'bg-indigo-950/30 hover:bg-indigo-950/40' :
-                                        'bg-zinc-950 hover:bg-zinc-800/60'
-                    }`}
+                    className={`transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg}`}
                   >
                     {/* Rank — left accent bar */}
                     <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 4px 0 0 ${accentColor}` }}>
                       {isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
                       ) : (
-                        <span className={`font-mono text-xl font-black tabular-nums leading-none ${getRankTextColor(row.rank)}`}>
+                        <span className={`font-mono text-xl font-black tabular-nums leading-none ${
+                          isAllTab
+                            ? allTier === 'portfolio'   ? 'text-indigo-400'
+                            : allTier === 'prefiltered' ? 'text-emerald-400'
+                            : 'text-zinc-400'
+                            : getRankTextColor(row.rank)
+                        }`}>
                           {row.rank}
                         </span>
                       )}
@@ -472,6 +495,15 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             ].filter(Boolean).join('\n')}
                           >
                             {exit.protected ? 'LOCKED' : 'EXIT'}
+                          </span>
+                        )}
+                        {/* Pre-filtered badge — only on All tab for stocks passing pre-filter */}
+                        {isAllTab && row.isPreFiltered && !row.inPortfolio && (
+                          <span
+                            className="text-[9px] px-1 h-3.5 border rounded leading-none shrink-0 flex items-center font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+                            title="Passes pre-filter criteria"
+                          >
+                            PRE
                           </span>
                         )}
                         {(() => {
