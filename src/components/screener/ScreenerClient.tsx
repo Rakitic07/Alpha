@@ -433,12 +433,16 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       {isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
                       ) : (
-                        <div className="flex items-baseline gap-1">
+                        <div className="flex flex-col items-start gap-1">
                           <span className={`font-mono text-xl font-black tabular-nums leading-none ${getRankTextColor(row.rank)}`}>
                             {row.rank}
                           </span>
                           {row.rankChange != null && row.rankChange !== 0 && (
-                            <span className={`text-xs font-semibold tabular-nums leading-none ${row.rankChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold tabular-nums px-1 py-0.5 rounded leading-none border ${
+                              row.rankChange > 0
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                                : 'bg-red-500/10 text-red-400 border-red-500/25'
+                            }`}>
                               {row.rankChange > 0 ? `▲${row.rankChange}` : `▼${Math.abs(row.rankChange)}`}
                             </span>
                           )}
