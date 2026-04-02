@@ -4,7 +4,7 @@ import ScreenerClient from '@/components/screener/ScreenerClient';
 export const dynamic = 'force-dynamic';
 
 export default async function ScreenerPage() {
-  const data = await getScreenerData('all');
+  const data = await getScreenerData('prefiltered');
 
   return <ScreenerClient initialData={data} />;
 }

@@ -286,11 +286,12 @@ model MomentumScore {
   appearances       Int      @default(0)  // Days ranked in last 50 trading days
   t50Pct            Float    @default(0)  // % of last 50 days in top 50
   t100Pct           Float    @default(0)  // % of last 50 days in top 100
+  rankType          String   @default("filtered")
   isActive          Boolean  @default(true)
 
-  @@unique([computedDate, symbol])
-  @@index([computedDate, isActive])
-  @@index([isActive, rank])
+  @@unique([computedDate, symbol, rankType])
+  @@index([computedDate, isActive, rankType])
+  @@index([isActive, rank, rankType])
   @@index([symbol])
 }
 
@@ -301,8 +302,9 @@ model RankingHistory {
   date           String // YYYY-MM-DD
   rank           Int
   compositeScore Float
+  rankType       String @default("filtered")
 
-  @@unique([symbol, date])
+  @@unique([symbol, date, rankType])
   @@index([symbol])
   @@index([date])
 }

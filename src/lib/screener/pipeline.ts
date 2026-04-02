@@ -14,6 +14,7 @@ import { updateATHFromPrices, loadATHMap } from './ath';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
 import { todayIST, effectiveTradingDay, isMarketHours } from './dates';
 import { logger } from '@/lib/logger';
+import { updateJob } from '@/lib/jobs';
 
 const pipelineLogger = logger.scope('ScreenerPipeline');
 
@@ -48,12 +49,16 @@ interface InstrumentInfo {
  * 6. Score each stock (filters + Sharpe + composite)
  * 7. Rank → store MomentumScore + RankingHistory
  */
-export async function runScreenerPipeline(): Promise<PipelineResult> {
+export async function runScreenerPipeline(jobId?: string): Promise<PipelineResult> {
   const start = Date.now();
   const duringMarket = isMarketHours();
   // Use last complete trading day's prices when market is open
   const today = effectiveTradingDay();
   const errors: string[] = [];
+
+  const progress = async (pct: number, msg: string) => {
+    if (jobId) await updateJob(jobId, pct, msg).catch(() => {});
+  };
 
   pipelineLogger.info(`Starting screener pipeline for ${today}${duringMarket ? ' (market open — using T-1 close)' : ''}`);
 
@@ -66,6 +71,7 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
     errors.push(`Bhavcopy: ${(err as Error).message}`);
     pipelineLogger.error('Bhavcopy failed:', err);
   }
+  await progress(10, 'Fetching bhavcopy...');
 
   // Step 2: Load instrument master (batch — single async call + sync lookups)
   await ensureInstrumentMaster();
@@ -75,13 +81,22 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
   for (const [symbol, data] of instrumentMap) {
     instruments.push({ symbol, instrumentKey: data.key, name: data.name });
   }
-  pipelineLogger.info(`Loaded ${instruments.length} instruments`);
+  // Filter out NSE_INDEX instruments (e.g. BHARATBOND-APR30/31/32/33) — they are
+  // not tradeable equities and cause errors in the candle and quote APIs.
+  const tradeable = instruments.filter(i => !i.instrumentKey.startsWith('NSE_INDEX|'));
+  const indexCount = instruments.length - tradeable.length;
+  if (indexCount > 0) {
+    pipelineLogger.info(`Filtered out ${indexCount} NSE_INDEX instruments`);
+  }
+  pipelineLogger.info(`Loaded ${tradeable.length} tradeable instruments (${instruments.length} total)`);
+  await progress(15, `Loaded ${tradeable.length} instruments`);
 
   // Step 3: Fetch candles (incremental)
   let candlesFetched = 0;
   let candlesInserted = 0;
+  await progress(25, 'Fetching candles...');
   try {
-    const priceResult = await fetchAndStoreCandles(instruments, today);
+    const priceResult = await fetchAndStoreCandles(tradeable, today);
     candlesFetched = priceResult.fetched;
     candlesInserted = priceResult.inserted;
     if (priceResult.errors.length > 0) {
@@ -91,11 +106,12 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
     errors.push(`Prices: ${(err as Error).message}`);
     pipelineLogger.error('Price ingestion failed:', err);
   }
+  await progress(40, 'Candles done');
 
   // Step 4: Circuit limit check — batch fetch full quotes
   const circuitMap = new Map<string, number>(); // symbol → band width %
   try {
-    const allKeys = instruments.map(i => i.instrumentKey);
+    const allKeys = tradeable.map(i => i.instrumentKey);
     // Batch 500 per call (Upstox limit)
     for (const chunk of chunkArray(allKeys, 500)) {
       const quotes = await getFullQuote(chunk);
@@ -103,7 +119,7 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
         if (quote.lower_circuit_limit > 0) {
           const bandWidth = (quote.upper_circuit_limit - quote.lower_circuit_limit) / quote.lower_circuit_limit;
           // Map back to symbol from instrument key
-          const symbol = instruments.find(i => i.instrumentKey === quote.instrument_token)?.symbol;
+          const symbol = tradeable.find(i => i.instrumentKey === quote.instrument_token)?.symbol;
           if (symbol) {
             circuitMap.set(symbol, bandWidth);
           }
@@ -114,6 +130,7 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
     errors.push(`Circuit check: ${(err as Error).message}`);
     pipelineLogger.warn('Circuit limit check failed, proceeding without circuit filter:', err);
   }
+  await progress(50, 'Checking circuit limits...');
 
   // Step 5: Update ATH from today's prices
   let athUpdated = 0;
@@ -124,25 +141,34 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
     errors.push(`ATH update: ${(err as Error).message}`);
     pipelineLogger.error('ATH update failed:', err);
   }
+  await progress(60, 'Updating ATH...');
 
   // Load market cap + AMFI classification + ATH for scoring
   const mcapMap = new Map<string, number>();
   const allMcap = await prisma.stockMarketCap.findMany({ select: { symbol: true, marketCap: true } });
   for (const row of allMcap) mcapMap.set(row.symbol, row.marketCap);
 
-  const amfiCategories = await getCategoriesBatch(instruments.map(i => i.symbol));
+  const amfiCategories = await getCategoriesBatch(tradeable.map(i => i.symbol));
   const athMap = await loadATHMap();
 
-  // Load previous day's rankings for rank change calculation
+  // Load previous day's rankings for rank change calculation (before Step 8 marks them inactive)
   const prevRanks = new Map<string, number>();
   const prevScores = await prisma.momentumScore.findMany({
-    where: { isActive: true },
+    where: { isActive: true, rankType: 'filtered' },
     select: { symbol: true, rank: true },
   });
   for (const s of prevScores) prevRanks.set(s.symbol, s.rank);
 
+  const prevAllRanks = new Map<string, number>();
+  const prevAllScores = await prisma.momentumScore.findMany({
+    where: { isActive: true, rankType: 'all' },
+    select: { symbol: true, rank: true },
+  });
+  for (const s of prevAllScores) prevAllRanks.set(s.symbol, s.rank);
+
   // Load ranking history for denormalized stats
-  const rankingHistory = await loadRankingHistoryForStats();
+  const rankingHistory = await loadRankingHistoryForStats('filtered');
+  const allRankingHistory = await loadRankingHistoryForStats('all');
 
   // Batch-load ALL prices in one query, group by symbol in memory.
   // This replaces 2000+ individual queries with a single round-trip.
@@ -174,7 +200,7 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
   }> = [];
 
   let scoringFailures = 0;
-  for (const inst of instruments) {
+  for (const inst of tradeable) {
     try {
       // Filter 2: Market cap >= 1000 Cr
       const mcap = mcapMap.get(inst.symbol);
@@ -222,18 +248,19 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
     pipelineLogger.warn(`${scoringFailures} stocks failed during scoring`);
     errors.push(`${scoringFailures} stocks failed scoring`);
   }
-  pipelineLogger.info(`Scored ${scored.length} stocks out of ${instruments.length} universe`);
+  pipelineLogger.info(`Scored ${scored.length} stocks out of ${tradeable.length} universe`);
+  await progress(70, 'Scoring pre-filtered...');
 
-  // Step 8: Mark previous scores as inactive
+  // Step 8: Mark previous filtered scores as inactive
   await prisma.momentumScore.updateMany({
-    where: { isActive: true },
+    where: { isActive: true, rankType: 'filtered' },
     data: { isActive: false },
   });
 
-  // Delete any existing records for today (handles same-day re-runs safely)
-  await prisma.momentumScore.deleteMany({ where: { computedDate: today } });
+  // Delete any existing filtered records for today (handles same-day re-runs safely)
+  await prisma.momentumScore.deleteMany({ where: { computedDate: today, rankType: 'filtered' } });
 
-  // Step 9: Insert new MomentumScore records
+  // Step 9: Insert new MomentumScore records (filtered)
   const scoreRows = scored.map((s, idx) => {
     const rank = idx + 1;
     const history = rankingHistory.get(s.symbol) || [];
@@ -280,6 +307,7 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
         ? (allRanksIncludingToday.filter(r => r <= 100).length / allRanksIncludingToday.length) * 100
         : 0,
       isActive: true,
+      rankType: 'filtered',
     };
   });
 
@@ -289,39 +317,173 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
   }
 
   // Step 10: Insert RankingHistory records (delete today first for re-run safety)
-  await prisma.rankingHistory.deleteMany({ where: { date: today } });
+  await prisma.rankingHistory.deleteMany({ where: { date: today, rankType: 'filtered' } });
   const historyRows = scored.map((s, idx) => ({
     symbol: s.symbol,
     date: today,
     rank: idx + 1,
     compositeScore: s.score.compositeScore,
+    rankType: 'filtered',
   }));
 
   for (const chunk of chunkArray(historyRows, 50)) {
     await prisma.rankingHistory.createMany({ data: chunk });
   }
 
-  // Step 11: Prune old RankingHistory (keep last 50 trading days)
-  try {
-    const distinctDates = await prisma.rankingHistory.findMany({
-      select: { date: true },
-      distinct: ['date'],
-      orderBy: { date: 'desc' },
-    });
+  // ── Second pass: score all-universe (mcap >= 1000 Cr + ETF whitelist, no additional filters) ──
 
-    if (distinctDates.length > 50) {
-      const cutoffDate = distinctDates[49].date;
-      await prisma.rankingHistory.deleteMany({
-        where: { date: { lt: cutoffDate } },
+  await progress(75, 'Scoring universe...');
+
+  const allScored: typeof scored = [];
+  let allScoringFailures = 0;
+  for (const inst of tradeable) {
+    try {
+      const mcap = mcapMap.get(inst.symbol);
+      if (!mcap || mcap < PARAMS.mcapMinCr) {
+        if (!isETFWhitelisted(inst.symbol)) continue;
+      }
+
+      const bandWidth = circuitMap.get(inst.symbol);
+      if (bandWidth !== undefined && bandWidth < 0.15) continue;
+
+      const candles = pricesBySymbol.get(inst.symbol);
+      if (!candles || candles.length < 269) continue;
+
+      const closes = candles.map(c => c.close);
+      const highs = candles.map(c => c.high);
+      const volumes = candles.map(c => c.volume);
+
+      const storedATH = athMap.get(inst.symbol);
+      const result = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { skipFilters: true });
+      if (!result) continue;
+
+      const sparkline = closes.slice(-50);
+
+      allScored.push({
+        symbol: inst.symbol,
+        instrumentKey: inst.instrumentKey,
+        companyName: inst.name,
+        score: result,
+        marketCapCr: mcap ?? 0,
+        marketCapCategory: amfiCategories.get(inst.symbol) || null,
+        circuitBandPct: bandWidth !== undefined ? Math.round(bandWidth * 100 * 10) / 10 : null,
+        sparklineData: sparkline,
       });
-      pipelineLogger.info(`Pruned ranking history before ${cutoffDate}`);
+    } catch {
+      allScoringFailures++;
+    }
+  }
+
+  allScored.sort((a, b) => b.score.compositeScore - a.score.compositeScore);
+
+  if (allScoringFailures > 0) {
+    pipelineLogger.warn(`${allScoringFailures} stocks failed during all-universe scoring`);
+  }
+  pipelineLogger.info(`All-universe scored: ${allScored.length} stocks`);
+
+  await progress(85, 'Storing rankings...');
+
+  // Mark previous "all" scores as inactive
+  await prisma.momentumScore.updateMany({
+    where: { isActive: true, rankType: 'all' },
+    data: { isActive: false },
+  });
+
+  // Delete existing "all" records for today
+  await prisma.momentumScore.deleteMany({ where: { computedDate: today, rankType: 'all' } });
+
+  const allScoreRows = allScored.map((s, idx) => {
+    const rank = idx + 1;
+    const history = allRankingHistory.get(s.symbol) || [];
+    const allRanksIncludingToday = [...history.map(h => h.rank), rank];
+
+    return {
+      computedDate: today,
+      symbol: s.symbol,
+      instrumentKey: s.instrumentKey,
+      companyName: s.companyName,
+      rank,
+      compositeScore: s.score.compositeScore,
+      avgSharpe: s.score.avgSharpe,
+      sharpe12m: s.score.sharpe12m,
+      sharpe6m: s.score.sharpe6m,
+      sharpe3m: s.score.sharpe3m,
+      athProximity: s.score.athProximity,
+      ath: s.score.ath,
+      currentPrice: s.score.currentPrice,
+      dma200: s.score.dma200,
+      aboveDma200Pct: s.score.aboveDma200Pct,
+      aboveDma10: s.score.aboveDma10,
+      aboveDma20: s.score.aboveDma20,
+      aboveDma50: s.score.aboveDma50,
+      aboveDma100: s.score.aboveDma100,
+      medianTurnoverCr: s.score.medianTurnoverCr,
+      marketCapCr: s.marketCapCr,
+      marketCapCategory: s.marketCapCategory,
+      sparklineData: JSON.stringify(s.sparklineData),
+      circuitBandPct: s.circuitBandPct,
+      prevRank: prevAllRanks.get(s.symbol) ?? null,
+      avgRank50d: allRanksIncludingToday.length > 0
+        ? allRanksIncludingToday.reduce((a, b) => a + b, 0) / allRanksIncludingToday.length
+        : null,
+      bestRank: allRanksIncludingToday.length > 0
+        ? Math.min(...allRanksIncludingToday)
+        : null,
+      appearances: allRanksIncludingToday.length,
+      t50Pct: allRanksIncludingToday.length > 0
+        ? (allRanksIncludingToday.filter(r => r <= 50).length / allRanksIncludingToday.length) * 100
+        : 0,
+      t100Pct: allRanksIncludingToday.length > 0
+        ? (allRanksIncludingToday.filter(r => r <= 100).length / allRanksIncludingToday.length) * 100
+        : 0,
+      isActive: true,
+      rankType: 'all',
+    };
+  });
+
+  for (const chunk of chunkArray(allScoreRows, 50)) {
+    await prisma.momentumScore.createMany({ data: chunk });
+  }
+
+  // Store "all" ranking history
+  await prisma.rankingHistory.deleteMany({ where: { date: today, rankType: 'all' } });
+  const allHistoryRows = allScored.map((s, idx) => ({
+    symbol: s.symbol,
+    date: today,
+    rank: idx + 1,
+    compositeScore: s.score.compositeScore,
+    rankType: 'all',
+  }));
+
+  for (const chunk of chunkArray(allHistoryRows, 50)) {
+    await prisma.rankingHistory.createMany({ data: chunk });
+  }
+  await progress(90, 'Storing rankings...');
+
+  // Step 11: Prune old RankingHistory (keep last 50 trading days, per rankType)
+  try {
+    for (const rt of ['filtered', 'all'] as const) {
+      const distinctDates = await prisma.rankingHistory.findMany({
+        where: { rankType: rt },
+        select: { date: true },
+        distinct: ['date'],
+        orderBy: { date: 'desc' },
+      });
+      if (distinctDates.length > 50) {
+        const cutoffDate = distinctDates[49].date;
+        await prisma.rankingHistory.deleteMany({
+          where: { date: { lt: cutoffDate }, rankType: rt },
+        });
+        pipelineLogger.info(`Pruned ${rt} ranking history before ${cutoffDate}`);
+      }
     }
   } catch (err) {
     errors.push(`History pruning: ${(err as Error).message}`);
   }
 
   const duration = Date.now() - start;
-  pipelineLogger.info(`Pipeline complete in ${duration}ms: ${scored.length} ranked`);
+  pipelineLogger.info(`Pipeline complete in ${duration}ms: ${scored.length} filtered, ${allScored.length} all ranked`);
+  await progress(100, `Done: ${scored.length} filtered, ${allScored.length} all`);
 
   return {
     success: true,
@@ -330,7 +492,7 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
     candlesFetched,
     candlesInserted,
     athUpdated,
-    universeSize: instruments.length,
+    universeSize: tradeable.length,
     scored: scored.length,
     ranked: scored.length,
     errors,
@@ -340,9 +502,12 @@ export async function runScreenerPipeline(): Promise<PipelineResult> {
 
 /**
  * Load ranking history for all symbols (last 50 trading days) for denormalized stat computation.
+ * Pass a rankType to filter to a specific universe ('filtered' or 'all').
  */
-async function loadRankingHistoryForStats(): Promise<Map<string, Array<{ date: string; rank: number }>>> {
+async function loadRankingHistoryForStats(rankType?: string): Promise<Map<string, Array<{ date: string; rank: number }>>> {
+  const where = rankType ? { rankType } : {};
   const allHistory = await prisma.rankingHistory.findMany({
+    where,
     orderBy: { date: 'asc' },
     select: { symbol: true, date: true, rank: true },
   });

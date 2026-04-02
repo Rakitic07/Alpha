@@ -5,6 +5,7 @@ import { computePortfolioState } from '@/lib/finance/recalculation';
 import { computeReturns, sharpeRatio, PARAMS } from '@/lib/screener/scoring';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
+import { createJob, completeJob, failJob } from '@/lib/jobs';
 
 // ── Types ──
 
@@ -35,6 +36,7 @@ export interface ScreenerRow {
 
 export interface ScreenerStats {
   total: number;
+  allTotal: number;
   portfolioCount: number;
   rankedPortfolioCount: number;
   rankBuckets: { top25: number; top50: number; above50: number };
@@ -45,10 +47,19 @@ export interface ScreenerStats {
 // ── Server Actions ──
 
 export async function getScreenerData(
-  tab: 'all' | 'portfolio' | 'others' = 'all',
+  tab: 'all' | 'prefiltered' | 'portfolio' | 'others' = 'prefiltered',
 ): Promise<{ rows: ScreenerRow[]; stats: ScreenerStats }> {
+  // Determine which rankType to query for the main scores list
+  let rankTypeForScores: 'filtered' | 'all';
+  if (tab === 'all') {
+    rankTypeForScores = 'all';
+  } else {
+    // 'prefiltered', 'portfolio', 'others' all use filtered rankings
+    rankTypeForScores = 'filtered';
+  }
+
   const scores = await prisma.momentumScore.findMany({
-    where: { isActive: true },
+    where: { isActive: true, rankType: rankTypeForScores },
     orderBy: { rank: 'asc' },
   });
 
@@ -84,7 +95,7 @@ export async function getScreenerData(
     return {
       rows: [],
       stats: {
-        total: 0, portfolioCount: 0, rankedPortfolioCount: 0,
+        total: 0, allTotal: 0, portfolioCount: 0, rankedPortfolioCount: 0,
         rankBuckets: { top25: 0, top50: 0, above50: 0 },
         mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0 },
         dataDate: null,
@@ -141,9 +152,9 @@ export async function getScreenerData(
           orderBy: { period: 'desc' },
           select: { symbol: true, category: true, companyName: true },
         }),
-        // Fallback mcap from last known scored entry
+        // Fallback mcap from last known scored entry (use filtered rankings for portfolio context)
         prisma.momentumScore.findMany({
-          where: { symbol: { in: unrankedSyms } },
+          where: { symbol: { in: unrankedSyms }, rankType: 'filtered' },
           orderBy: [{ computedDate: 'desc' }],
           select: { symbol: true, marketCapCr: true, marketCapCategory: true },
         }),
@@ -227,7 +238,7 @@ export async function getScreenerData(
     }
   }
 
-  const stats = computeStats(allRows, portfolioSymbols.size);
+  const stats = await computeStats(allRows, portfolioSymbols.size);
 
   // Mcap breakdown by actual portfolio position value (qty × currentPrice)
   let mcLarge = 0, mcMid = 0, mcSmall = 0, mcMicro = 0;
@@ -273,7 +284,7 @@ export async function getScreenerData(
 
 // ── Helpers ──
 
-function computeStats(rows: ScreenerRow[], totalPortfolioCount?: number): ScreenerStats {
+async function computeStats(rows: ScreenerRow[], totalPortfolioCount?: number): Promise<ScreenerStats> {
   let top25 = 0, top50 = 0, rankedInPortfolio = 0;
 
   for (const r of rows) {
@@ -288,8 +299,11 @@ function computeStats(rows: ScreenerRow[], totalPortfolioCount?: number): Screen
   // above50 = everything not in top25/top50, including unranked holdings
   const above50 = portfolioCount - top25 - top50;
 
+  const allTotal = await prisma.momentumScore.count({ where: { isActive: true, rankType: 'all' } });
+
   return {
     total: rows.filter(r => !r.isUnranked).length,
+    allTotal,
     portfolioCount,
     rankedPortfolioCount: rankedInPortfolio,
     rankBuckets: { top25, top50, above50: Math.max(0, above50) },
@@ -299,12 +313,27 @@ function computeStats(rows: ScreenerRow[], totalPortfolioCount?: number): Screen
 }
 
 /** Trigger the screener pipeline server-side (used by the Sync button). */
-export async function syncScreener(): Promise<{ success: boolean; ranked: number; error?: string }> {
+export async function syncScreener(): Promise<{ success: boolean; ranked: number; error?: string; jobId: string }> {
+  const job = await createJob('screener-sync', 'Starting...');
   try {
-    const result = await runScreenerPipeline();
+    const result = await runScreenerPipeline(job.id);
     try { await detectAndFlushAnomalies(); } catch { /* non-fatal */ }
-    return { success: true, ranked: result.ranked };
+    await completeJob(job.id, { ranked: result.ranked });
+    return { success: true, ranked: result.ranked, jobId: job.id };
   } catch (err) {
-    return { success: false, ranked: 0, error: (err as Error).message };
+    await failJob(job.id, (err as Error).message);
+    return { success: false, ranked: 0, error: (err as Error).message, jobId: job.id };
   }
+}
+
+export async function getRankHistory(
+  symbol: string,
+  rankType: 'filtered' | 'all' = 'all'
+): Promise<{ date: string; rank: number; compositeScore: number }[]> {
+  const history = await prisma.rankingHistory.findMany({
+    where: { symbol, rankType },
+    orderBy: { date: 'asc' },
+    select: { date: true, rank: true, compositeScore: true },
+  });
+  return history;
 }

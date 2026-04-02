@@ -144,7 +144,11 @@ export interface ScoreResult {
  * @param volumes Oldest-first volumes (for turnover)
  * @param symbol  Stock symbol (for ETF whitelist check)
  * @param storedATH  Pre-loaded ATH from StockATH table (optional, falls back to computing from highs)
- * @returns ScoreResult or null if stock fails any filter/prerequisite
+ * @param options  Optional scoring options
+ * @param options.skipFilters  When true, skip the 4 entry filters (200 DMA, min price, ATH proximity,
+ *                             median turnover) and return a result regardless. Computation prerequisites
+ *                             (effectiveIdx >= 247, finite Sharpe values) still apply.
+ * @returns ScoreResult or null if stock fails any prerequisite (or a filter when skipFilters is false)
  */
 export function scoreStock(
   closes: number[],
@@ -152,7 +156,9 @@ export function scoreStock(
   volumes: number[],
   symbol: string,
   storedATH?: number,
+  options?: { skipFilters?: boolean },
 ): ScoreResult | null {
+  const skipFilters = options?.skipFilters === true;
   const skipDays = PARAMS.skipMonths * 21; // engine.py:72
   const dateIdx = closes.length - 1;
   const effectiveIdx = dateIdx - skipDays; // engine.py:73
@@ -166,11 +172,12 @@ export function scoreStock(
 
   // 200 DMA filter (engine.py:79-85)
   const prefixSums = buildPrefixSums(closes);
-  const dma200 = movingAveragePrefix(prefixSums, dateIdx, 200);
-  if (dma200 === null || currentClose < dma200) return null;
+  const dma200Raw = movingAveragePrefix(prefixSums, dateIdx, 200);
+  if (!skipFilters && (dma200Raw === null || currentClose < dma200Raw)) return null;
+  const dma200 = dma200Raw ?? 0; // null only possible when skipFilters is true (< 200 candles)
 
   // Price filter — ETF whitelist exempt (engine.py:88-89)
-  if (currentClose < PARAMS.minPrice && !isETFWhitelisted(symbol)) return null;
+  if (!skipFilters && currentClose < PARAMS.minPrice && !isETFWhitelisted(symbol)) return null;
 
   // ATH proximity (engine.py:91-104)
   // Use stored ATH from monthly candles if available, else compute from highs array
@@ -196,7 +203,7 @@ export function scoreStock(
 
   // AND filter mode (engine.py:119-124): must pass both 200 DMA AND ATH proximity
   // 200 DMA already checked above. Check ATH:
-  if (!withinATH) return null;
+  if (!skipFilters && !withinATH) return null;
 
   // Volume filter (engine.py:127-131)
   const volLookback = PARAMS.volumeLookbackDays;
@@ -205,7 +212,7 @@ export function scoreStock(
     volWindow.push(closes[i] * volumes[i]);
   }
   const medianTurnover = median(volWindow);
-  if (medianTurnover < PARAMS.volumeThresholdCr * 1e7) return null;
+  if (!skipFilters && medianTurnover < PARAMS.volumeThresholdCr * 1e7) return null;
 
   // Sharpe ratios (engine.py:148-152)
   const closes12m = closes.slice(Math.max(0, dateIdx - 251), dateIdx + 1);
