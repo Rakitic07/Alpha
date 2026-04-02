@@ -114,6 +114,7 @@ function SkeletonRow() {
       <td className="pl-5 pr-2 py-3">
         <div className="h-7 w-7 bg-zinc-800 rounded" />
       </td>
+      <td className="px-1 py-3"><div className="h-3 w-5 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-3 py-3">
         <div className="flex flex-col gap-1.5">
           <div className="h-4 w-24 bg-zinc-800 rounded" />
@@ -366,7 +367,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         <table className="w-full text-sm" style={{ tableLayout: 'fixed', minWidth: '1000px' }}>
             <colgroup>
               <col style={{ width: '4%',  minWidth: '60px' }} />
-              <col style={{ width: '20%', minWidth: '200px' }} />
+              <col style={{ width: '4%',  minWidth: '50px' }} />
+              <col style={{ width: '18%', minWidth: '180px' }} />
               <col style={{ width: '8%',  minWidth: '90px' }} />
               <col style={{ width: '16%', minWidth: '160px' }} />
               <col style={{ width: '7%',  minWidth: '70px' }} />
@@ -378,6 +380,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
             <thead className="sticky top-0 z-10 bg-slate-900 border-b border-zinc-800/60">
               <tr>
                 <SortHeader field="rank"   current={sortField} dir={sortDir} onClick={handleSort} pl="pl-5">#</SortHeader>
+                <th className={`${TH_BASE} text-center`}>Chg</th>
                 <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort}>Stock</SortHeader>
                 <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
                 <th className={`${TH_BASE}`}>Trend</th>
@@ -433,20 +436,20 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       {isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
                       ) : (
-                        <div className="flex flex-col items-start gap-1">
-                          <span className={`font-mono text-xl font-black tabular-nums leading-none ${getRankTextColor(row.rank)}`}>
-                            {row.rank}
-                          </span>
-                          {row.rankChange != null && row.rankChange !== 0 && (
-                            <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold tabular-nums px-1 py-0.5 rounded leading-none border ${
-                              row.rankChange > 0
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
-                                : 'bg-red-500/10 text-red-400 border-red-500/25'
-                            }`}>
-                              {row.rankChange > 0 ? `▲${row.rankChange}` : `▼${Math.abs(row.rankChange)}`}
+                        <span className={`font-mono text-xl font-black tabular-nums leading-none ${getRankTextColor(row.rank)}`}>
+                          {row.rank}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Rank change */}
+                    <td className="px-1 py-3 text-center">
+                      {!isUnranked && (
+                        row.rankChange == null || row.rankChange === 0
+                          ? <span className="text-zinc-600 text-xs">—</span>
+                          : <span className={`font-mono text-xs font-semibold tabular-nums ${row.rankChange > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {row.rankChange > 0 ? `↑${row.rankChange}` : `↓${Math.abs(row.rankChange)}`}
                             </span>
-                          )}
-                        </div>
                       )}
                     </td>
 
