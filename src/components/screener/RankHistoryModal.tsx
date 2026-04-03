@@ -328,7 +328,7 @@ export default function RankHistoryModal({
 
                       {/* Green fill — uses gradient; bridge points ensure fill reaches y=50 at transitions */}
                       <Area
-                        type="basis"
+                        type="monotone"
                         dataKey="rankGood"
                         baseValue={50}
                         stroke="transparent"
@@ -345,7 +345,7 @@ export default function RankHistoryModal({
 
                       {/* Red fill — gradient + bridge points for seamless fill */}
                       <Area
-                        type="basis"
+                        type="monotone"
                         dataKey="rankBad"
                         baseValue={50}
                         stroke="transparent"
@@ -363,7 +363,7 @@ export default function RankHistoryModal({
 
                       {/* Glow line behind the main line */}
                       <Line
-                        type="basis"
+                        type="monotone"
                         dataKey="rank"
                         stroke="#818cf8"
                         strokeWidth={4}
@@ -376,7 +376,7 @@ export default function RankHistoryModal({
 
                       {/* Main rank line — sleek 1.5px */}
                       <Line
-                        type="basis"
+                        type="monotone"
                         dataKey="rank"
                         stroke="#818cf8"
                         strokeWidth={1.5}
