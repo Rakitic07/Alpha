@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
+} from 'recharts';
+import { format, parseISO } from 'date-fns';
 import { getRankHistory } from '@/app/actions/screener';
 
 interface RankHistoryModalProps {
@@ -12,320 +17,135 @@ interface RankHistoryModalProps {
 }
 
 type HistoryEntry = { date: string; rank: number; compositeScore: number };
+type ChartPoint  = { dateStr: string; rank: number };
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDateShort(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+function fmtShort(s: string) {
+  try { return format(parseISO(s), 'd MMM'); } catch { return s; }
+}
+function fmtFull(s: string) {
+  try { return format(parseISO(s), 'd MMM yyyy'); } catch { return s; }
 }
 
-function formatDateFull(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-}
+// ── Custom Tooltip ────────────────────────────────────────────────────────────
 
-// ── Chart ──────────────────────────────────────────────────────────────────
-
-function RankChart({ data }: { data: HistoryEntry[] }) {
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-
-  if (data.length === 0) return null;
-
-  const width = 560;
-  const height = 260;
-  const pad = { top: 20, right: 32, bottom: 32, left: 40 };
-  const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
-
-  const ranks = data.map(d => d.rank);
-  const minRank = 1;
-  const maxRank = Math.max(...ranks, 50) + 20;
-
-  const xScale = (i: number) =>
-    data.length === 1 ? pad.left + plotW / 2 : pad.left + (i / (data.length - 1)) * plotW;
-  // Inverted Y: rank 1 = top
-  const yScale = (rank: number) =>
-    pad.top + ((rank - minRank) / (maxRank - minRank)) * plotH;
-
-  const pts = data.map((d, i) => ({ x: xScale(i), y: yScale(d.rank), rank: d.rank, date: d.date }));
-
-  // Smooth bezier path
-  function smoothPath(points: { x: number; y: number }[]): string {
-    if (points.length < 2) return points.length === 1 ? `M ${points[0].x} ${points[0].y}` : '';
-    let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpx = (prev.x + curr.x) / 2;
-      d += ` C ${cpx.toFixed(2)} ${prev.y.toFixed(2)}, ${cpx.toFixed(2)} ${curr.y.toFixed(2)}, ${curr.x.toFixed(2)} ${curr.y.toFixed(2)}`;
-    }
-    return d;
-  }
-
-  const linePath = smoothPath(pts);
-  const rank50Y = yScale(50);
-  const top50Y = Math.max(pad.top, Math.min(rank50Y, pad.top + plotH));
-  const yTicks = Array.from(new Set([1, 25, 50, Math.round(maxRank * 0.75)])).filter(t => t <= maxRank);
-
-  const isTop50 = (rank: number) => rank <= 50;
-
-  // Mouse move: find nearest point by x-distance
-  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    const svg = e.currentTarget;
-    const rect = svg.getBoundingClientRect();
-    const scaleX = width / rect.width;
-    const mx = (e.clientX - rect.left) * scaleX;
-    if (pts.length === 0) return;
-    let nearest = 0;
-    let minDist = Math.abs(pts[0].x - mx);
-    for (let i = 1; i < pts.length; i++) {
-      const dist = Math.abs(pts[i].x - mx);
-      if (dist < minDist) { minDist = dist; nearest = i; }
-    }
-    setHoveredIdx(nearest);
-  }, [pts, width]);
-
-  const handleMouseLeave = useCallback(() => setHoveredIdx(null), []);
-
-  const hoveredPt = hoveredIdx !== null ? pts[hoveredIdx] : null;
-  const lastPt = pts[pts.length - 1];
-
-  // Tooltip dimensions
-  const tipW = 110;
-  const tipH = 50;
-  const tipPad = 10;
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const RankTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const rank = payload[0]?.value as number | undefined;
+  if (rank == null) return null;
+  const top50 = rank <= 50;
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width="100%"
-      style={{ display: 'block', cursor: 'crosshair' }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-    >
-      <defs>
-        <linearGradient id="rhLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#6366f1" />
-          <stop offset="100%" stopColor="#818cf8" />
-        </linearGradient>
-        <linearGradient id="rhAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.14" />
-          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.01" />
-        </linearGradient>
-        <clipPath id="rhTopClip">
-          <rect x={pad.left} y={pad.top} width={plotW} height={Math.max(0, top50Y - pad.top)} />
-        </clipPath>
-        <clipPath id="rhBotClip">
-          <rect x={pad.left} y={top50Y} width={plotW} height={pad.top + plotH - top50Y} />
-        </clipPath>
-      </defs>
-
-      {/* Top-50 green zone background */}
-      <rect
-        x={pad.left} y={pad.top}
-        width={plotW} height={Math.max(0, top50Y - pad.top)}
-        fill="rgba(34,197,94,0.04)"
-        rx={2}
-      />
-
-      {/* Grid lines */}
-      {yTicks.map(tick => {
-        const y = yScale(tick);
-        if (y < pad.top - 1 || y > pad.top + plotH + 1) return null;
-        return (
-          <line key={tick}
-            x1={pad.left} x2={pad.left + plotW} y1={y} y2={y}
-            stroke="rgba(255,255,255,0.06)" strokeWidth={1}
-          />
-        );
-      })}
-
-      {/* Rank-50 reference line */}
-      <line
-        x1={pad.left} x2={pad.left + plotW} y1={top50Y} y2={top50Y}
-        stroke="#f59e0b" strokeWidth={1} strokeDasharray="5 3" opacity={0.5}
-      />
-
-      {/* Area fill */}
-      {pts.length > 1 && (
-        <path
-          d={`${linePath} L ${pts[pts.length - 1].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} L ${pts[0].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} Z`}
-          fill="url(#rhAreaGrad)"
-        />
-      )}
-
-      {/* Line — green above rank-50, indigo below */}
-      {pts.length > 1 && (
-        <>
-          <path d={linePath} fill="none" stroke="#22c55e" strokeWidth={2}
-            strokeLinejoin="round" strokeLinecap="round" clipPath="url(#rhTopClip)" />
-          <path d={linePath} fill="none" stroke="url(#rhLineGrad)" strokeWidth={2}
-            strokeLinejoin="round" strokeLinecap="round" clipPath="url(#rhBotClip)" />
-        </>
-      )}
-
-      {/* Hover crosshair */}
-      {hoveredPt && (
-        <line
-          x1={hoveredPt.x} x2={hoveredPt.x}
-          y1={pad.top} y2={pad.top + plotH}
-          stroke="rgba(255,255,255,0.15)" strokeWidth={1} strokeDasharray="3 3"
-        />
-      )}
-
-      {/* Dots */}
-      {pts.map((p, i) => {
-        const isHovered = i === hoveredIdx;
-        const active = isHovered || (hoveredIdx === null && i === pts.length - 1);
-        const color = isTop50(p.rank) ? '#22c55e' : '#818cf8';
-        return (
-          <g key={i}>
-            {active && (
-              <circle cx={p.x} cy={p.y} r={12}
-                fill={color} fillOpacity={0.12} />
-            )}
-            <circle cx={p.x} cy={p.y} r={active ? 4.5 : 2}
-              fill={color}
-              stroke={active ? 'rgba(255,255,255,0.25)' : 'none'}
-              strokeWidth={active ? 1.5 : 0}
-            />
-          </g>
-        );
-      })}
-
-      {/* Rank label on last dot (when not hovering) */}
-      {hoveredIdx === null && (
-        <text
-          x={lastPt.x}
-          y={lastPt.y - 11}
-          textAnchor="middle"
-          fontSize={10}
-          fontWeight="600"
-          fill={isTop50(lastPt.rank) ? '#22c55e' : '#818cf8'}
-        >
-          #{lastPt.rank}
-        </text>
-      )}
-
-      {/* Y-axis labels */}
-      {yTicks.map(tick => {
-        const y = yScale(tick);
-        if (y < pad.top - 2 || y > pad.top + plotH + 2) return null;
-        return (
-          <text key={tick} x={pad.left - 6} y={y + 4}
-            textAnchor="end" fontSize={9} fill="rgba(156,163,175,0.65)">
-            {tick}
-          </text>
-        );
-      })}
-
-      {/* X-axis date labels — first, mid, last */}
-      {[0, Math.floor((data.length - 1) / 2), data.length - 1]
-        .filter((v, i, a) => a.indexOf(v) === i && v < data.length)
-        .map(idx => (
-          <text key={idx} x={xScale(idx)} y={height - 8}
-            textAnchor={idx === 0 ? 'start' : idx === data.length - 1 ? 'end' : 'middle'}
-            fontSize={9} fill="rgba(156,163,175,0.6)">
-            {formatDateShort(data[idx].date)}
-          </text>
-        ))}
-
-      {/* Rank-50 label */}
-      <text x={pad.left + plotW + 4} y={top50Y + 4}
-        fontSize={8} fill="rgba(245,158,11,0.6)">
-        50
-      </text>
-
-      {/* Hover tooltip */}
-      {hoveredPt && (() => {
-        const color = isTop50(hoveredPt.rank) ? '#22c55e' : '#818cf8';
-        const tipX = hoveredPt.x + tipPad + tipW > width - pad.right
-          ? hoveredPt.x - tipPad - tipW
-          : hoveredPt.x + tipPad;
-        const tipY = Math.max(pad.top, Math.min(hoveredPt.y - tipH / 2, pad.top + plotH - tipH));
-        return (
-          <g>
-            <rect
-              x={tipX} y={tipY} width={tipW} height={tipH} rx={6}
-              fill="rgba(15,23,42,0.93)"
-              stroke="rgba(255,255,255,0.1)"
-              strokeWidth={1}
-            />
-            <text
-              x={tipX + tipW / 2} y={tipY + 16}
-              textAnchor="middle" fontSize={9} fill="rgba(156,163,175,0.85)">
-              {formatDateFull(hoveredPt.date)}
-            </text>
-            <text
-              x={tipX + tipW / 2} y={tipY + 40}
-              textAnchor="middle" fontSize={20} fontWeight="700" fill={color}>
-              #{hoveredPt.rank}
-            </text>
-          </g>
-        );
-      })()}
-    </svg>
+    <div className="bg-slate-900/95 border border-white/10 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-md min-w-[130px]">
+      <p className="text-[11px] text-gray-400 mb-2">{fmtFull(label)}</p>
+      <div className="flex items-center gap-2">
+        <span className={`text-3xl font-black tabular-nums leading-none ${top50 ? 'text-emerald-400' : 'text-indigo-400'}`}>
+          #{rank}
+        </span>
+      </div>
+      <p className={`text-[10px] font-semibold mt-1.5 ${top50 ? 'text-emerald-500' : 'text-slate-500'}`}>
+        {top50 ? '✓ In Top 50' : `${rank - 50} below top 50`}
+      </p>
+    </div>
   );
-}
+};
 
-// ── Stat Card ──────────────────────────────────────────────────────────────
+// ── Custom Dot ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const RankDot = (props: any) => {
+  const { cx, cy, payload, index, dataLength } = props;
+  if (cx == null || cy == null) return null;
+  const top50  = payload.rank <= 50;
+  const color  = top50 ? '#22c55e' : '#818cf8';
+  const isLast = index === dataLength - 1;
+  if (isLast) {
+    return (
+      <g key="last-dot">
+        <circle cx={cx} cy={cy} r={14} fill={color} fillOpacity={0.1} />
+        <circle cx={cx} cy={cy} r={5}  fill={color} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5} />
+        <text x={cx} y={cy - 14} textAnchor="middle" fontSize={10} fontWeight="700" fill={color}>
+          #{payload.rank}
+        </text>
+      </g>
+    );
+  }
+  return <circle key={`dot-${index}`} cx={cx} cy={cy} r={2.5} fill={color} fillOpacity={0.75} />;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const RankActiveDot = (props: any) => {
+  const { cx, cy, payload } = props;
+  if (cx == null || cy == null) return null;
+  const color = payload.rank <= 50 ? '#22c55e' : '#818cf8';
   return (
-    <div className="flex-1 min-w-0 bg-slate-800/60 border border-white/8 rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
-      <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide truncate">{label}</span>
-      <span className="text-sm font-semibold text-gray-100 tabular-nums">{value}</span>
-      {sub && <span className="text-[10px] text-gray-500">{sub}</span>}
+    <g key="active-dot">
+      <circle cx={cx} cy={cy} r={12} fill={color} fillOpacity={0.15} />
+      <circle cx={cx} cy={cy} r={5.5} fill={color} stroke="#fff" strokeWidth={2} />
+    </g>
+  );
+};
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+
+function Stat({
+  label, value, sub, color = 'text-gray-100',
+}: { label: string; value: string; sub?: string; color?: string }) {
+  return (
+    <div className="flex-1 min-w-0 bg-slate-800/50 border border-white/[0.06] rounded-2xl px-4 py-3.5 flex flex-col gap-0.5">
+      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</span>
+      <span className={`text-xl font-black tabular-nums leading-tight ${color}`}>{value}</span>
+      {sub && <span className="text-[10px] text-gray-500 mt-0.5">{sub}</span>}
     </div>
   );
 }
 
-// ── Modal ──────────────────────────────────────────────────────────────────
+// ── Modal ─────────────────────────────────────────────────────────────────────
 
 export default function RankHistoryModal({
-  symbol,
-  companyName,
-  rankType,
-  onClose,
+  symbol, companyName, rankType, onClose,
 }: RankHistoryModalProps) {
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory]   = useState<HistoryEntry[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error,   setError]     = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     getRankHistory(symbol, rankType)
-      .then(data => {
-        if (!cancelled) {
-          setHistory(data);
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        if (!cancelled) {
-          setError((err as Error).message ?? 'Failed to load history');
-          setLoading(false);
-        }
-      });
+      .then(data  => { if (!cancelled) { setHistory(data);  setLoading(false); } })
+      .catch(err  => { if (!cancelled) { setError((err as Error).message ?? 'Error'); setLoading(false); } });
     return () => { cancelled = true; };
   }, [symbol, rankType]);
 
-  // Derived stats
-  const ranks = history.map(d => d.rank);
-  const currentRank = ranks.length > 0 ? ranks[ranks.length - 1] : null;
-  const bestRank = ranks.length > 0 ? Math.min(...ranks) : null;
-  const appearances = ranks.length;
-  const avgRank = ranks.length > 0
-    ? (ranks.reduce((a, b) => a + b, 0) / ranks.length).toFixed(1)
-    : '—';
-  const top50Days = ranks.filter(r => r <= 50).length;
-  const top50Pct = appearances > 0 ? Math.round((top50Days / appearances) * 100) : 0;
+  // ── Derived stats ──────────────────────────────────────────────────────────
+  const ranks      = history.map(d => d.rank);
+  const current    = ranks.at(-1)  ?? null;
+  const best       = ranks.length  ? Math.min(...ranks) : null;
+  const avgRank    = ranks.length  ? ranks.reduce((a, b) => a + b, 0) / ranks.length : null;
+  const top50Days  = ranks.filter(r => r <= 50).length;
+  const top50Pct   = ranks.length  ? Math.round((top50Days / ranks.length) * 100) : 0;
+  const maxRank    = ranks.length  ? Math.max(...ranks) + 12 : 110;
 
+  // Trend: compare avg of last 7 vs avg of first 7
+  const n = Math.min(ranks.length, 7);
+  const earlyAvg  = n > 0 ? ranks.slice(0, n).reduce((a, b) => a + b, 0) / n : null;
+  const recentAvg = n > 0 ? ranks.slice(-n).reduce((a, b) => a + b, 0) / n : null;
+  const trend = earlyAvg !== null && recentAvg !== null
+    ? (earlyAvg - recentAvg > 2 ? 'improving' : recentAvg - earlyAvg > 2 ? 'worsening' : 'stable')
+    : null;
+
+  // Chart data — inject dataLength so dots know which is last
+  const chartData: (ChartPoint & { dataLength: number })[] = history.map((d, i) => ({
+    dateStr: d.date,
+    rank: d.rank,
+    dataLength: history.length,
+  }));
+
+  const isTop50Now = current !== null && current <= 50;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <AnimatePresence>
       <div
@@ -337,34 +157,48 @@ export default function RankHistoryModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         />
 
         {/* Panel */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ duration: 0.2 }}
-          className="relative w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
+          animate={{ opacity: 1, scale: 1,    y: 0  }}
+          exit={{    opacity: 0, scale: 0.96, y: 16 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="relative w-full max-w-3xl bg-[#0f1623] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden"
           onClick={e => e.stopPropagation()}
         >
           <div className="p-6 flex flex-col gap-5">
 
-            {/* Header */}
+            {/* ── Header ───────────────────────────────────────────────────── */}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white truncate">{symbol}</h2>
-                  <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    {rankType === 'filtered' ? 'Pre-filtered' : 'All'}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-2xl font-black text-white tracking-tight">{symbol}</h2>
+
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/25">
+                    {rankType === 'filtered' ? 'Pre-filtered' : 'All stocks'}
                   </span>
+
+                  {trend && (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      trend === 'improving'
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
+                        : trend === 'worsening'
+                        ? 'bg-red-500/15 text-red-400 border-red-500/25'
+                        : 'bg-zinc-500/15 text-zinc-400 border-zinc-500/25'
+                    }`}>
+                      {trend === 'improving' ? '↑ Improving' : trend === 'worsening' ? '↓ Worsening' : '→ Stable'}
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">{companyName}</p>
+                <p className="text-sm text-gray-400 mt-1">{companyName}</p>
               </div>
+
               <button
                 onClick={onClose}
-                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors shrink-0"
+                className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/8 transition-colors shrink-0 mt-0.5"
                 aria-label="Close"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -373,58 +207,178 @@ export default function RankHistoryModal({
               </button>
             </div>
 
-            {/* Body */}
+            {/* ── Body ─────────────────────────────────────────────────────── */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <div className="h-[420px] flex flex-col items-center justify-center gap-3">
                 <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm text-gray-500">Loading history…</p>
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="h-[420px] flex items-center justify-center">
                 <p className="text-sm text-red-400">{error}</p>
               </div>
             ) : history.length === 0 ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="h-[420px] flex items-center justify-center">
                 <p className="text-sm text-gray-500">No ranking history found for {symbol}.</p>
               </div>
             ) : (
               <>
-                {/* Chart */}
-                <div className="bg-slate-800/30 border border-white/5 rounded-xl p-3">
-                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-2">
-                    Rank History · last {appearances} days
-                  </p>
-                  <RankChart data={history} />
-                  <div className="flex items-center gap-4 mt-2">
-                    <span className="flex items-center gap-1.5 text-[10px] text-amber-400/70">
-                      <span className="inline-block w-4 border-t border-dashed border-amber-400/60" />
-                      Rank 50
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-emerald-400/70">
-                      <span className="inline-block w-4 border-t-2 border-emerald-400/70" />
-                      Top 50
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-indigo-400/70">
-                      <span className="inline-block w-4 border-t-2 border-indigo-400/70" />
-                      Below 50
-                    </span>
+                {/* ── Chart ──────────────────────────────────────────────── */}
+                <div className="bg-slate-800/20 border border-white/[0.05] rounded-2xl p-4">
+
+                  {/* Chart header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                      Rank History · last {ranks.length} days
+                    </p>
+                    <div className="flex items-center gap-4 text-[10px] text-gray-500">
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-4 h-[1px] bg-amber-400/60" style={{ borderTop: '1px dashed #f59e0b' }} />
+                        Rank 50
+                      </span>
+                      {best && best <= 50 && best > 1 && (
+                        <span className="flex items-center gap-1.5 text-emerald-500/70">
+                          <span className="inline-block w-4 h-[1px]" style={{ borderTop: '1px dashed #22c55e' }} />
+                          Best #{best}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-4 h-[2px] rounded bg-indigo-400" />
+                        Your rank
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Chart */}
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart
+                        data={chartData}
+                        margin={{ top: 16, right: 20, left: -4, bottom: 4 }}
+                      >
+                        <defs>
+                          <linearGradient id="rankAreaGradient" x1="0" y1="1" x2="0" y2="0">
+                            <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.22} />
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.01} />
+                          </linearGradient>
+                        </defs>
+
+                        {/* Top-50 green background zone */}
+                        <ReferenceArea
+                          y1={1} y2={50}
+                          fill="rgba(34,197,94,0.06)"
+                          stroke="none"
+                          ifOverflow="visible"
+                        />
+
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+
+                        <XAxis
+                          dataKey="dateStr"
+                          stroke="#374151"
+                          tick={{ fill: '#6b7280', fontSize: 10 }}
+                          tickLine={false}
+                          axisLine={{ stroke: '#1f2937' }}
+                          tickFormatter={fmtShort}
+                          interval={Math.max(1, Math.floor(chartData.length / 7))}
+                        />
+                        <YAxis
+                          reversed
+                          domain={[1, maxRank]}
+                          stroke="#374151"
+                          tick={{ fill: '#6b7280', fontSize: 10 }}
+                          tickLine={false}
+                          axisLine={{ stroke: '#1f2937' }}
+                          tickFormatter={v => `#${v}`}
+                          width={38}
+                          allowDataOverflow
+                        />
+
+                        <Tooltip
+                          content={<RankTooltip />}
+                          cursor={{ stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1 }}
+                        />
+
+                        {/* Rank-50 threshold line */}
+                        <ReferenceLine
+                          y={50}
+                          stroke="#f59e0b"
+                          strokeDasharray="6 3"
+                          strokeWidth={1.2}
+                          strokeOpacity={0.55}
+                        />
+
+                        {/* Best rank line (if achieved top-50 and different from current) */}
+                        {best && best <= 50 && best > 1 && best !== current && (
+                          <ReferenceLine
+                            y={best}
+                            stroke="#22c55e"
+                            strokeDasharray="4 3"
+                            strokeWidth={1}
+                            strokeOpacity={0.4}
+                          />
+                        )}
+
+                        {/* Area fill */}
+                        <Area
+                          type="monotone"
+                          dataKey="rank"
+                          stroke="transparent"
+                          fill="url(#rankAreaGradient)"
+                          fillOpacity={1}
+                          baseValue={maxRank}
+                          isAnimationActive={false}
+                        />
+
+                        {/* Main rank line */}
+                        <Line
+                          type="monotone"
+                          dataKey="rank"
+                          stroke="#6366f1"
+                          strokeWidth={2.5}
+                          dot={(props: any) => (
+                            <RankDot
+                              {...props}
+                              dataLength={chartData.length}
+                            />
+                          )}
+                          activeDot={<RankActiveDot />}
+                          isAnimationActive
+                          animationDuration={600}
+                          animationEasing="ease-out"
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* Stats */}
-                <div className="flex gap-2">
-                  <StatCard label="Current" value={currentRank !== null ? `#${currentRank}` : '—'} />
-                  <StatCard label="Best" value={bestRank !== null ? `#${bestRank}` : '—'} />
-                  <StatCard label="Avg Rank" value={avgRank !== '—' ? `#${avgRank}` : '—'} />
-                  <StatCard
+                {/* ── Stats ──────────────────────────────────────────────── */}
+                <div className="flex gap-3">
+                  <Stat
+                    label="Current"
+                    value={current !== null ? `#${current}` : '—'}
+                    color={isTop50Now ? 'text-emerald-400' : 'text-indigo-400'}
+                    sub={isTop50Now ? 'Top 50 ✓' : undefined}
+                  />
+                  <Stat
+                    label="Best"
+                    value={best !== null ? `#${best}` : '—'}
+                    color="text-emerald-400"
+                  />
+                  <Stat
+                    label="Avg Rank"
+                    value={avgRank !== null ? `#${avgRank.toFixed(1)}` : '—'}
+                    color={avgRank !== null && avgRank <= 50 ? 'text-emerald-400' : avgRank !== null && avgRank <= 75 ? 'text-amber-400' : 'text-gray-300'}
+                  />
+                  <Stat
                     label="In Top 50"
                     value={`${top50Days}d`}
-                    sub={appearances > 0 ? `${top50Pct}% of days` : undefined}
+                    sub={`${top50Pct}% of ${ranks.length} days`}
+                    color={top50Pct >= 70 ? 'text-emerald-400' : top50Pct >= 40 ? 'text-amber-400' : 'text-gray-300'}
                   />
                 </div>
               </>
             )}
-
           </div>
         </motion.div>
       </div>
