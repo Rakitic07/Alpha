@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import StatsBar from './StatsBar';
 import RulesInfoModal from './RulesInfoModal';
 import RankHistoryModal from './RankHistoryModal';
-import { getScreenerData, syncScreener, type ScreenerRow, type ScreenerStats } from '@/app/actions/screener';
+import { getScreenerData, syncScreener, getRankHistoriesBatch, type ScreenerRow, type ScreenerStats } from '@/app/actions/screener';
 
 interface ScreenerClientProps {
   initialData: { rows: ScreenerRow[]; stats: ScreenerStats };
@@ -178,6 +178,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<string>('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rankHistoryCacheRef = useRef<Record<string, { date: string; rank: number; compositeScore: number }[]>>({});
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -205,6 +206,24 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   // Clean up polling on unmount
   useEffect(() => () => stopPolling(), [stopPolling]);
 
+  const prefetchRankHistories = useCallback(async (tabRows: ScreenerRow[], rType: 'filtered' | 'all') => {
+    // Silently pre-load all visible symbols in one DB round-trip
+    const syms = tabRows.map(r => r.symbol);
+    if (syms.length === 0) return;
+    try {
+      const batch = await getRankHistoriesBatch(syms, rType);
+      rankHistoryCacheRef.current = { ...rankHistoryCacheRef.current, ...batch };
+    } catch {
+      // non-fatal — modal will fall back to per-symbol fetch
+    }
+  }, []);
+
+  // Prefetch rank histories for the initial pre-filtered rows (background, non-blocking)
+  useEffect(() => {
+    prefetchRankHistories(initialData.rows, 'filtered');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // only on mount — initialData is stable
+
   const handleTabChange = useCallback(async (tab: 'all' | 'prefiltered' | 'portfolio') => {
     setActiveTab(tab);
     setLoading(true);
@@ -212,10 +231,12 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       const data = await getScreenerData(tab);
       setRows(data.rows);
       setStats(data.stats);
+      const rType = tab === 'all' ? 'all' : 'filtered';
+      prefetchRankHistories(data.rows, rType);  // background prefetch — non-blocking
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [prefetchRankHistories]);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
@@ -580,6 +601,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
           companyName={selectedCompany}
           rankType={activeTab === 'all' ? 'all' : 'filtered'}
           onClose={() => setSelectedSymbol(null)}
+          preloadedHistory={rankHistoryCacheRef.current[selectedSymbol]}
         />
       )}
     </motion.div>

@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidateTag, unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { computePortfolioState } from '@/lib/finance/recalculation';
 import { computeReturns, sharpeRatio, PARAMS } from '@/lib/screener/scoring';
@@ -47,6 +48,30 @@ export interface ScreenerStats {
 
 // ── Server Actions ──
 
+// Cached MomentumScore query — revalidated on every sync/pipeline run
+const getCachedActiveScores = unstable_cache(
+  async (rankType: 'filtered' | 'all') => {
+    return prisma.momentumScore.findMany({
+      where: { isActive: true, rankType },
+      orderBy: { rank: 'asc' },
+    });
+  },
+  ['screener-scores'],
+  { revalidate: 3600, tags: ['screener-scores'] },
+);
+
+const getCachedFilteredSymbols = unstable_cache(
+  async () => {
+    const rows = await prisma.momentumScore.findMany({
+      where: { isActive: true, rankType: 'filtered' },
+      select: { symbol: true },
+    });
+    return rows.map(r => r.symbol);
+  },
+  ['screener-filtered-symbols'],
+  { revalidate: 3600, tags: ['screener-scores'] },
+);
+
 export async function getScreenerData(
   tab: 'all' | 'prefiltered' | 'portfolio' = 'prefiltered',
 ): Promise<{ rows: ScreenerRow[]; stats: ScreenerStats }> {
@@ -59,10 +84,7 @@ export async function getScreenerData(
     rankTypeForScores = 'filtered';
   }
 
-  const scores = await prisma.momentumScore.findMany({
-    where: { isActive: true, rankType: rankTypeForScores },
-    orderBy: { rank: 'asc' },
-  });
+  const scores = await getCachedActiveScores(rankTypeForScores);
 
   let portfolioSymbols: Set<string>;
   let portfolioNames: Map<string, string>;
@@ -107,11 +129,7 @@ export async function getScreenerData(
   // For All tab: fetch which symbols also pass pre-filtering — used for row highlights
   let filteredSymbols = new Set<string>();
   if (tab === 'all') {
-    const filteredScores = await prisma.momentumScore.findMany({
-      where: { isActive: true, rankType: 'filtered' },
-      select: { symbol: true },
-    });
-    filteredSymbols = new Set(filteredScores.map(s => s.symbol));
+    filteredSymbols = new Set(await getCachedFilteredSymbols());
   }
 
   const rankedSymbols = new Set<string>();
@@ -336,11 +354,31 @@ export async function syncScreener(): Promise<{ success: boolean; ranked: number
     const result = await runScreenerPipeline(job.id);
     try { await detectAndFlushAnomalies(); } catch { /* non-fatal */ }
     await completeJob(job.id, { ranked: result.ranked });
+    revalidateTag('screener-scores', 'max');  // bust cached score rows
     return { success: true, ranked: result.ranked, jobId: job.id };
   } catch (err) {
     await failJob(job.id, (err as Error).message);
     return { success: false, ranked: 0, error: (err as Error).message, jobId: job.id };
   }
+}
+
+
+export async function getRankHistoriesBatch(
+  symbols: string[],
+  rankType: 'filtered' | 'all',
+): Promise<Record<string, { date: string; rank: number; compositeScore: number }[]>> {
+  if (symbols.length === 0) return {};
+  const rows = await prisma.rankingHistory.findMany({
+    where: { symbol: { in: symbols }, rankType },
+    orderBy: { date: 'asc' },
+    select: { symbol: true, date: true, rank: true, compositeScore: true },
+  });
+  const result: Record<string, { date: string; rank: number; compositeScore: number }[]> = {};
+  for (const r of rows) {
+    if (!result[r.symbol]) result[r.symbol] = [];
+    result[r.symbol].push({ date: r.date, rank: r.rank, compositeScore: r.compositeScore });
+  }
+  return result;
 }
 
 export async function getRankHistory(

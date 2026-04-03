@@ -14,6 +14,7 @@ interface RankHistoryModalProps {
   companyName: string;
   rankType: 'filtered' | 'all';
   onClose: () => void;
+  preloadedHistory?: HistoryEntry[];  // skip fetch if provided
 }
 
 type HistoryEntry = { date: string; rank: number; compositeScore: number };
@@ -112,20 +113,21 @@ function Stat({
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 export default function RankHistoryModal({
-  symbol, companyName, rankType, onClose,
+  symbol, companyName, rankType, onClose, preloadedHistory,
 }: RankHistoryModalProps) {
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<HistoryEntry[]>(preloadedHistory ?? []);
+  const [loading, setLoading] = useState(!preloadedHistory);
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
+    if (preloadedHistory) return;  // already have data — no fetch needed
     let cancelled = false;
     setLoading(true); setError(null);
     getRankHistory(symbol, rankType)
       .then(data => { if (!cancelled) { setHistory(data); setLoading(false); } })
       .catch(err  => { if (!cancelled) { setError((err as Error).message ?? 'Error'); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [symbol, rankType]);
+  }, [symbol, rankType, preloadedHistory]);
 
   const ranks     = history.map(d => d.rank);
   const current   = ranks.at(-1) ?? null;
@@ -240,7 +242,7 @@ export default function RankHistoryModal({
                           Everything above = green, below = red.
                           Fill uses baseValue={maxRank} so it fills from line to chart floor.
                         */}
-                        <linearGradient id="rankAreaFill" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="rankAreaFill" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
                           <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.40} />
                           <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.08} />
                           <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.08} />
