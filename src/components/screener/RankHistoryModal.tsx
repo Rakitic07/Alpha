@@ -52,7 +52,7 @@ const RankTooltip = ({ active, payload, label }: any) => {
         #{rank}
       </span>
       <p className={`text-[10px] font-semibold mt-2 ${top50 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
-        {top50 ? `✓ In Top 50 · ${50 - rank} above cutoff` : `✗ Outside Top 50 · ${rank - 50} below cutoff`}
+        {top50 ? '✓ In Top 50' : '✗ Outside Top 50'}
       </p>
     </div>
   );
@@ -73,7 +73,7 @@ const RankDot = (props: any) => {
         <circle cx={cx} cy={cy} r={16} fill={color} fillOpacity={0.08} />
         <circle cx={cx} cy={cy} r={8}  fill={color} fillOpacity={0.15} />
         <circle cx={cx} cy={cy} r={4.5} fill={color} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
-        <text x={cx} y={cy - 20} textAnchor="middle" fontSize={11} fontWeight="800" fill={color} letterSpacing="-0.3">
+        <text x={cx} y={cy - 22} textAnchor="middle" fontSize={11} fontWeight="800" fill={color} letterSpacing="-0.3">
           #{payload.rank}
         </text>
       </g>
@@ -145,6 +145,7 @@ export default function RankHistoryModal({
     : null;
 
   // Chart data — split rank into good/bad for two-tone fill
+  // Include the boundary point in both series to prevent visual gaps at transitions
   const chartData: ChartPoint[] = history.map(d => ({
     dateStr:    d.date,
     rank:       d.rank,
@@ -231,171 +232,146 @@ export default function RankHistoryModal({
               </div>
             ) : (
               <>
-                {/* ── Chart container ─────────────────────────────────────── */}
-                <div className="bg-slate-800/20 border border-white/[0.05] rounded-2xl px-4 pt-5 pb-3">
+                {/* ── Chart ───────────────────────────────────────────────── */}
+                <div className="h-[380px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={chartData}
+                      margin={{ top: 52, right: 28, left: 0, bottom: 4 }}
+                    >
+                      <defs>
+                        {/* Green gradient: fills from rank line down toward rank-50 baseline */}
+                        <linearGradient id="rhGreenGrad" x1="0" y1="1" x2="0" y2="0">
+                          <stop offset="0%"   stopColor="#22c55e" stopOpacity={0.08} />
+                          <stop offset="100%" stopColor="#22c55e" stopOpacity={0.32} />
+                        </linearGradient>
+                        {/* Red gradient: fills from rank-50 baseline down to rank line */}
+                        <linearGradient id="rhRedGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%"   stopColor="#f43f5e" stopOpacity={0.08} />
+                          <stop offset="100%" stopColor="#f43f5e" stopOpacity={0.28} />
+                        </linearGradient>
+                      </defs>
 
-                  {/* Chart legend */}
-                  <div className="flex items-center justify-between mb-4 px-1">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
-                      Rank History · {ranks.length} days
-                    </p>
-                    <div className="flex items-center gap-5 text-[10px]">
-                      <span className="flex items-center gap-1.5 text-emerald-400/70">
-                        <span className="w-3 h-3 rounded-sm inline-block bg-emerald-500/20 border border-emerald-500/30" />
-                        Top 50 zone
-                      </span>
-                      <span className="flex items-center gap-1.5 text-rose-400/70">
-                        <span className="w-3 h-3 rounded-sm inline-block bg-rose-500/15 border border-rose-500/25" />
-                        Outside Top 50
-                      </span>
-                      <span className="flex items-center gap-1.5 text-amber-400/60">
-                        <span className="inline-block w-5 border-t border-dashed border-amber-400/50" />
-                        Rank 50
-                      </span>
-                    </div>
-                  </div>
+                      {/* Background: green zone (top 50) */}
+                      <ReferenceArea
+                        y1={1} y2={50}
+                        fill="rgba(34,197,94,0.05)"
+                        stroke="none"
+                        ifOverflow="visible"
+                      />
+                      {/* Background: red zone (outside top 50) */}
+                      <ReferenceArea
+                        y1={50} y2={maxRank}
+                        fill="rgba(244,63,94,0.04)"
+                        stroke="none"
+                        ifOverflow="visible"
+                      />
 
-                  {/* Chart */}
-                  <div className="h-[360px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart
-                        data={chartData}
-                        margin={{ top: 24, right: 24, left: 0, bottom: 4 }}
-                      >
-                        <defs>
-                          {/* Green gradient: fills downward from rank line to rank-50 baseline */}
-                          <linearGradient id="rhGreenGrad" x1="0" y1="1" x2="0" y2="0">
-                            <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.05} />
-                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0.28} />
-                          </linearGradient>
-                          {/* Red gradient: fills upward from rank-50 baseline to rank line */}
-                          <linearGradient id="rhRedGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#f43f5e" stopOpacity={0.05} />
-                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.25} />
-                          </linearGradient>
-                        </defs>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="rgba(255,255,255,0.04)"
+                        vertical={false}
+                      />
 
-                        {/* Background: green zone (top 50) */}
-                        <ReferenceArea
-                          y1={1} y2={50}
-                          fill="rgba(34,197,94,0.06)"
-                          stroke="none"
-                          ifOverflow="visible"
-                        />
-                        {/* Background: red zone (outside top 50) */}
-                        <ReferenceArea
-                          y1={50} y2={maxRank}
-                          fill="rgba(244,63,94,0.05)"
-                          stroke="none"
-                          ifOverflow="visible"
-                        />
+                      <XAxis
+                        dataKey="dateStr"
+                        stroke="#1f2937"
+                        tick={{ fill: '#4b5563', fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={{ stroke: '#1f2937' }}
+                        tickFormatter={fmtShort}
+                        interval={Math.max(1, Math.floor(chartData.length / 8))}
+                      />
+                      <YAxis
+                        reversed
+                        domain={[1, maxRank]}
+                        stroke="#1f2937"
+                        tick={{ fill: '#4b5563', fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={{ stroke: '#1f2937' }}
+                        tickFormatter={v => `#${v}`}
+                        width={40}
+                        allowDataOverflow
+                      />
 
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="rgba(255,255,255,0.04)"
-                          vertical={false}
-                        />
+                      <Tooltip
+                        content={<RankTooltip />}
+                        cursor={{ stroke: 'rgba(255,255,255,0.06)', strokeWidth: 1 }}
+                      />
 
-                        <XAxis
-                          dataKey="dateStr"
-                          stroke="#1f2937"
-                          tick={{ fill: '#4b5563', fontSize: 10 }}
-                          tickLine={false}
-                          axisLine={{ stroke: '#1f2937' }}
-                          tickFormatter={fmtShort}
-                          interval={Math.max(1, Math.floor(chartData.length / 8))}
-                        />
-                        <YAxis
-                          reversed
-                          domain={[1, maxRank]}
-                          stroke="#1f2937"
-                          tick={{ fill: '#4b5563', fontSize: 10 }}
-                          tickLine={false}
-                          axisLine={{ stroke: '#1f2937' }}
-                          tickFormatter={v => `#${v}`}
-                          width={40}
-                          allowDataOverflow
-                        />
+                      {/* Rank-50 threshold line */}
+                      <ReferenceLine
+                        y={50}
+                        stroke="#f59e0b"
+                        strokeDasharray="6 4"
+                        strokeWidth={1.5}
+                        strokeOpacity={0.5}
+                      />
 
-                        <Tooltip
-                          content={<RankTooltip />}
-                          cursor={{ stroke: 'rgba(255,255,255,0.06)', strokeWidth: 1 }}
-                        />
-
-                        {/* Rank-50 threshold line */}
+                      {/* Best rank reference (only if top-50 and distinct) */}
+                      {best && best <= 50 && best !== current && best > 1 && (
                         <ReferenceLine
-                          y={50}
-                          stroke="#f59e0b"
-                          strokeDasharray="6 4"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.5}
+                          y={best}
+                          stroke="#22c55e"
+                          strokeDasharray="3 4"
+                          strokeWidth={1}
+                          strokeOpacity={0.35}
+                          label={{
+                            value: `Best #${best}`,
+                            position: 'insideTopRight',
+                            fill: '#22c55e',
+                            fontSize: 9,
+                            opacity: 0.6,
+                          }}
                         />
+                      )}
 
-                        {/* Best rank reference (only if top-50 and distinct) */}
-                        {best && best <= 50 && best !== current && best > 1 && (
-                          <ReferenceLine
-                            y={best}
-                            stroke="#22c55e"
-                            strokeDasharray="3 4"
-                            strokeWidth={1}
-                            strokeOpacity={0.35}
-                            label={{
-                              value: `Best #${best}`,
-                              position: 'insideTopRight',
-                              fill: '#22c55e',
-                              fontSize: 9,
-                              opacity: 0.6,
-                            }}
-                          />
+                      {/* Green fill — rank ≤ 50 zone, baseValue=50 draws up to threshold */}
+                      <Area
+                        type="monotone"
+                        dataKey="rankGood"
+                        baseValue={50}
+                        stroke="transparent"
+                        fill="url(#rhGreenGrad)"
+                        fillOpacity={1}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                        dot={false}
+                        activeDot={false}
+                        legendType="none"
+                      />
+
+                      {/* Red fill — rank > 50 zone, baseValue=50 draws down from threshold */}
+                      <Area
+                        type="monotone"
+                        dataKey="rankBad"
+                        baseValue={50}
+                        stroke="transparent"
+                        fill="url(#rhRedGrad)"
+                        fillOpacity={1}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                        dot={false}
+                        activeDot={false}
+                        legendType="none"
+                      />
+
+                      {/* Main rank line */}
+                      <Line
+                        type="monotone"
+                        dataKey="rank"
+                        stroke="#6366f1"
+                        strokeWidth={2.5}
+                        dot={(props: any) => (  // eslint-disable-line @typescript-eslint/no-explicit-any
+                          <RankDot {...props} dataLength={chartData.length} />
                         )}
-
-                        {/* Green fill — rank ≤ 50 zone, baseValue=50 draws up to threshold */}
-                        <Area
-                          type="monotone"
-                          dataKey="rankGood"
-                          baseValue={50}
-                          stroke="transparent"
-                          fill="url(#rhGreenGrad)"
-                          fillOpacity={1}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                          dot={false}
-                          activeDot={false}
-                          legendType="none"
-                        />
-
-                        {/* Red fill — rank > 50 zone, baseValue=50 draws down from threshold */}
-                        <Area
-                          type="monotone"
-                          dataKey="rankBad"
-                          baseValue={50}
-                          stroke="transparent"
-                          fill="url(#rhRedGrad)"
-                          fillOpacity={1}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                          dot={false}
-                          activeDot={false}
-                          legendType="none"
-                        />
-
-                        {/* Main rank line */}
-                        <Line
-                          type="monotone"
-                          dataKey="rank"
-                          stroke={isTop50Now ? '#6366f1' : '#6366f1'}
-                          strokeWidth={2.5}
-                          dot={(props: any) => (  // eslint-disable-line @typescript-eslint/no-explicit-any
-                            <RankDot {...props} dataLength={chartData.length} />
-                          )}
-                          activeDot={<RankActiveDot />}
-                          isAnimationActive
-                          animationDuration={700}
-                          animationEasing="ease-out"
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
+                        activeDot={<RankActiveDot />}
+                        isAnimationActive
+                        animationDuration={700}
+                        animationEasing="ease-out"
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
                 </div>
 
                 {/* ── Stats row ────────────────────────────────────────────── */}
