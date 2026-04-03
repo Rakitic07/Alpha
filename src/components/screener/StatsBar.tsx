@@ -5,21 +5,19 @@ import type { ScreenerStats } from '@/app/actions/screener';
 
 interface StatsBarProps {
   stats: ScreenerStats;
-  activeTab: 'all' | 'prefiltered' | 'portfolio' | 'others';
-  onTabChange: (tab: 'all' | 'prefiltered' | 'portfolio' | 'others') => void;
+  activeTab: 'all' | 'prefiltered' | 'portfolio';
+  onTabChange: (tab: 'all' | 'prefiltered' | 'portfolio') => void;
   filteredCount: number;
 }
 
 export default memo(function StatsBar({ stats, activeTab, onTabChange, filteredCount }: StatsBarProps) {
   const { total, allTotal, portfolioCount, rankedPortfolioCount, rankBuckets, mcapBreakdown } = stats;
-  const othersCount = total - rankedPortfolioCount;
   const totalMcap = mcapBreakdown.large + mcapBreakdown.mid + mcapBreakdown.small + mcapBreakdown.micro;
 
   const tabs = [
     { key: 'all' as const,         label: 'All',          count: allTotal },
     { key: 'prefiltered' as const, label: 'Pre-filtered', count: total },
     { key: 'portfolio' as const,   label: 'Portfolio',    count: portfolioCount },
-    { key: 'others' as const,      label: 'Others',       count: othersCount },
   ];
 
   return (

@@ -167,7 +167,7 @@ function SortHeader({
 export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [rows, setRows] = useState<ScreenerRow[]>(initialData.rows);
   const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
-  const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio' | 'others'>('prefiltered');
+  const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio'>('prefiltered');
   const [loading, setLoading] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -205,7 +205,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   // Clean up polling on unmount
   useEffect(() => () => stopPolling(), [stopPolling]);
 
-  const handleTabChange = useCallback(async (tab: 'all' | 'prefiltered' | 'portfolio' | 'others') => {
+  const handleTabChange = useCallback(async (tab: 'all' | 'prefiltered' | 'portfolio') => {
     setActiveTab(tab);
     setLoading(true);
     try {

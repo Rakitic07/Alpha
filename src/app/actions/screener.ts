@@ -48,14 +48,14 @@ export interface ScreenerStats {
 // ── Server Actions ──
 
 export async function getScreenerData(
-  tab: 'all' | 'prefiltered' | 'portfolio' | 'others' = 'prefiltered',
+  tab: 'all' | 'prefiltered' | 'portfolio' = 'prefiltered',
 ): Promise<{ rows: ScreenerRow[]; stats: ScreenerStats }> {
   // Determine which rankType to query for the main scores list
   let rankTypeForScores: 'filtered' | 'all';
   if (tab === 'all') {
     rankTypeForScores = 'all';
   } else {
-    // 'prefiltered', 'portfolio', 'others' all use filtered rankings
+    // 'prefiltered', 'portfolio' all use filtered rankings
     rankTypeForScores = 'filtered';
   }
 
@@ -283,9 +283,6 @@ export async function getScreenerData(
   switch (tab) {
     case 'portfolio':
       rows = allRows.filter(r => r.inPortfolio);
-      break;
-    case 'others':
-      rows = allRows.filter(r => !r.inPortfolio);
       break;
     default:
       rows = allRows;
