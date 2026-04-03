@@ -19,10 +19,10 @@ interface RankHistoryModalProps {
 type HistoryEntry = { date: string; rank: number; compositeScore: number };
 
 type ChartPoint = {
-  dateStr: string;
-  rank: number;
-  rankGood: number | null;  // rank when ≤ 50, else null
-  rankBad:  number | null;  // rank when > 50, else null
+  dateStr:    string;
+  rank:       number;
+  rankGood:   number | null;
+  rankBad:    number | null;
   dataLength: number;
 };
 
@@ -40,7 +40,6 @@ function fmtFull(s: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const RankTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
-  // rank comes from the main 'rank' line payload
   const entry = payload.find((p: { dataKey: string }) => p.dataKey === 'rank');
   const rank  = entry?.value as number | undefined;
   if (rank == null) return null;
@@ -67,19 +66,30 @@ const RankDot = (props: any) => {
   const top50  = payload.rank <= 50;
   const color  = top50 ? '#22c55e' : '#f43f5e';
   const isLast = index === dataLength - 1;
+
   if (isLast) {
     return (
       <g key="last-dot">
-        <circle cx={cx} cy={cy} r={16} fill={color} fillOpacity={0.08} />
-        <circle cx={cx} cy={cy} r={8}  fill={color} fillOpacity={0.15} />
-        <circle cx={cx} cy={cy} r={4.5} fill={color} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
-        <text x={cx} y={cy - 22} textAnchor="middle" fontSize={11} fontWeight="800" fill={color} letterSpacing="-0.3">
+        {/* Animated outer pulse ring */}
+        <circle cx={cx} cy={cy} r={10} fill={color} fillOpacity={0.12}>
+          <animate attributeName="r"            values="10;26;10" dur="2.6s" repeatCount="indefinite" />
+          <animate attributeName="fill-opacity" values="0.12;0;0.12" dur="2.6s" repeatCount="indefinite" />
+        </circle>
+        {/* Animated inner ring */}
+        <circle cx={cx} cy={cy} r={7} fill={color} fillOpacity={0.18}>
+          <animate attributeName="r"            values="7;14;7"     dur="2.6s" begin="0.3s" repeatCount="indefinite" />
+          <animate attributeName="fill-opacity" values="0.18;0.04;0.18" dur="2.6s" begin="0.3s" repeatCount="indefinite" />
+        </circle>
+        {/* Static core */}
+        <circle cx={cx} cy={cy} r={5} fill={color} stroke="rgba(255,255,255,0.4)" strokeWidth={1.5} />
+        {/* Label above */}
+        <text x={cx} y={cy - 14} textAnchor="middle" fontSize={11} fontWeight="800" fill={color} letterSpacing="-0.3">
           #{payload.rank}
         </text>
       </g>
     );
   }
-  return <circle key={`dot-${index}`} cx={cx} cy={cy} r={2.5} fill={color} fillOpacity={0.7} />;
+  return <circle key={`dot-${index}`} cx={cx} cy={cy} r={2.5} fill={color} fillOpacity={0.75} />;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,7 +99,7 @@ const RankActiveDot = (props: any) => {
   const color = payload.rank <= 50 ? '#22c55e' : '#f43f5e';
   return (
     <g key="active-dot">
-      <circle cx={cx} cy={cy} r={14} fill={color} fillOpacity={0.12} />
+      <circle cx={cx} cy={cy} r={14} fill={color} fillOpacity={0.14} />
       <circle cx={cx} cy={cy} r={6}  fill={color} stroke="#fff" strokeWidth={2} />
     </g>
   );
@@ -98,14 +108,19 @@ const RankActiveDot = (props: any) => {
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 
 function Stat({
-  label, value, sub, color = 'text-gray-100',
-}: { label: string; value: string; sub?: string; color?: string }) {
+  label, value, sub, color = 'text-gray-100', delay = 0,
+}: { label: string; value: string; sub?: string; color?: string; delay?: number }) {
   return (
-    <div className="flex-1 min-w-0 bg-slate-800/40 border border-white/[0.07] rounded-2xl px-4 py-4 flex flex-col gap-1">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay, ease: 'easeOut' }}
+      className="flex-1 min-w-0 bg-slate-800/40 border border-white/[0.07] rounded-2xl px-4 py-4 flex flex-col gap-1"
+    >
       <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</span>
       <span className={`text-2xl font-black tabular-nums leading-tight ${color}`}>{value}</span>
       {sub && <span className="text-[10px] text-gray-500">{sub}</span>}
-    </div>
+    </motion.div>
   );
 }
 
@@ -145,7 +160,6 @@ export default function RankHistoryModal({
     : null;
 
   // Chart data — split rank into good/bad for two-tone fill
-  // Include the boundary point in both series to prevent visual gaps at transitions
   const chartData: ChartPoint[] = history.map(d => ({
     dateStr:    d.date,
     rank:       d.rank,
@@ -155,6 +169,10 @@ export default function RankHistoryModal({
   }));
 
   const isTop50Now = current !== null && current <= 50;
+
+  // Y-axis domain: extend to -2 so rank #1 dot doesn't sit at the pixel edge
+  // (negative values are hidden by tickFormatter)
+  const yDomainMin = -2;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -233,36 +251,40 @@ export default function RankHistoryModal({
             ) : (
               <>
                 {/* ── Chart ───────────────────────────────────────────────── */}
-                <div className="h-[380px]">
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.05, ease: 'easeOut' }}
+                  className="h-[380px]"
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                       data={chartData}
-                      margin={{ top: 52, right: 28, left: 0, bottom: 4 }}
+                      margin={{ top: 40, right: 28, left: 0, bottom: 4 }}
                     >
                       <defs>
-                        {/* Green gradient: fills from rank line down toward rank-50 baseline */}
+                        {/* Green gradient — fills from rank line toward rank-50 baseline */}
                         <linearGradient id="rhGreenGrad" x1="0" y1="1" x2="0" y2="0">
-                          <stop offset="0%"   stopColor="#22c55e" stopOpacity={0.08} />
-                          <stop offset="100%" stopColor="#22c55e" stopOpacity={0.32} />
+                          <stop offset="0%"   stopColor="#22c55e" stopOpacity={0.10} />
+                          <stop offset="100%" stopColor="#22c55e" stopOpacity={0.38} />
                         </linearGradient>
-                        {/* Red gradient: fills from rank-50 baseline down to rank line */}
-                        <linearGradient id="rhRedGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%"   stopColor="#f43f5e" stopOpacity={0.08} />
-                          <stop offset="100%" stopColor="#f43f5e" stopOpacity={0.28} />
-                        </linearGradient>
+                        {/* Glow gradient for the main line soft halo */}
+                        <filter id="lineGlow" x="-10%" y="-80%" width="120%" height="260%">
+                          <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+                          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
                       </defs>
 
-                      {/* Background: green zone (top 50) */}
+                      {/* Background zones */}
                       <ReferenceArea
-                        y1={1} y2={50}
+                        y1={yDomainMin} y2={50}
                         fill="rgba(34,197,94,0.05)"
                         stroke="none"
                         ifOverflow="visible"
                       />
-                      {/* Background: red zone (outside top 50) */}
                       <ReferenceArea
                         y1={50} y2={maxRank}
-                        fill="rgba(244,63,94,0.04)"
+                        fill="rgba(244,63,94,0.05)"
                         stroke="none"
                         ifOverflow="visible"
                       />
@@ -284,12 +306,12 @@ export default function RankHistoryModal({
                       />
                       <YAxis
                         reversed
-                        domain={[1, maxRank]}
+                        domain={[yDomainMin, maxRank]}
                         stroke="#1f2937"
                         tick={{ fill: '#4b5563', fontSize: 10 }}
                         tickLine={false}
                         axisLine={{ stroke: '#1f2937' }}
-                        tickFormatter={v => `#${v}`}
+                        tickFormatter={v => v > 0 ? `#${v}` : ''}
                         width={40}
                         allowDataOverflow
                       />
@@ -305,10 +327,10 @@ export default function RankHistoryModal({
                         stroke="#f59e0b"
                         strokeDasharray="6 4"
                         strokeWidth={1.5}
-                        strokeOpacity={0.5}
+                        strokeOpacity={0.55}
                       />
 
-                      {/* Best rank reference (only if top-50 and distinct) */}
+                      {/* Best rank reference (distinct from current, top-50 only) */}
                       {best && best <= 50 && best !== current && best > 1 && (
                         <ReferenceLine
                           y={best}
@@ -326,7 +348,7 @@ export default function RankHistoryModal({
                         />
                       )}
 
-                      {/* Green fill — rank ≤ 50 zone, baseValue=50 draws up to threshold */}
+                      {/* Green fill — rank ≤ 50 */}
                       <Area
                         type="monotone"
                         dataKey="rankGood"
@@ -335,24 +357,42 @@ export default function RankHistoryModal({
                         fill="url(#rhGreenGrad)"
                         fillOpacity={1}
                         connectNulls={false}
-                        isAnimationActive={false}
+                        isAnimationActive
+                        animationDuration={900}
+                        animationEasing="ease-out"
                         dot={false}
                         activeDot={false}
                         legendType="none"
                       />
 
-                      {/* Red fill — rank > 50 zone, baseValue=50 draws down from threshold */}
+                      {/* Red fill — rank > 50 (solid fill: gradient bounding-box causes near-invisible at small dips) */}
                       <Area
                         type="monotone"
                         dataKey="rankBad"
                         baseValue={50}
                         stroke="transparent"
-                        fill="url(#rhRedGrad)"
+                        fill="rgba(244,63,94,0.22)"
                         fillOpacity={1}
                         connectNulls={false}
-                        isAnimationActive={false}
+                        isAnimationActive
+                        animationBegin={100}
+                        animationDuration={900}
+                        animationEasing="ease-out"
                         dot={false}
                         activeDot={false}
+                        legendType="none"
+                      />
+
+                      {/* Glow line — soft wide stroke behind the main line */}
+                      <Line
+                        type="monotone"
+                        dataKey="rank"
+                        stroke="#818cf8"
+                        strokeWidth={7}
+                        strokeOpacity={0.13}
+                        dot={false}
+                        activeDot={false}
+                        isAnimationActive={false}
                         legendType="none"
                       />
 
@@ -360,19 +400,19 @@ export default function RankHistoryModal({
                       <Line
                         type="monotone"
                         dataKey="rank"
-                        stroke="#6366f1"
+                        stroke="#818cf8"
                         strokeWidth={2.5}
                         dot={(props: any) => (  // eslint-disable-line @typescript-eslint/no-explicit-any
                           <RankDot {...props} dataLength={chartData.length} />
                         )}
                         activeDot={<RankActiveDot />}
                         isAnimationActive
-                        animationDuration={700}
+                        animationDuration={800}
                         animationEasing="ease-out"
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
-                </div>
+                </motion.div>
 
                 {/* ── Stats row ────────────────────────────────────────────── */}
                 <div className="flex gap-3">
@@ -381,11 +421,13 @@ export default function RankHistoryModal({
                     value={current !== null ? `#${current}` : '—'}
                     color={isTop50Now ? 'text-emerald-400' : 'text-rose-400'}
                     sub={isTop50Now ? '✓ Top 50' : '✗ Outside 50'}
+                    delay={0.15}
                   />
                   <Stat
                     label="Best Ever"
                     value={best !== null ? `#${best}` : '—'}
                     color="text-emerald-400"
+                    delay={0.22}
                   />
                   <Stat
                     label="Avg Rank"
@@ -395,12 +437,14 @@ export default function RankHistoryModal({
                       : avgRank !== null && avgRank <= 75 ? 'text-amber-400'
                       : 'text-rose-400'
                     }
+                    delay={0.29}
                   />
                   <Stat
                     label="In Top 50"
                     value={`${top50Days}d`}
                     sub={`${top50Pct}% of ${ranks.length} days`}
                     color={top50Pct >= 70 ? 'text-emerald-400' : top50Pct >= 40 ? 'text-amber-400' : 'text-rose-400'}
+                    delay={0.36}
                   />
                 </div>
               </>
