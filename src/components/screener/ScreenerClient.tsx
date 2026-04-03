@@ -284,7 +284,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     });
   }, [rows, sortField, sortDir]);
 
-  const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered';
+  const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered' || activeTab === 'portfolio';
 
   return (
     <motion.div className="flex flex-col gap-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
