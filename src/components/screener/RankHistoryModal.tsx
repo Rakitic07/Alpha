@@ -76,7 +76,7 @@ const RankDot = (props: any) => {
       </g>
     );
   }
-  return <circle key={`dot-${index}`} cx={cx} cy={cy} r={2} fill={color} fillOpacity={0.85} />;
+  return null;  // only render last dot
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -249,14 +249,14 @@ export default function RankHistoryModal({
                           <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.38} />
                         </linearGradient>
                         {/* Stroke gradient: green line above rank-50, red below */}
-                        <linearGradient id="rankStroke" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="rankStroke" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
                           <stop offset="0%"              stopColor="#22c55e" />
                           <stop offset={`${gradStop}%`}  stopColor="#4ade80" />
                           <stop offset={`${gradStop}%`}  stopColor="#fb7185" />
                           <stop offset="100%"            stopColor="#f43f5e" />
                         </linearGradient>
                         {/* Glow (same as stroke but wider) */}
-                        <linearGradient id="rankGlow" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="rankGlow" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
                           <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.18} />
                           <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.18} />
                           <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.18} />
@@ -287,13 +287,13 @@ export default function RankHistoryModal({
                       )}
 
                       {/* Glow line — wide soft halo behind the main stroke */}
-                      <Line type="monotone" dataKey="rank"
+                      <Line type="natural" dataKey="rank"
                         stroke="url(#rankGlow)" strokeWidth={5} dot={false} activeDot={false}
                         isAnimationActive={false} legendType="none" />
 
                       {/* Main area — single component; gradient fill + gradient stroke */}
                       <Area
-                        type="monotone"
+                        type="natural"
                         dataKey="rank"
                         stroke="url(#rankStroke)"
                         strokeWidth={1.5}
