@@ -7,8 +7,8 @@
 
 // ── Backtest DEFAULT_PARAMS (engine.py:522-548) — LOCKED ──
 export const PARAMS = {
-  sharpeWeight: 0.5,
-  proximityWeight: 0.5,
+  sharpeWeight: 1.0,
+  proximityWeight: 0.0,
   skipMonths: 1,             // = 21 trading days, applied to 3m window only
   athProximityPct: 30,       // entry: within 30% of ATH
   athWindow: 'full' as const,
