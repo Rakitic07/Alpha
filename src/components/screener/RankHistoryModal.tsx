@@ -41,9 +41,7 @@ const RankTooltip = ({ active, payload, label }: any) => {
       <span className={`text-4xl font-black tabular-nums leading-none ${top50 ? 'text-emerald-400' : 'text-rose-400'}`}>
         #{rank}
       </span>
-      <p className={`text-[10px] font-semibold mt-2 ${top50 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
-        {top50 ? '✓ In Top 50' : '✗ Outside Top 50'}
-      </p>
+
     </div>
   );
 };
@@ -316,7 +314,7 @@ export default function RankHistoryModal({
                 <div className="flex gap-3">
                   <Stat label="Current" value={current !== null ? `#${current}` : '—'}
                     color={isTop50Now ? 'text-emerald-400' : 'text-rose-400'}
-                    sub={isTop50Now ? '✓ Top 50' : '✗ Outside 50'} delay={0.15} />
+                    delay={0.15} />
                   <Stat label="Best Ever" value={best !== null ? `#${best}` : '—'}
                     color="text-emerald-400" delay={0.22} />
                   <Stat label="Avg Rank" value={avgRank !== null ? `#${avgRank.toFixed(1)}` : '—'}
@@ -324,7 +322,6 @@ export default function RankHistoryModal({
                       : avgRank !== null && avgRank <= 75 ? 'text-amber-400' : 'text-rose-400'}
                     delay={0.29} />
                   <Stat label="In Top 50" value={`${top50Days}d`}
-                    sub={`${top50Pct}% of ${ranks.length} days`}
                     color={top50Pct >= 70 ? 'text-emerald-400' : top50Pct >= 40 ? 'text-amber-400' : 'text-rose-400'}
                     delay={0.36} />
                 </div>
