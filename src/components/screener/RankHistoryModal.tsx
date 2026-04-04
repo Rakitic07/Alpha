@@ -18,13 +18,7 @@ interface RankHistoryModalProps {
 }
 
 type HistoryEntry = { date: string; rank: number; compositeScore: number };
-type ChartPoint   = {
-  dateStr: string;
-  rank: number;
-  greenRank: number;   // clamped: min(rank, 50)
-  redRank: number;     // clamped: max(rank, 50)
-  dataLength: number;
-};
+type ChartPoint   = { dateStr: string; rank: number; dataLength: number };
 
 function fmtShort(s: string) {
   try { return format(parseISO(s), 'd MMM'); } catch { return s; }
@@ -148,19 +142,27 @@ export default function RankHistoryModal({
     ? earlyAvg - recentAvg > 2 ? 'improving' : recentAvg - earlyAvg > 2 ? 'worsening' : 'stable'
     : null;
 
-  // Split data into green (above rank 50) and red (below rank 50) series.
-  // Each series is clamped at rank 50 and fills toward rank 50 as baseValue,
-  // so green never extends below the threshold and red never extends above.
   const chartData: ChartPoint[] = history.map(d => ({
     dateStr:    d.date,
     rank:       d.rank,
-    greenRank:  Math.min(d.rank, 50),  // above rank 50 → actual rank; at/below → clamped to 50
-    redRank:    Math.max(d.rank, 50),  // below rank 50 → actual rank; at/above → clamped to 50
     dataLength: history.length,
   }));
 
   const isTop50Now = current !== null && current <= 50;
   const yDomainMin  = -2;  // gives rank #1 dot breathing room at top
+  const bestRank    = best ?? 1;
+  const worstRank   = ranks.length ? Math.max(...ranks) : 100;
+
+  // Gradient stops — objectBoundingBox via gradientTransform="rotate(90)".
+  // offset 0 = top of bounding box (best rank), offset 1 = bottom.
+  // Area fill bounding box: bestRank → maxRank (baseValue)
+  const fillStop  = maxRank > bestRank
+    ? Math.max(0, Math.min(1, (50 - bestRank) / (maxRank - bestRank)))
+    : 0.5;
+  // Line stroke bounding box: bestRank → worstRank
+  const lineStop  = worstRank > bestRank
+    ? Math.max(0, Math.min(1, (50 - bestRank) / (worstRank - bestRank)))
+    : 0.5;
 
   // Rank volatility — std dev of ranks over history
   const rankMean   = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 0;
@@ -258,6 +260,29 @@ export default function RankHistoryModal({
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 40, right: 28, left: 0, bottom: 4 }}>
 
+                      <defs>
+                        {/* Storybook pattern: gradientTransform="rotate(90)" makes gradient
+                            vertical relative to element bounding box. No pixel coordinates. */}
+                        <linearGradient id="rankFill" gradientTransform="rotate(90)">
+                          <stop offset="0%"        stopColor="#22c55e" stopOpacity={0.25} />
+                          <stop offset={fillStop}   stopColor="#22c55e" stopOpacity={0.08} />
+                          <stop offset={fillStop}   stopColor="#f43f5e" stopOpacity={0.08} />
+                          <stop offset="100%"       stopColor="#f43f5e" stopOpacity={0.25} />
+                        </linearGradient>
+                        <linearGradient id="rankStroke" gradientTransform="rotate(90)">
+                          <stop offset="0%"         stopColor="#22c55e" />
+                          <stop offset={lineStop}    stopColor="#4ade80" />
+                          <stop offset={lineStop}    stopColor="#fb7185" />
+                          <stop offset="100%"        stopColor="#f43f5e" />
+                        </linearGradient>
+                        <linearGradient id="rankGlow" gradientTransform="rotate(90)">
+                          <stop offset="0%"         stopColor="#22c55e" stopOpacity={0.18} />
+                          <stop offset={lineStop}    stopColor="#22c55e" stopOpacity={0.18} />
+                          <stop offset={lineStop}    stopColor="#f43f5e" stopOpacity={0.18} />
+                          <stop offset="100%"        stopColor="#f43f5e" stopOpacity={0.18} />
+                        </linearGradient>
+                      </defs>
+
                       <ReferenceArea y1={yDomainMin} y2={50}      fill="rgba(34,197,94,0.03)"  stroke="none" ifOverflow="visible" />
                       <ReferenceArea y1={50}         y2={maxRank} fill="rgba(244,63,94,0.03)"  stroke="none" ifOverflow="visible" />
 
@@ -280,69 +305,35 @@ export default function RankHistoryModal({
                           label={{ value: `Best #${best}`, position: 'insideTopRight', fill: '#22c55e', fontSize: 9, opacity: 0.6 }} />
                       )}
 
-                      {/* Green fill: above rank 50 zone only. baseValue=50 means
-                          the area fills from the greenRank line UP to rank 50.
-                          Since greenRank is clamped to min(rank,50), when rank < 50
-                          the area spans from rank to 50 (above threshold = green).
-                          When rank >= 50, greenRank = 50 = baseValue so area is zero. */}
+                      {/* Area fill — storybook pattern: gradientTransform="rotate(90)" */}
                       <Area
                         type="monotone"
-                        dataKey="greenRank"
-                        fill="#22c55e"
-                        fillOpacity={0.15}
+                        dataKey="rank"
+                        fill="url(#rankFill)"
+                        fillOpacity={1}
                         stroke="none"
-                        baseValue={50}
+                        baseValue={maxRank}
                         isAnimationActive={false}
                         legendType="none"
                         dot={false}
                         activeDot={false}
                       />
 
-                      {/* Red fill: below rank 50 zone only. baseValue=50 means
-                          the area fills from rank 50 DOWN to the redRank line.
-                          Since redRank is clamped to max(rank,50), when rank > 50
-                          the area spans from 50 to rank (below threshold = red).
-                          When rank <= 50, redRank = 50 = baseValue so area is zero. */}
-                      <Area
-                        type="monotone"
-                        dataKey="redRank"
-                        fill="#f43f5e"
-                        fillOpacity={0.15}
-                        stroke="none"
-                        baseValue={50}
-                        isAnimationActive={false}
-                        legendType="none"
-                        dot={false}
-                        activeDot={false}
-                      />
-
-                      {/* Glow lines — split at rank 50 */}
-                      <Line type="monotone" dataKey="greenRank"
-                        stroke="#22c55e" strokeOpacity={0.18} strokeWidth={5}
-                        dot={false} activeDot={false} isAnimationActive={false} legendType="none" />
-                      <Line type="monotone" dataKey="redRank"
-                        stroke="#f43f5e" strokeOpacity={0.18} strokeWidth={5}
-                        dot={false} activeDot={false} isAnimationActive={false} legendType="none" />
-
-                      {/* Main lines — split at rank 50: green above, red below */}
-                      <Line type="monotone" dataKey="greenRank"
-                        stroke="#22c55e" strokeWidth={1.5} fill="none"
-                        dot={false} activeDot={false}
-                        isAnimationActive={false} legendType="none" />
-                      <Line type="monotone" dataKey="redRank"
-                        stroke="#f43f5e" strokeWidth={1.5} fill="none"
-                        dot={false} activeDot={false}
+                      {/* Glow line */}
+                      <Line type="monotone" dataKey="rank"
+                        stroke="url(#rankGlow)" strokeWidth={5} dot={false} activeDot={false}
                         isAnimationActive={false} legendType="none" />
 
-                      {/* Invisible line for dots + tooltip interaction (uses unclamped rank) */}
+                      {/* Main line */}
                       <Line
                         type="monotone"
                         dataKey="rank"
-                        stroke="transparent"
-                        strokeWidth={0}
+                        stroke="url(#rankStroke)"
+                        strokeWidth={1.5}
                         fill="none"
-                        isAnimationActive={false}
-                        legendType="none"
+                        isAnimationActive
+                        animationDuration={800}
+                        animationEasing="ease-out"
                         dot={(props: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                           <RankDot {...props} dataLength={chartData.length} />
                         )}
