@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Customized,
+  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { getRankHistory } from '@/app/actions/screener';
@@ -87,57 +87,7 @@ const RankActiveDot = (props: any) => {
   );
 };
 
-// ── Dynamic defs (gradients + clip paths) ────────────────────────────────────
-//
-// Renders gradient and clip-path definitions using the actual chart pixel
-// coordinates from Recharts' axis scales. This ensures:
-//  - Stroke gradient splits at exactly rank 50's pixel position
-//  - Clip paths for Area fills are positioned precisely
-//
-// Customized receives ALL chart props + state: xAxisMap, yAxisMap, offset, etc.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const DynamicDefs = (props: any) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const yAxis = props.yAxisMap ? (Object.values(props.yAxisMap) as any[])[0] : null;
-  const offset = props.offset;
-  if (!yAxis?.scale || !offset) return null;
-
-  const yTop    = offset.top as number;
-  const yBottom = yTop + (offset.height as number);
-  const y50     = yAxis.scale(50) as number;
-
-  // Gradient stop: rank 50 as precise % of plot area
-  const pct = ((y50 - yTop) / (yBottom - yTop) * 100).toFixed(2);
-
-  return (
-    <g>
-      <defs>
-        {/* Stroke gradient: green above rank 50, red below */}
-        <linearGradient id="rankStroke" x1="0" y1={yTop} x2="0" y2={yBottom} gradientUnits="userSpaceOnUse">
-          <stop offset="0%"       stopColor="#22c55e" />
-          <stop offset={`${pct}%`} stopColor="#4ade80" />
-          <stop offset={`${pct}%`} stopColor="#fb7185" />
-          <stop offset="100%"     stopColor="#f43f5e" />
-        </linearGradient>
-        {/* Glow gradient */}
-        <linearGradient id="rankGlow" x1="0" y1={yTop} x2="0" y2={yBottom} gradientUnits="userSpaceOnUse">
-          <stop offset="0%"       stopColor="#22c55e" stopOpacity={0.18} />
-          <stop offset={`${pct}%`} stopColor="#22c55e" stopOpacity={0.18} />
-          <stop offset={`${pct}%`} stopColor="#f43f5e" stopOpacity={0.18} />
-          <stop offset="100%"     stopColor="#f43f5e" stopOpacity={0.18} />
-        </linearGradient>
-        {/* Fill gradient: green/red split at rank 50 */}
-        <linearGradient id="rankFill" x1="0" y1={yTop} x2="0" y2={yBottom} gradientUnits="userSpaceOnUse">
-          <stop offset="0%"       stopColor="#22c55e" stopOpacity={0.28} />
-          <stop offset={`${pct}%`} stopColor="#22c55e" stopOpacity={0.06} />
-          <stop offset={`${pct}%`} stopColor="#f43f5e" stopOpacity={0.06} />
-          <stop offset="100%"     stopColor="#f43f5e" stopOpacity={0.28} />
-        </linearGradient>
-      </defs>
-    </g>
-  );
-};
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 
@@ -199,7 +149,10 @@ export default function RankHistoryModal({
   }));
 
   const isTop50Now = current !== null && current <= 50;
-  const yDomainMin = -2;
+  const yDomainMin  = -2;  // gives rank #1 dot breathing room at top
+  const domainRange = maxRank - yDomainMin;
+  // Where rank 50 falls in the plot area (0-100%), for gradient split
+  const gradStop    = ((50 - yDomainMin) / domainRange * 100).toFixed(2);
 
   return (
     <AnimatePresence>
@@ -273,8 +226,29 @@ export default function RankHistoryModal({
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 40, right: 28, left: 0, bottom: 4 }}>
 
-                      {/* Dynamic defs — gradient/clip positions computed from actual axis scales */}
-                      <Customized component={DynamicDefs} />
+                      <defs>
+                        {/* Stroke gradient: green line above rank 50, red below */}
+                        <linearGradient id="rankStroke" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%"              stopColor="#22c55e" />
+                          <stop offset={`${gradStop}%`}  stopColor="#4ade80" />
+                          <stop offset={`${gradStop}%`}  stopColor="#fb7185" />
+                          <stop offset="100%"            stopColor="#f43f5e" />
+                        </linearGradient>
+                        {/* Glow gradient */}
+                        <linearGradient id="rankGlow" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.18} />
+                          <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.18} />
+                          <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.18} />
+                          <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.18} />
+                        </linearGradient>
+                        {/* Fill gradient: green/red split at rank 50, like Recharts storybook */}
+                        <linearGradient id="rankFill" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.30} />
+                          <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.05} />
+                          <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.05} />
+                          <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.30} />
+                        </linearGradient>
+                      </defs>
 
                       <ReferenceArea y1={yDomainMin} y2={50}      fill="rgba(34,197,94,0.03)"  stroke="none" ifOverflow="visible" />
                       <ReferenceArea y1={50}         y2={maxRank} fill="rgba(244,63,94,0.03)"  stroke="none" ifOverflow="visible" />
