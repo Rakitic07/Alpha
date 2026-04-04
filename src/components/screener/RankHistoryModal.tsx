@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
@@ -111,6 +111,67 @@ function Stat({
       <span className={`text-2xl font-black tabular-nums leading-tight ${color}`}>{value}</span>
       {sub && <span className="text-[10px] text-gray-500">{sub}</span>}
     </motion.div>
+  );
+}
+
+// ── Dynamic gradient defs — measures actual SVG plot area ─────────────────────
+
+function GradientDefs({ gradStop }: { gradStop: string }) {
+  const [yTop, setYTop] = useState(40);
+  const [yBot, setYBot] = useState(376);
+  const defsRef = useRef<SVGDefsElement | null>(null);
+
+  // Try to read the grid rect dimensions. Returns true if found.
+  const measure = useCallback(() => {
+    const node = defsRef.current;
+    if (!node) return false;
+    const svg = node.closest('svg');
+    if (!svg) return false;
+    const grid = svg.querySelector('.recharts-cartesian-grid rect');
+    if (!grid) return false;
+    const y = parseFloat(grid.getAttribute('y') ?? '40');
+    const h = parseFloat(grid.getAttribute('height') ?? '336');
+    if (h > 0) {
+      setYTop(y);
+      setYBot(y + h);
+      return true;
+    }
+    return false;
+  }, []);
+
+  // On mount: try immediately, then observe for Recharts children being added
+  const setRef = useCallback((node: SVGDefsElement | null) => {
+    defsRef.current = node;
+    if (!node) return;
+    if (measure()) return; // grid already exists
+    // Grid hasn't rendered yet — watch for it
+    const svg = node.closest('svg');
+    if (!svg) return;
+    const observer = new MutationObserver(() => {
+      if (measure()) observer.disconnect();
+    });
+    observer.observe(svg, { childList: true, subtree: true });
+    // Safety: disconnect after 2s regardless
+    setTimeout(() => observer.disconnect(), 2000);
+  }, [measure]);
+
+  return (
+    <defs ref={setRef}>
+      {/* Stroke gradient: green line above rank 50, red below */}
+      <linearGradient id="rankStroke" x1="0" y1={yTop} x2="0" y2={yBot} gradientUnits="userSpaceOnUse">
+        <stop offset="0%"              stopColor="#22c55e" />
+        <stop offset={`${gradStop}%`}  stopColor="#4ade80" />
+        <stop offset={`${gradStop}%`}  stopColor="#fb7185" />
+        <stop offset="100%"            stopColor="#f43f5e" />
+      </linearGradient>
+      {/* Glow gradient */}
+      <linearGradient id="rankGlow" x1="0" y1={yTop} x2="0" y2={yBot} gradientUnits="userSpaceOnUse">
+        <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.18} />
+        <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.18} />
+        <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.18} />
+        <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.18} />
+      </linearGradient>
+    </defs>
   );
 }
 
@@ -261,22 +322,7 @@ export default function RankHistoryModal({
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 40, right: 28, left: 0, bottom: 4 }}>
 
-                      <defs>
-                        {/* Stroke gradient: green line above rank 50, red below */}
-                        <linearGradient id="rankStroke" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
-                          <stop offset="0%"              stopColor="#22c55e" />
-                          <stop offset={`${gradStop}%`}  stopColor="#4ade80" />
-                          <stop offset={`${gradStop}%`}  stopColor="#fb7185" />
-                          <stop offset="100%"            stopColor="#f43f5e" />
-                        </linearGradient>
-                        {/* Glow gradient */}
-                        <linearGradient id="rankGlow" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
-                          <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.18} />
-                          <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.18} />
-                          <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.18} />
-                          <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.18} />
-                        </linearGradient>
-                      </defs>
+                      <GradientDefs gradStop={gradStop} />
 
                       <ReferenceArea y1={yDomainMin} y2={50}      fill="rgba(34,197,94,0.03)"  stroke="none" ifOverflow="visible" />
                       <ReferenceArea y1={50}         y2={maxRank} fill="rgba(244,63,94,0.03)"  stroke="none" ifOverflow="visible" />
