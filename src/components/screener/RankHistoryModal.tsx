@@ -18,7 +18,7 @@ interface RankHistoryModalProps {
 }
 
 type HistoryEntry = { date: string; rank: number; compositeScore: number };
-type ChartPoint   = { dateStr: string; rank: number; dataLength: number };
+type ChartPoint   = { dateStr: string; rank: number; rankAbove: number; rankBelow: number; dataLength: number };
 
 function fmtShort(s: string) {
   try { return format(parseISO(s), 'd MMM'); } catch { return s; }
@@ -69,9 +69,6 @@ const RankDot = (props: any) => {
           <animate attributeName="fill-opacity" values="0.16;0.03;0.16" dur="2.6s" begin="0.3s" repeatCount="indefinite" />
         </circle>
         <circle cx={cx} cy={cy} r={4} fill={color} stroke="rgba(255,255,255,0.4)" strokeWidth={1.2} />
-        <text x={cx} y={cy - 13} textAnchor="middle" fontSize={10} fontWeight="800" fill={color} letterSpacing="-0.3">
-          #{payload.rank}
-        </text>
       </g>
     );
   }
@@ -147,6 +144,8 @@ export default function RankHistoryModal({
   const chartData: ChartPoint[] = history.map(d => ({
     dateStr:    d.date,
     rank:       d.rank,
+    rankAbove:  Math.min(d.rank, 50),  // clamped: fills green zone (line→50) only
+    rankBelow:  Math.max(d.rank, 50),  // clamped: fills red zone  (50→floor) always
     dataLength: history.length,
   }));
 
@@ -236,18 +235,6 @@ export default function RankHistoryModal({
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 40, right: 28, left: 0, bottom: 4 }}>
                       <defs>
-                        {/*
-                          Dynamic gradient split — mirrors IntradayPnLChart technique.
-                          gradStop = position of rank-50 in the domain (% from top).
-                          Everything above = green, below = red.
-                          Fill uses baseValue={maxRank} so it fills from line to chart floor.
-                        */}
-                        <linearGradient id="rankAreaFill" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
-                          <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.40} />
-                          <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.08} />
-                          <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.08} />
-                          <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.38} />
-                        </linearGradient>
                         {/* Stroke gradient: green line above rank-50, red below */}
                         <linearGradient id="rankStroke" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
                           <stop offset="0%"              stopColor="#22c55e" />
@@ -286,20 +273,32 @@ export default function RankHistoryModal({
                           label={{ value: `Best #${best}`, position: 'insideTopRight', fill: '#22c55e', fontSize: 9, opacity: 0.6 }} />
                       )}
 
+                      {/* Red fill: rankBelow = max(rank,50), fills from rank-50-floor to chart floor.
+                           Clamped at 50 so good stocks always show the red zone background. */}
+                      <Area type="natural" dataKey="rankBelow" baseValue={fillBase}
+                        fill="#f43f5e" fillOpacity={0.14} stroke="none"
+                        isAnimationActive={false} legendType="none"
+                        dot={false} activeDot={false} />
+
+                      {/* Green fill: rankAbove = min(rank,50), fills from line down to rank-50.
+                           Clamped at 50 so bad stocks (rank>50) produce zero fill. */}
+                      <Area type="natural" dataKey="rankAbove" baseValue={50}
+                        fill="#22c55e" fillOpacity={0.22} stroke="none"
+                        isAnimationActive={false} legendType="none"
+                        dot={false} activeDot={false} />
+
                       {/* Glow line — wide soft halo behind the main stroke */}
                       <Line type="natural" dataKey="rank"
                         stroke="url(#rankGlow)" strokeWidth={5} dot={false} activeDot={false}
                         isAnimationActive={false} legendType="none" />
 
-                      {/* Main area — single component; gradient fill + gradient stroke */}
-                      <Area
+                      {/* Main line — gradient stroke only (no fill), with last-dot */}
+                      <Line
                         type="natural"
                         dataKey="rank"
                         stroke="url(#rankStroke)"
                         strokeWidth={1.5}
-                        fill="url(#rankAreaFill)"
-                        fillOpacity={1}
-                        baseValue={fillBase}
+                        fill="none"
                         isAnimationActive
                         animationDuration={800}
                         animationEasing="ease-out"
