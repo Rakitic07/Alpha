@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Customized,
 } from 'recharts';
+import { area as d3Area, curveNatural } from 'd3-shape';
 import { format, parseISO } from 'date-fns';
 import { getRankHistory } from '@/app/actions/screener';
 
@@ -18,7 +19,7 @@ interface RankHistoryModalProps {
 }
 
 type HistoryEntry = { date: string; rank: number; compositeScore: number };
-type ChartPoint   = { dateStr: string; rank: number; rankAbove: number; rankBelow: number; dataLength: number };
+type ChartPoint   = { dateStr: string; rank: number; dataLength: number };
 
 function fmtShort(s: string) {
   try { return format(parseISO(s), 'd MMM'); } catch { return s; }
@@ -88,6 +89,71 @@ const RankActiveDot = (props: any) => {
   );
 };
 
+// ── Pixel-perfect fill via SVG clipPath ──────────────────────────────────────
+//
+// Previous approaches (gradient fill, clamped data + Area) all fail because
+// they modify the spline shape — the fill curve diverges from the actual Line.
+//
+// This approach:
+//  1. Reads the Line's computed screen-coordinate points from Recharts internals
+//  2. Generates fill paths using d3 curveNatural — IDENTICAL curve to the Line
+//  3. Clips at rank-50's exact pixel position using SVG <clipPath>
+//
+// Result: fills match the line curve exactly down to the sub-pixel level.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const RankFill = (props: any) => {
+  const { formattedGraphicalItems, yAxisMap, offset } = props;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const yAxis = yAxisMap ? (Object.values(yAxisMap) as any[])[0] : null;
+  if (!yAxis?.scale || !formattedGraphicalItems?.length || !offset) return null;
+
+  // Exact pixel Y of rank 50 — the clip boundary
+  const y50    = yAxis.scale(50) as number;
+  const yFloor = (offset.top as number) + (offset.height as number);
+
+  // Find the rank Line's computed screen-coordinate points
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rankItem = formattedGraphicalItems.find(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (item: any) => item.item?.props?.dataKey === 'rank',
+  );
+  if (!rankItem?.props?.points?.length) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const points: Array<{ x: number; y: number }> = rankItem.props.points.filter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (p: any) => typeof p.x === 'number' && typeof p.y === 'number',
+  );
+  if (points.length < 2) return null;
+
+  // d3 area generators with curveNatural — matches the Line's spline exactly
+  const greenD = d3Area<{ x: number; y: number }>()
+    .x(d => d.x).y0(y50).y1(d => d.y).curve(curveNatural)(points);
+  const redD = d3Area<{ x: number; y: number }>()
+    .x(d => d.x).y0(yFloor).y1(d => d.y).curve(curveNatural)(points);
+
+  if (!greenD || !redD) return null;
+
+  return (
+    <g className="rank-fill">
+      <defs>
+        <clipPath id="rh-clip-green">
+          <rect x={0} y={0} width={9999} height={y50} />
+        </clipPath>
+        <clipPath id="rh-clip-red">
+          <rect x={0} y={y50} width={9999} height={9999} />
+        </clipPath>
+      </defs>
+      {/* Green fill: area between line and rank-50, clipped to above rank 50 */}
+      <path d={greenD} fill="#22c55e" fillOpacity={0.22} clipPath="url(#rh-clip-green)" />
+      {/* Red fill: area between line and chart floor, clipped to below rank 50 */}
+      <path d={redD}   fill="#f43f5e" fillOpacity={0.14} clipPath="url(#rh-clip-red)" />
+    </g>
+  );
+};
+
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 
 function Stat({
@@ -144,24 +210,15 @@ export default function RankHistoryModal({
   const chartData: ChartPoint[] = history.map(d => ({
     dateStr:    d.date,
     rank:       d.rank,
-    rankAbove:  Math.min(d.rank, 50),  // clamped: fills green zone (line→50) only
-    rankBelow:  Math.max(d.rank, 50),  // clamped: fills red zone  (50→floor) always
     dataLength: history.length,
   }));
 
   const isTop50Now = current !== null && current <= 50;
 
-  // ── Gradient split position ────────────────────────────────────────────────
-  // Same technique as IntradayPnLChart: calculate where rank-50 falls in the
-  // chart domain (0–100%) so the gradient transitions EXACTLY at the dashed line.
-  // Domain: reversed, from yDomainMin (top) to maxRank (bottom).
-  // In screen space: rank yDomainMin → y=0 (top), rank maxRank → y=1 (bottom).
+  // Gradient split position: where rank-50 falls in the domain (0–100%)
   const yDomainMin  = -2;  // gives rank #1 dot breathing room at top
   const domainRange = maxRank - yDomainMin;
-  // Where rank 50 sits in the 0→1 gradient space
   const gradStop    = Math.round((50 - yDomainMin) / domainRange * 100);
-  // baseValue fills from the rank line downward to maxRank (chart floor)
-  const fillBase    = maxRank;
 
   return (
     <AnimatePresence>
@@ -242,7 +299,7 @@ export default function RankHistoryModal({
                           <stop offset={`${gradStop}%`}  stopColor="#fb7185" />
                           <stop offset="100%"            stopColor="#f43f5e" />
                         </linearGradient>
-                        {/* Glow (same as stroke but wider) */}
+                        {/* Glow (same colour split, wider + transparent) */}
                         <linearGradient id="rankGlow" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
                           <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.18} />
                           <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.18} />
@@ -273,26 +330,17 @@ export default function RankHistoryModal({
                           label={{ value: `Best #${best}`, position: 'insideTopRight', fill: '#22c55e', fontSize: 9, opacity: 0.6 }} />
                       )}
 
-                      {/* Red fill: rankBelow = max(rank,50), fills from rank-50-floor to chart floor.
-                           Clamped at 50 so good stocks always show the red zone background. */}
-                      <Area type="monotone" dataKey="rankBelow" baseValue={fillBase}
-                        fill="#f43f5e" fillOpacity={0.14} stroke="none"
-                        isAnimationActive={false} legendType="none"
-                        dot={false} activeDot={false} />
-
-                      {/* Green fill: rankAbove = min(rank,50), fills from line down to rank-50.
-                           Clamped at 50 so bad stocks (rank>50) produce zero fill. */}
-                      <Area type="monotone" dataKey="rankAbove" baseValue={50}
-                        fill="#22c55e" fillOpacity={0.22} stroke="none"
-                        isAnimationActive={false} legendType="none"
-                        dot={false} activeDot={false} />
+                      {/* Fill areas — raw SVG paths with d3 curveNatural + clipPath.
+                          Uses the Line's identical points for a curve that matches exactly,
+                          then clips at rank-50's pixel position. Pixel-perfect. */}
+                      <Customized component={RankFill} />
 
                       {/* Glow line — wide soft halo behind the main stroke */}
                       <Line type="natural" dataKey="rank"
                         stroke="url(#rankGlow)" strokeWidth={5} dot={false} activeDot={false}
                         isAnimationActive={false} legendType="none" />
 
-                      {/* Main line — gradient stroke only (no fill), with last-dot */}
+                      {/* Main line — gradient stroke, with last-dot */}
                       <Line
                         type="natural"
                         dataKey="rank"
@@ -313,12 +361,12 @@ export default function RankHistoryModal({
 
                 {/* Stats */}
                 <div className="flex gap-3">
-                  <Stat label="Current" value={current !== null ? `#${current}` : '—'}
+                  <Stat label="Current" value={current !== null ? `#${current}` : '\u2014'}
                     color={isTop50Now ? 'text-emerald-400' : 'text-rose-400'}
                     delay={0.15} />
-                  <Stat label="Best Ever" value={best !== null ? `#${best}` : '—'}
+                  <Stat label="Best Ever" value={best !== null ? `#${best}` : '\u2014'}
                     color="text-emerald-400" delay={0.22} />
-                  <Stat label="Avg Rank" value={avgRank !== null ? `#${avgRank.toFixed(1)}` : '—'}
+                  <Stat label="Avg Rank" value={avgRank !== null ? `#${avgRank.toFixed(1)}` : '\u2014'}
                     color={avgRank !== null && avgRank <= 50 ? 'text-emerald-400'
                       : avgRank !== null && avgRank <= 75 ? 'text-amber-400' : 'text-rose-400'}
                     delay={0.29} />
