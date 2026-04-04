@@ -275,14 +275,14 @@ export default function RankHistoryModal({
 
                       {/* Red fill: rankBelow = max(rank,50), fills from rank-50-floor to chart floor.
                            Clamped at 50 so good stocks always show the red zone background. */}
-                      <Area type="natural" dataKey="rankBelow" baseValue={fillBase}
+                      <Area type="monotone" dataKey="rankBelow" baseValue={fillBase}
                         fill="#f43f5e" fillOpacity={0.14} stroke="none"
                         isAnimationActive={false} legendType="none"
                         dot={false} activeDot={false} />
 
                       {/* Green fill: rankAbove = min(rank,50), fills from line down to rank-50.
                            Clamped at 50 so bad stocks (rank>50) produce zero fill. */}
-                      <Area type="natural" dataKey="rankAbove" baseValue={50}
+                      <Area type="monotone" dataKey="rankAbove" baseValue={50}
                         fill="#22c55e" fillOpacity={0.22} stroke="none"
                         isAnimationActive={false} legendType="none"
                         dot={false} activeDot={false} />
