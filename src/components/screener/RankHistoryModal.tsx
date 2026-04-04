@@ -18,7 +18,13 @@ interface RankHistoryModalProps {
 }
 
 type HistoryEntry = { date: string; rank: number; compositeScore: number };
-type ChartPoint   = { dateStr: string; rank: number; dataLength: number };
+type ChartPoint   = {
+  dateStr: string;
+  rank: number;
+  greenRank: number;   // clamped: min(rank, 50)
+  redRank: number;     // clamped: max(rank, 50)
+  dataLength: number;
+};
 
 function fmtShort(s: string) {
   try { return format(parseISO(s), 'd MMM'); } catch { return s; }
@@ -39,7 +45,7 @@ const RankTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="bg-[#0c1220]/98 border border-white/10 rounded-xl px-4 py-3.5 shadow-2xl backdrop-blur-md min-w-[140px]">
       <p className="text-[11px] text-gray-400 mb-2.5 font-medium">{fmtFull(label)}</p>
-      <span className={`text-4xl font-black tabular-nums leading-none ${top50 ? 'text-emerald-400' : 'text-rose-400'}`}>
+      <span className={`text-xl font-bold tabular-nums leading-none ${top50 ? 'text-emerald-400' : 'text-rose-400'}`}>
         #{rank}
       </span>
     </div>
@@ -142,9 +148,14 @@ export default function RankHistoryModal({
     ? earlyAvg - recentAvg > 2 ? 'improving' : recentAvg - earlyAvg > 2 ? 'worsening' : 'stable'
     : null;
 
+  // Split data into green (above rank 50) and red (below rank 50) series.
+  // Each series is clamped at rank 50 and fills toward rank 50 as baseValue,
+  // so green never extends below the threshold and red never extends above.
   const chartData: ChartPoint[] = history.map(d => ({
     dateStr:    d.date,
     rank:       d.rank,
+    greenRank:  Math.min(d.rank, 50),  // above rank 50 → actual rank; at/below → clamped to 50
+    redRank:    Math.max(d.rank, 50),  // below rank 50 → actual rank; at/above → clamped to 50
     dataLength: history.length,
   }));
 
@@ -153,6 +164,30 @@ export default function RankHistoryModal({
   const domainRange = maxRank - yDomainMin;
   // Where rank 50 falls in the plot area (0-100%), for gradient split
   const gradStop    = ((50 - yDomainMin) / domainRange * 100).toFixed(2);
+
+  // Rank volatility — std dev of ranks over history
+  const rankMean   = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 0;
+  const rankStdDev = ranks.length
+    ? Math.sqrt(ranks.reduce((acc, r) => acc + Math.pow(r - rankMean, 2), 0) / ranks.length)
+    : 0;
+  // Normalize: std dev of ~35 = very volatile; cap at 100%
+  const volatilityPct = Math.min(100, Math.round((rankStdDev / 35) * 100));
+  const volatilityLabel =
+    volatilityPct < 25 ? 'Stable'
+    : volatilityPct < 50 ? 'Low'
+    : volatilityPct < 70 ? 'Moderate'
+    : volatilityPct < 85 ? 'High'
+    : 'Very High';
+  const volatilityColor =
+    volatilityPct < 25 ? 'text-emerald-400'
+    : volatilityPct < 50 ? 'text-teal-400'
+    : volatilityPct < 70 ? 'text-amber-400'
+    : 'text-rose-400';
+  const volatilityBarColor =
+    volatilityPct < 25 ? '#22c55e'
+    : volatilityPct < 50 ? '#2dd4bf'
+    : volatilityPct < 70 ? '#f59e0b'
+    : '#f43f5e';
 
   return (
     <AnimatePresence>
@@ -204,7 +239,7 @@ export default function RankHistoryModal({
             {loading ? (
               <div className="h-[460px] flex flex-col items-center justify-center gap-3">
                 <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-gray-500">Loading history\u2026</p>
+                <p className="text-sm text-gray-500">Loading history&hellip;</p>
               </div>
             ) : error ? (
               <div className="h-[460px] flex items-center justify-center">
@@ -241,13 +276,6 @@ export default function RankHistoryModal({
                           <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.18} />
                           <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.18} />
                         </linearGradient>
-                        {/* Fill gradient: green/red split at rank 50, like Recharts storybook */}
-                        <linearGradient id="rankFill" x1="0" y1="40" x2="0" y2="376" gradientUnits="userSpaceOnUse">
-                          <stop offset="0%"              stopColor="#22c55e" stopOpacity={0.30} />
-                          <stop offset={`${gradStop}%`}  stopColor="#22c55e" stopOpacity={0.05} />
-                          <stop offset={`${gradStop}%`}  stopColor="#f43f5e" stopOpacity={0.05} />
-                          <stop offset="100%"            stopColor="#f43f5e" stopOpacity={0.30} />
-                        </linearGradient>
                       </defs>
 
                       <ReferenceArea y1={yDomainMin} y2={50}      fill="rgba(34,197,94,0.03)"  stroke="none" ifOverflow="visible" />
@@ -272,14 +300,36 @@ export default function RankHistoryModal({
                           label={{ value: `Best #${best}`, position: 'insideTopRight', fill: '#22c55e', fontSize: 9, opacity: 0.6 }} />
                       )}
 
-                      {/* Fill — single Area with dynamic gradient fill, baseValue at chart floor */}
+                      {/* Green fill: above rank 50 zone only. baseValue=50 means
+                          the area fills from the greenRank line UP to rank 50.
+                          Since greenRank is clamped to min(rank,50), when rank < 50
+                          the area spans from rank to 50 (above threshold = green).
+                          When rank >= 50, greenRank = 50 = baseValue so area is zero. */}
                       <Area
-                        type="natural"
-                        dataKey="rank"
-                        fill="url(#rankFill)"
-                        fillOpacity={1}
+                        type="monotone"
+                        dataKey="greenRank"
+                        fill="#22c55e"
+                        fillOpacity={0.15}
                         stroke="none"
-                        baseValue={maxRank}
+                        baseValue={50}
+                        isAnimationActive={false}
+                        legendType="none"
+                        dot={false}
+                        activeDot={false}
+                      />
+
+                      {/* Red fill: below rank 50 zone only. baseValue=50 means
+                          the area fills from rank 50 DOWN to the redRank line.
+                          Since redRank is clamped to max(rank,50), when rank > 50
+                          the area spans from 50 to rank (below threshold = red).
+                          When rank <= 50, redRank = 50 = baseValue so area is zero. */}
+                      <Area
+                        type="monotone"
+                        dataKey="redRank"
+                        fill="#f43f5e"
+                        fillOpacity={0.15}
+                        stroke="none"
+                        baseValue={50}
                         isAnimationActive={false}
                         legendType="none"
                         dot={false}
@@ -310,7 +360,7 @@ export default function RankHistoryModal({
                   </ResponsiveContainer>
                 </motion.div>
 
-                {/* Stats */}
+                {/* Stats + Volatility (5 cards in one row) */}
                 <div className="flex gap-3">
                   <Stat label="Current" value={current !== null ? `#${current}` : '\u2014'}
                     color={isTop50Now ? 'text-emerald-400' : 'text-rose-400'}
@@ -324,6 +374,24 @@ export default function RankHistoryModal({
                   <Stat label="In Top 50" value={`${top50Days}d`}
                     color={top50Pct >= 70 ? 'text-emerald-400' : top50Pct >= 40 ? 'text-amber-400' : 'text-rose-400'}
                     delay={0.36} />
+
+                  {/* Volatility — compact card matching other stats */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.43, ease: 'easeOut' }}
+                    className="flex-1 min-w-0 bg-slate-800/40 border border-white/[0.07] rounded-2xl px-4 py-4 flex flex-col gap-1.5"
+                  >
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Volatility</span>
+                    <span className={`text-2xl font-black tabular-nums leading-tight ${volatilityColor}`}>{volatilityLabel}</span>
+                    {/* Mini bar */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex-1 h-1 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${volatilityPct}%`, backgroundColor: volatilityBarColor }} />
+                      </div>
+                      <span className="text-[9px] text-gray-500 tabular-nums whitespace-nowrap">{`\u03C3`}{rankStdDev.toFixed(0)}</span>
+                    </div>
+                  </motion.div>
                 </div>
               </>
             )}

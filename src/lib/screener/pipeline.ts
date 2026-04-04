@@ -204,7 +204,7 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     try {
       // Filter 2: Market cap >= 1000 Cr
       const mcap = mcapMap.get(inst.symbol);
-      if (!mcap || mcap < PARAMS.mcapMinCr) continue;
+      if ((!mcap || mcap < PARAMS.mcapMinCr) && !isETFWhitelisted(inst.symbol)) continue;
 
       // Filter 5: Circuit band >= 15% (skip stocks with 2%/5% circuits)
       const bandWidth = circuitMap.get(inst.symbol);
@@ -231,7 +231,7 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
         instrumentKey: inst.instrumentKey,
         companyName: inst.name,
         score: result,
-        marketCapCr: mcap,
+        marketCapCr: mcap ?? 0,
         marketCapCategory: amfiCategories.get(inst.symbol) || null,
         circuitBandPct: bandWidth !== undefined ? Math.round(bandWidth * 100 * 10) / 10 : null,
         sparklineData: sparkline,
