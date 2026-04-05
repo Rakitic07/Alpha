@@ -29,18 +29,20 @@ export async function GET(request: NextRequest) {
 
   const startTime = Date.now();
   const today = getTodayIST();
+  const url = new URL(request.url);
+  const force = url.searchParams.get('force') === 'true';
 
   // Skip on weekends (belt-and-suspenders — cron already filters weekdays)
   const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'Asia/Kolkata' });
-  if (dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday') {
-    return NextResponse.json({ status: 'skipped', reason: 'Weekend' });
+  if (!force && (dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday')) {
+    return NextResponse.json({ status: 'skipped', reason: 'Weekend', tip: 'Add ?force=true to bypass' });
   }
 
   // Skip on NSE trading holidays
-  const isHoliday = await isTradingHoliday(today);
+  const isHoliday = !force && await isTradingHoliday(today);
   if (isHoliday) {
     cronLogger.info(`Skipping daily report — ${today} is a trading holiday`);
-    return NextResponse.json({ status: 'skipped', reason: 'Trading holiday', date: today });
+    return NextResponse.json({ status: 'skipped', reason: 'Trading holiday', date: today, tip: 'Add ?force=true to bypass' });
   }
 
   cronLogger.info(`Generating daily report for ${today}...`);
@@ -72,12 +74,13 @@ export async function GET(request: NextRequest) {
 
   // Send via Resend
   const resend = new Resend(resendKey);
-  const { error: sendError } = await resend.emails.send({ from, to, subject, html });
+  cronLogger.info(`Sending report email from=${from} to=${to}`);
+  const { data: sendData, error: sendError } = await resend.emails.send({ from, to, subject, html });
 
   if (sendError) {
     cronLogger.error('Email send failed:', sendError);
     return NextResponse.json(
-      { status: 'error', error: 'Email send failed', details: sendError, durationMs: Date.now() - startTime },
+      { status: 'error', error: 'Email send failed', details: sendError, from, to, durationMs: Date.now() - startTime },
       { status: 500 }
     );
   }
@@ -88,6 +91,7 @@ export async function GET(request: NextRequest) {
     status: 'sent',
     date: today,
     to,
+    emailId: sendData?.id,
     sections: {
       portfolio: data.portfolio !== null,
       market: data.market !== null,
