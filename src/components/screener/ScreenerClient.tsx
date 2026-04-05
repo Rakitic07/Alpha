@@ -122,7 +122,7 @@ function SkeletonRow() {
         </div>
       </td>
       <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
-      <td className="px-3 py-3"><div className="h-9 bg-zinc-800/50 rounded" /></td>
+      <td className="px-3 py-3 hidden md:table-cell"><div className="h-9 bg-zinc-800/50 rounded" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-10 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-2 py-3">
         <div className="flex gap-0.5 justify-center">
@@ -404,7 +404,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 <SortHeader field="rankChange" current={sortField} dir={sortDir} onClick={handleSort} center>Δ</SortHeader>
                 <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort}>Stock</SortHeader>
                 <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
-                <th className={`${TH_BASE}`}>Trend</th>
+                <th className={`${TH_BASE} hidden md:table-cell`}>Trend</th>
                 <SortHeader field="score"  current={sortField} dir={sortDir} onClick={handleSort} center>Score</SortHeader>
                 <th className={`${TH_BASE} text-center`} title="10 / 20 / 50 / 100 / 200 DMA">DMA</th>
                 <th className={`${TH_BASE} text-center`} title="Away from ATH: 10/15/20/25/30%">ATH</th>
@@ -543,7 +543,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     </td>
 
                     {/* Price trend sparkline */}
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-3 hidden md:table-cell">
                       <Sparkline data={row.sparklineData} />
                     </td>
 

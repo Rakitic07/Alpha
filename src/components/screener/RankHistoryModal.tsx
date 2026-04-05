@@ -99,10 +99,10 @@ function Stat({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay, ease: 'easeOut' }}
-      className="flex-1 min-w-0 bg-slate-800/40 border border-white/[0.07] rounded-2xl px-4 py-4 flex flex-col gap-1"
+      className="bg-slate-800/40 border border-white/[0.07] rounded-2xl px-3 py-3 sm:px-4 sm:py-4 flex flex-col gap-1"
     >
       <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</span>
-      <span className={`text-2xl font-black tabular-nums leading-tight ${color}`}>{value}</span>
+      <span className={`text-lg sm:text-2xl font-black tabular-nums leading-tight ${color}`}>{value}</span>
       {sub && <span className="text-[10px] text-gray-500">{sub}</span>}
     </motion.div>
   );
@@ -203,7 +203,7 @@ export default function RankHistoryModal({
           className="relative w-full max-w-4xl bg-[#0c1220] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden"
           onClick={e => e.stopPropagation()}
         >
-          <div className="p-7 flex flex-col gap-6">
+          <div className="p-4 sm:p-7 flex flex-col gap-4 sm:gap-6">
 
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
@@ -236,16 +236,16 @@ export default function RankHistoryModal({
 
             {/* Body */}
             {loading ? (
-              <div className="h-[460px] flex flex-col items-center justify-center gap-3">
+              <div className="h-[300px] sm:h-[460px] flex flex-col items-center justify-center gap-3">
                 <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm text-gray-500">Loading history&hellip;</p>
               </div>
             ) : error ? (
-              <div className="h-[460px] flex items-center justify-center">
+              <div className="h-[300px] sm:h-[460px] flex items-center justify-center">
                 <p className="text-sm text-red-400">{error}</p>
               </div>
             ) : history.length === 0 ? (
-              <div className="h-[460px] flex items-center justify-center">
+              <div className="h-[300px] sm:h-[460px] flex items-center justify-center">
                 <p className="text-sm text-gray-500">No ranking history found for {symbol}.</p>
               </div>
             ) : (
@@ -255,7 +255,7 @@ export default function RankHistoryModal({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.05, ease: 'easeOut' }}
-                  className="h-[380px]"
+                  className="h-[260px] sm:h-[380px]"
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 40, right: 28, left: 0, bottom: 4 }}>
@@ -344,7 +344,7 @@ export default function RankHistoryModal({
                 </motion.div>
 
                 {/* Stats + Volatility (5 cards in one row) */}
-                <div className="flex gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
                   <Stat label="Current" value={current !== null ? `#${current}` : '\u2014'}
                     color={isTop50Now ? 'text-emerald-400' : 'text-rose-400'}
                     delay={0.15} />
@@ -363,10 +363,10 @@ export default function RankHistoryModal({
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: 0.43, ease: 'easeOut' }}
-                    className="flex-1 min-w-0 bg-slate-800/40 border border-white/[0.07] rounded-2xl px-4 py-4 flex flex-col gap-1.5"
+                    className="col-span-2 sm:col-span-1 bg-slate-800/40 border border-white/[0.07] rounded-2xl px-3 py-3 sm:px-4 sm:py-4 flex flex-col gap-1.5"
                   >
                     <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Volatility</span>
-                    <span className={`text-2xl font-black tabular-nums leading-tight ${volatilityColor}`}>{volatilityLabel}</span>
+                    <span className={`text-lg sm:text-2xl font-black tabular-nums leading-tight ${volatilityColor}`}>{volatilityLabel}</span>
                     {/* Mini bar */}
                     <div className="flex items-center gap-1.5">
                       <div className="flex-1 h-1 rounded-full bg-white/5 overflow-hidden">

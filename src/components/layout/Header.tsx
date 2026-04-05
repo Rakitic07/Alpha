@@ -104,8 +104,6 @@ export default function Header() {
      if (!lastDataDate) return 'No Data';
 
      const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-     const today = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
      const year = d.getFullYear();
      const month = String(d.getMonth() + 1).padStart(2, '0');
      const day = String(d.getDate()).padStart(2, '0');
@@ -113,19 +111,9 @@ export default function Header() {
 
      if (lastDataDate === todayStr) return 'Today';
 
-     // Check yesterday
-     const yesterday = new Date(today);
-     yesterday.setDate(yesterday.getDate() - 1);
-     const yYear = yesterday.getFullYear();
-     const yMonth = String(yesterday.getMonth() + 1).padStart(2, '0');
-     const yDay = String(yesterday.getDate()).padStart(2, '0');
-     const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
-
-     if (lastDataDate === yesterdayStr) return 'Yesterday';
-
-     // Format DD MMM
-     const dateObj = new Date(lastDataDate);
-     return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+     // Format with weekday for clarity — avoids ambiguous "Yesterday" when market is closed
+     const dateObj = new Date(lastDataDate + 'T12:00:00');
+     return dateObj.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   };
   
   const statusLabel = getStatusLabel();
