@@ -30,23 +30,15 @@ async function gatherPortfolioSection(): Promise<PortfolioSection> {
       }
     : null;
 
-  const nifty50 = data.indices.find(
-    (i) => i.name.toLowerCase().includes('nifty 50') && !i.name.toLowerCase().includes('500') && !i.name.toLowerCase().includes('next')
-  );
-  const momentum50 = data.indices.find(
-    (i) => i.name.toLowerCase().includes('momentum')
-  );
-
   return {
     dayGainPercent: data.dayGainPercent,
-    totalPnlPercent: data.totalPnlPercent,
     holdingsCount: data.allHoldings.length,
     topGainer,
     topLoser,
-    benchmarks: {
-      nifty50ChangePercent: nifty50?.percentChange ?? null,
-      momentum50ChangePercent: momentum50?.percentChange ?? null,
-    },
+    benchmarks: data.indices.map((i) => ({
+      name: i.name,
+      changePercent: i.percentChange,
+    })),
   };
 }
 

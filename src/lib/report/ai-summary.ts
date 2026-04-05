@@ -15,7 +15,6 @@ function buildSummaryInput(data: ReportData): string {
     portfolio: p
       ? {
           dayGainPercent: p.dayGainPercent.toFixed(2),
-          totalPnlPercent: p.totalPnlPercent.toFixed(2),
           holdingsCount: p.holdingsCount,
           topGainer: p.topGainer
             ? `${p.topGainer.symbol} (${p.topGainer.changePercent.toFixed(2)}%)`
@@ -25,16 +24,9 @@ function buildSummaryInput(data: ReportData): string {
             : 'N/A',
         }
       : null,
-    benchmarks: p?.benchmarks
-      ? {
-          nifty50: p.benchmarks.nifty50ChangePercent != null
-            ? `${p.benchmarks.nifty50ChangePercent.toFixed(2)}%`
-            : 'N/A',
-          nifty500Momentum50: p.benchmarks.momentum50ChangePercent != null
-            ? `${p.benchmarks.momentum50ChangePercent.toFixed(2)}%`
-            : 'N/A',
-        }
-      : null,
+    benchmarks: p?.benchmarks.reduce((acc, b) => ({
+      ...acc, [b.name]: `${b.changePercent >= 0 ? '+' : ''}${b.changePercent.toFixed(2)}%`,
+    }), {} as Record<string, string>) ?? null,
     sectors: m
       ? {
           topGainers: m.topSectors.map(

@@ -75,19 +75,24 @@ function renderPortfolio(p: ReportData['portfolio']): string {
   const dayColor = p.dayGainPercent >= 0 ? C.green : C.red;
   const arrow    = p.dayGainPercent >= 0 ? '▲' : '▼';
 
-  // Benchmark rows
-  const bRows = [
-    ['Nifty 50',             p.benchmarks.nifty50ChangePercent],
-    ['Nifty 500 Momentum 50', p.benchmarks.momentum50ChangePercent],
-  ]
-    .filter(([, v]) => v != null)
-    .map(([name, val]) => statRow(name as string, gain(val as number)))
-    .join('');
-
   // Alpha vs Nifty 50
-  const alpha = p.benchmarks.nifty50ChangePercent != null
-    ? p.dayGainPercent - p.benchmarks.nifty50ChangePercent
-    : null;
+  const nifty50 = p.benchmarks.find((b) => b.name === 'Nifty 50');
+  const alpha   = nifty50 != null ? p.dayGainPercent - nifty50.changePercent : null;
+
+  // Benchmark grid — 2 columns
+  const bCells = p.benchmarks.map((b) => `
+    <td style="width:50%;padding:8px 10px;">
+      <p style="margin:0 0 2px 0;font-size:11px;color:${C.muted};">${b.name}</p>
+      <p style="margin:0;font-size:15px;font-weight:600;color:${b.changePercent >= 0 ? C.green : C.red};">${pct(b.changePercent)}</p>
+    </td>`);
+
+  // Chunk into rows of 2
+  const bRows = [];
+  for (let i = 0; i < bCells.length; i += 2) {
+    const pair = bCells.slice(i, i + 2);
+    if (pair.length === 1) pair.push(`<td style="width:50%;padding:8px 10px;"></td>`);
+    bRows.push(`<tr>${pair.join('')}</tr>`);
+  }
 
   return card(`
     ${sectionLabel('Portfolio')}
@@ -99,13 +104,15 @@ function renderPortfolio(p: ReportData['portfolio']): string {
     </div>
 
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${statRow('Overall P&L', gain(p.totalPnlPercent))}
-      ${p.topGainer ? statRow('Best today', `${p.topGainer.symbol} &nbsp;${gain(p.topGainer.changePercent)}`) : ''}
+      ${p.topGainer ? statRow('Best today',  `${p.topGainer.symbol} &nbsp;${gain(p.topGainer.changePercent)}`) : ''}
       ${p.topLoser  ? statRow('Worst today', `${p.topLoser.symbol} &nbsp;${gain(p.topLoser.changePercent)}`) : ''}
     </table>
 
-    ${bRows ? `${divider()}<p style="margin:0 0 10px 0;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${C.muted};">Benchmarks</p>
-    <table width="100%" cellpadding="0" cellspacing="0">${bRows}</table>` : ''}
+    ${bRows.length ? `${divider()}
+    ${sectionLabel('Benchmarks')}
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      ${bRows.join('')}
+    </table>` : ''}
   `);
 }
 

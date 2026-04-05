@@ -1,13 +1,14 @@
+export interface BenchmarkIndex {
+  name: string;
+  changePercent: number;
+}
+
 export interface PortfolioSection {
   dayGainPercent: number;
-  totalPnlPercent: number;
   holdingsCount: number;
   topGainer: { symbol: string; changePercent: number } | null;
   topLoser: { symbol: string; changePercent: number } | null;
-  benchmarks: {
-    nifty50ChangePercent: number | null;
-    momentum50ChangePercent: number | null;
-  };
+  benchmarks: BenchmarkIndex[];
 }
 
 export interface SectorPerf {
