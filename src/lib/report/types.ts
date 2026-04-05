@@ -1,9 +1,6 @@
 export interface PortfolioSection {
-  dayGainRs: number;
   dayGainPercent: number;
-  totalPnlRs: number;
   totalPnlPercent: number;
-  totalEquity: number;
   holdingsCount: number;
   topGainer: { symbol: string; changePercent: number } | null;
   topLoser: { symbol: string; changePercent: number } | null;

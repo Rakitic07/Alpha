@@ -1,244 +1,318 @@
 import type { ReportData, SectorPerf, TopMover, ExitCandidate, EntryCandidate } from './types';
 
-// ── Formatters ──────────────────────────────────────────────────────────────
+// ── Formatters ───────────────────────────────────────────────────────────────
 
 function pct(val: number, decimals = 2): string {
   const sign = val >= 0 ? '+' : '';
   return `${sign}${val.toFixed(decimals)}%`;
 }
 
-function rs(val: number): string {
-  const abs = Math.abs(val);
-  const sign = val < 0 ? '-' : '';
-  if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toFixed(2)}Cr`;
-  if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toFixed(2)}L`;
-  return `${sign}₹${abs.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+function gain(val: number): string {
+  return `<span style="color:${val >= 0 ? '#34d399' : '#f87171'};font-weight:600;">${pct(val)}</span>`;
 }
 
-function color(val: number): string {
-  return val >= 0 ? '#4ade80' : '#f87171';
+// ── Design tokens ────────────────────────────────────────────────────────────
+
+const C = {
+  bg:        '#0d1117',
+  surface:   '#161b22',
+  border:    '#21262d',
+  muted:     '#8b949e',
+  text:      '#e6edf3',
+  textDim:   '#c9d1d9',
+  green:     '#34d399',
+  red:       '#f87171',
+  amber:     '#fbbf24',
+  purple:    '#a78bfa',
+  blue:      '#60a5fa',
+  accent:    '#238636',
+};
+
+// ── Shared snippets ──────────────────────────────────────────────────────────
+
+const font = `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;`;
+
+function card(content: string, extraStyle = ''): string {
+  return `<div style="background:${C.surface};border:1px solid ${C.border};border-radius:10px;padding:20px 24px;margin-bottom:12px;${extraStyle}">${content}</div>`;
 }
 
-// ── Shared styles ────────────────────────────────────────────────────────────
+function sectionLabel(text: string): string {
+  return `<p style="margin:0 0 14px 0;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${C.muted};">${text}</p>`;
+}
 
-const BASE = `font-family:Arial,Helvetica,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:0;`;
-const CARD = `background:#1e293b;border-radius:8px;padding:20px;margin-bottom:16px;`;
-const HEADING = `font-size:12px;font-weight:700;letter-spacing:1.5px;color:#64748b;text-transform:uppercase;margin:0 0 12px 0;`;
-const TD = `padding:6px 8px;font-size:13px;border-bottom:1px solid #334155;`;
-const TH = `padding:6px 8px;font-size:11px;font-weight:700;color:#94a3b8;text-align:left;border-bottom:1px solid #475569;`;
-const BADGE_NEW = `background:#7c3aed;color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;`;
+function divider(): string {
+  return `<hr style="border:none;border-top:1px solid ${C.border};margin:14px 0;">`;
+}
 
-// ── Section renderers ────────────────────────────────────────────────────────
+function pill(text: string, bg: string, color = '#fff'): string {
+  return `<span style="display:inline-block;background:${bg};color:${color};font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:0.5px;">${text}</span>`;
+}
+
+function statRow(label: string, value: string): string {
+  return `<tr>
+    <td style="padding:7px 0;font-size:13px;color:${C.muted};width:50%;">${label}</td>
+    <td style="padding:7px 0;font-size:13px;text-align:right;">${value}</td>
+  </tr>`;
+}
+
+// ── Section: AI Commentary ───────────────────────────────────────────────────
 
 function renderAISummary(summary: string | null): string {
   if (!summary) return '';
-  return `
-  <div style="${CARD}">
-    <p style="${HEADING}">Market Commentary</p>
-    <p style="font-size:14px;line-height:1.7;color:#cbd5e1;margin:0;">${summary.replace(/\n/g, '<br>')}</p>
-  </div>`;
+  return card(`
+    ${sectionLabel('Market Commentary')}
+    <p style="margin:0;font-size:14px;line-height:1.75;color:${C.textDim};">${summary.replace(/\n\n/g, '</p><p style="margin:12px 0 0 0;font-size:14px;line-height:1.75;color:' + C.textDim + ';">').replace(/\n/g, '<br>')}</p>
+  `);
 }
+
+// ── Section: Portfolio ───────────────────────────────────────────────────────
 
 function renderPortfolio(p: ReportData['portfolio']): string {
   if (!p) {
-    return `<div style="${CARD}"><p style="${HEADING}">Portfolio</p><p style="color:#64748b;font-size:13px;">Data unavailable</p></div>`;
+    return card(`${sectionLabel('Portfolio')}<p style="color:${C.muted};font-size:13px;margin:0;">Data unavailable</p>`);
   }
 
-  const dayColor = color(p.dayGainPercent);
-  const totalColor = color(p.totalPnlPercent);
+  const dayColor = p.dayGainPercent >= 0 ? C.green : C.red;
+  const arrow    = p.dayGainPercent >= 0 ? '▲' : '▼';
 
-  const benchmarkRows = [
-    ['Nifty 50', p.benchmarks.nifty50ChangePercent],
+  // Benchmark rows
+  const bRows = [
+    ['Nifty 50',             p.benchmarks.nifty50ChangePercent],
     ['Nifty 500 Momentum 50', p.benchmarks.momentum50ChangePercent],
   ]
     .filter(([, v]) => v != null)
-    .map(
-      ([name, val]) =>
-        `<tr>
-          <td style="${TD}color:#94a3b8;">${name}</td>
-          <td style="${TD}font-weight:700;color:${color(val as number)};">${pct(val as number)}</td>
-        </tr>`
-    )
+    .map(([name, val]) => statRow(name as string, gain(val as number)))
     .join('');
 
+  // Alpha vs Nifty 50
+  const alpha = p.benchmarks.nifty50ChangePercent != null
+    ? p.dayGainPercent - p.benchmarks.nifty50ChangePercent
+    : null;
+
+  return card(`
+    ${sectionLabel('Portfolio')}
+
+    <!-- Hero metric -->
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px;">
+      <span style="font-size:40px;font-weight:700;color:${dayColor};line-height:1;">${arrow} ${Math.abs(p.dayGainPercent).toFixed(2)}%</span>
+      ${alpha != null ? `<span style="font-size:13px;color:${C.muted};">${alpha >= 0 ? '+' : ''}${alpha.toFixed(2)}% vs Nifty 50</span>` : ''}
+    </div>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${statRow('Overall P&L', gain(p.totalPnlPercent))}
+      ${p.topGainer ? statRow('Best today', `${p.topGainer.symbol} &nbsp;${gain(p.topGainer.changePercent)}`) : ''}
+      ${p.topLoser  ? statRow('Worst today', `${p.topLoser.symbol} &nbsp;${gain(p.topLoser.changePercent)}`) : ''}
+    </table>
+
+    ${bRows ? `${divider()}<p style="margin:0 0 10px 0;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${C.muted};">Benchmarks</p>
+    <table width="100%" cellpadding="0" cellspacing="0">${bRows}</table>` : ''}
+  `);
+}
+
+// ── Section: Market ──────────────────────────────────────────────────────────
+
+function renderSectors(top: SectorPerf[], bottom: SectorPerf[]): string {
+  const row = (s: SectorPerf) => `
+    <tr>
+      <td style="padding:7px 0;font-size:13px;color:${C.textDim};">${s.shortName}</td>
+      <td style="padding:7px 0;font-size:13px;text-align:right;">${gain(s.changePercent)}</td>
+    </tr>`;
+
   return `
-  <div style="${CARD}">
-    <p style="${HEADING}">Portfolio — ${p.holdingsCount} holdings</p>
     <table width="100%" cellpadding="0" cellspacing="0">
       <tr>
-        <td style="padding:0 0 16px 0;">
-          <span style="font-size:28px;font-weight:700;color:${dayColor};">${pct(p.dayGainPercent)}</span>
-          <span style="font-size:14px;color:#64748b;margin-left:8px;">${rs(p.dayGainRs)} today</span>
+        <td style="width:50%;padding-right:10px;vertical-align:top;">
+          <p style="margin:0 0 8px 0;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${C.green};">Top Sectors</p>
+          <table width="100%" cellpadding="0" cellspacing="0">${top.map(row).join('')}</table>
+        </td>
+        <td style="width:50%;padding-left:10px;vertical-align:top;border-left:1px solid ${C.border};">
+          <p style="margin:0 0 8px 0;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${C.red};">Weak Sectors</p>
+          <table width="100%" cellpadding="0" cellspacing="0">${bottom.map(row).join('')}</table>
         </td>
       </tr>
-    </table>
+    </table>`;
+}
+
+function renderMovers(gainers: TopMover[], losers: TopMover[]): string {
+  const row = (m: TopMover) => `
+    <tr>
+      <td style="padding:5px 0;font-size:12px;color:${C.textDim};">${m.symbol}</td>
+      <td style="padding:5px 0;font-size:12px;text-align:right;">${gain(m.changePercent)}</td>
+    </tr>`;
+
+  return `
     <table width="100%" cellpadding="0" cellspacing="0">
       <tr>
-        <td style="${TD}color:#94a3b8;">Total P&amp;L</td>
-        <td style="${TD}font-weight:700;color:${totalColor};">${pct(p.totalPnlPercent)} &nbsp;<span style="color:#64748b;font-weight:400;">${rs(p.totalPnlRs)}</span></td>
+        <td style="width:50%;padding-right:10px;vertical-align:top;">
+          <p style="margin:0 0 8px 0;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${C.green};">Top 5 Gainers</p>
+          <table width="100%" cellpadding="0" cellspacing="0">${gainers.map(row).join('')}</table>
+        </td>
+        <td style="width:50%;padding-left:10px;vertical-align:top;border-left:1px solid ${C.border};">
+          <p style="margin:0 0 8px 0;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${C.red};">Top 5 Losers</p>
+          <table width="100%" cellpadding="0" cellspacing="0">${losers.map(row).join('')}</table>
+        </td>
       </tr>
-      ${p.topGainer ? `<tr>
-        <td style="${TD}color:#94a3b8;">Top Gainer</td>
-        <td style="${TD}font-weight:700;color:#4ade80;">${p.topGainer.symbol} &nbsp;${pct(p.topGainer.changePercent)}</td>
-      </tr>` : ''}
-      ${p.topLoser ? `<tr>
-        <td style="${TD}color:#94a3b8;">Top Loser</td>
-        <td style="${TD}font-weight:700;color:#f87171;">${p.topLoser.symbol} &nbsp;${pct(p.topLoser.changePercent)}</td>
-      </tr>` : ''}
-    </table>
-    ${benchmarkRows ? `
-    <p style="font-size:11px;font-weight:700;letter-spacing:1px;color:#64748b;text-transform:uppercase;margin:14px 0 8px 0;">Benchmarks</p>
-    <table width="100%" cellpadding="0" cellspacing="0">${benchmarkRows}</table>` : ''}
-  </div>`;
+    </table>`;
 }
 
-function renderSectorRow(s: SectorPerf): string {
-  return `<tr>
-    <td style="${TD}">${s.shortName}</td>
-    <td style="${TD}font-weight:700;color:${color(s.changePercent)};">${pct(s.changePercent)}</td>
-  </tr>`;
-}
-
-function renderMoverRow(m: TopMover): string {
-  return `<tr>
-    <td style="${TD}">${m.symbol}</td>
-    <td style="${TD}color:#94a3b8;">₹${m.lastPrice.toFixed(2)}</td>
-    <td style="${TD}font-weight:700;color:${color(m.changePercent)};">${pct(m.changePercent)}</td>
-  </tr>`;
+function adBar(label: string, adv: number, dec: number, unch: number): string {
+  const total  = adv + dec + unch || 1;
+  const advPct = ((adv / total) * 100).toFixed(0);
+  const decPct = ((dec / total) * 100).toFixed(0);
+  return `
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:12px;color:${C.muted};">${label}</span>
+        <span style="font-size:12px;">
+          <span style="color:${C.green};">${adv}↑</span>
+          <span style="color:${C.muted};margin:0 4px;">·</span>
+          <span style="color:${C.red};">${dec}↓</span>
+          <span style="color:${C.muted};margin:0 4px;">·</span>
+          <span style="color:${C.muted};">${unch}→</span>
+        </span>
+      </div>
+      <div style="background:${C.border};border-radius:4px;height:6px;overflow:hidden;">
+        <div style="display:flex;height:100%;">
+          <div style="width:${advPct}%;background:${C.green};"></div>
+          <div style="width:${decPct}%;background:${C.red};"></div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function renderMarket(m: ReportData['market']): string {
   if (!m) {
-    return `<div style="${CARD}"><p style="${HEADING}">Market</p><p style="color:#64748b;font-size:13px;">Data unavailable</p></div>`;
+    return card(`${sectionLabel('Market')}<p style="color:${C.muted};font-size:13px;margin:0;">Data unavailable</p>`);
   }
 
-  const adTotalMarket = m.totalMarket
-    ? `Total Market: ${m.totalMarket.advancing}↑ ${m.totalMarket.declining}↓ ${m.totalMarket.unchanged}→`
-    : '';
-  const adNifty50 = m.nifty50
-    ? `Nifty 50: ${m.nifty50.advancing}↑ ${m.nifty50.declining}↓ ${m.nifty50.unchanged}→`
-    : '';
+  const adSection = (m.totalMarket || m.nifty50) ? `
+    ${divider()}
+    ${sectionLabel('Advance / Decline')}
+    ${m.totalMarket ? adBar('Nifty Total Market', m.totalMarket.advancing, m.totalMarket.declining, m.totalMarket.unchanged) : ''}
+    ${m.nifty50     ? adBar('Nifty 50',           m.nifty50.advancing,     m.nifty50.declining,     m.nifty50.unchanged)     : ''}
+  ` : '';
 
-  return `
-  <div style="${CARD}">
-    <p style="${HEADING}">Market Overview</p>
-
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
-      <tr>
-        <th style="${TH}">Sector</th>
-        <th style="${TH}">Change</th>
-      </tr>
-      ${m.topSectors.map(renderSectorRow).join('')}
-      <tr><td colspan="2" style="padding:4px 8px;font-size:11px;color:#475569;">···</td></tr>
-      ${m.bottomSectors.map(renderSectorRow).join('')}
-    </table>
-
-    <p style="font-size:11px;font-weight:700;letter-spacing:1px;color:#64748b;text-transform:uppercase;margin:0 0 8px 0;">Top Movers — Nifty Total Market</p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
-      <tr>
-        <th style="${TH}">Symbol</th>
-        <th style="${TH}">Price</th>
-        <th style="${TH}">Change</th>
-      </tr>
-      ${m.topGainers.map(renderMoverRow).join('')}
-      <tr><td colspan="3" style="padding:4px 8px;font-size:11px;color:#475569;">···</td></tr>
-      ${m.topLosers.map(renderMoverRow).join('')}
-    </table>
-
-    ${adTotalMarket || adNifty50 ? `
-    <p style="font-size:12px;color:#64748b;margin:0;">
-      ${adTotalMarket}${adTotalMarket && adNifty50 ? ' &nbsp;|&nbsp; ' : ''}${adNifty50}
-    </p>` : ''}
-  </div>`;
+  return card(`
+    ${sectionLabel('Market Overview')}
+    ${renderSectors(m.topSectors, m.bottomSectors)}
+    ${divider()}
+    ${sectionLabel('Nifty Total Market — Top Movers')}
+    ${renderMovers(m.topGainers, m.topLosers)}
+    ${adSection}
+  `);
 }
+
+// ── Section: Exit Signals ────────────────────────────────────────────────────
 
 function renderExits(exits: ExitCandidate[]): string {
-  const inner = exits.length === 0
-    ? `<p style="color:#4ade80;font-size:13px;margin:0;">No exit signals today</p>`
-    : `<table width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          <th style="${TH}">Symbol</th>
-          <th style="${TH}">Rank</th>
-          <th style="${TH}">Reason</th>
-          <th style="${TH}">Status</th>
-        </tr>
-        ${exits.map((e) => {
-          const reason = e.isUnranked
-            ? 'Unranked'
-            : e.byRank
-            ? `Rank ${e.rank} &gt; 50`
-            : 'Below 200 DMA + ATH';
-          const status = e.protected
-            ? `<span style="color:#fbbf24;font-size:11px;">Protected (&lt;14d)</span>`
-            : `<span style="color:#f87171;font-size:11px;">Exit candidate</span>`;
-          return `<tr>
-            <td style="${TD}font-weight:700;">${e.symbol}</td>
-            <td style="${TD}color:#94a3b8;">${e.rank ?? '—'}</td>
-            <td style="${TD}color:#f87171;">${reason}</td>
-            <td style="${TD}">${status}</td>
-          </tr>`;
-        }).join('')}
-      </table>`;
+  if (exits.length === 0) {
+    return card(`
+      ${sectionLabel('Exit Signals')}
+      <p style="margin:0;font-size:13px;color:${C.green};">✓ No exit signals today</p>
+    `);
+  }
 
-  return `
-  <div style="${CARD}">
-    <p style="${HEADING}">Exit Signals (${exits.length})</p>
-    ${inner}
-  </div>`;
+  const rows = exits.map((e) => {
+    const reason = e.isUnranked
+      ? 'Unranked'
+      : e.byRank
+      ? `Rank ${e.rank}`
+      : 'Below 200 DMA';
+    const status = e.protected
+      ? pill('Protected', '#78350f', C.amber)
+      : pill('Exit', '#7f1d1d', C.red);
+    return `<tr>
+      <td style="padding:8px 0;font-size:13px;font-weight:600;color:${C.text};">${e.symbol}</td>
+      <td style="padding:8px 0;font-size:12px;color:${C.muted};text-align:center;">${reason}</td>
+      <td style="padding:8px 0;text-align:right;">${status}</td>
+    </tr>`;
+  }).join('');
+
+  return card(`
+    ${sectionLabel(`Exit Signals — ${exits.length} stock${exits.length > 1 ? 's' : ''}`)}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;">Symbol</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:center;">Reason</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;">Action</th>
+      </tr>
+      ${rows}
+    </table>
+  `);
 }
 
-function renderEntries(entries: EntryCandidate[]): string {
-  const inner = entries.length === 0
-    ? `<p style="color:#64748b;font-size:13px;margin:0;">No candidates outside portfolio in top 30</p>`
-    : `<table width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          <th style="${TH}">#</th>
-          <th style="${TH}">Symbol</th>
-          <th style="${TH}">Score</th>
-          <th style="${TH}">ATH%</th>
-          <th style="${TH}">Cap</th>
-        </tr>
-        ${entries.map((e) => `<tr>
-          <td style="${TD}color:#64748b;">${e.rank}</td>
-          <td style="${TD}font-weight:700;">
-            ${e.symbol}
-            ${e.isNewEntrant ? `<span style="${BADGE_NEW}">NEW</span>` : ''}
-          </td>
-          <td style="${TD}color:#94a3b8;">${e.compositeScore.toFixed(3)}</td>
-          <td style="${TD}color:#94a3b8;">${e.athProximityPct.toFixed(1)}%</td>
-          <td style="${TD}font-size:11px;color:#64748b;">${e.marketCapCategory ?? '—'}</td>
-        </tr>`).join('')}
-      </table>`;
+// ── Section: Entry Candidates ────────────────────────────────────────────────
 
-  return `
-  <div style="${CARD}">
-    <p style="${HEADING}">Entry Candidates — Top 30 (excl. portfolio)</p>
-    ${inner}
-  </div>`;
+function renderEntries(entries: EntryCandidate[]): string {
+  if (entries.length === 0) {
+    return card(`
+      ${sectionLabel('Entry Candidates')}
+      <p style="margin:0;font-size:13px;color:${C.muted};">No candidates outside portfolio in top 30</p>
+    `);
+  }
+
+  const rows = entries.map((e) => {
+    const newBadge = e.isNewEntrant ? `&nbsp;${pill('NEW', C.purple)}` : '';
+    const capColor: Record<string, string> = {
+      'Large Cap': C.blue, 'Mid Cap': C.green, 'Small Cap': C.amber,
+    };
+    const capBg = capColor[e.marketCapCategory ?? ''] ?? C.muted;
+    const capBadge = e.marketCapCategory
+      ? `<span style="font-size:10px;color:${capBg};">${e.marketCapCategory.replace(' Cap', '')}</span>`
+      : '';
+
+    return `<tr>
+      <td style="padding:7px 0;font-size:12px;color:${C.muted};width:28px;">${e.rank}</td>
+      <td style="padding:7px 0;font-size:13px;font-weight:600;color:${C.text};">${e.symbol}${newBadge}</td>
+      <td style="padding:7px 0;font-size:12px;color:${C.muted};text-align:center;">${e.athProximityPct.toFixed(1)}%</td>
+      <td style="padding:7px 0;text-align:right;">${capBadge}</td>
+    </tr>`;
+  }).join('');
+
+  const newCount = entries.filter((e) => e.isNewEntrant).length;
+  const subtitle = newCount > 0
+    ? `Top 30 (excl. portfolio) &nbsp;·&nbsp; <span style="color:${C.purple};">${newCount} new entrant${newCount > 1 ? 's' : ''}</span>`
+    : 'Top 30 (excl. portfolio)';
+
+  return card(`
+    ${sectionLabel('Entry Candidates')}
+    <p style="margin:-8px 0 14px 0;font-size:12px;color:${C.muted};">${subtitle}</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;width:28px;">#</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;">Symbol</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:center;">ATH%</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;">Cap</th>
+      </tr>
+      ${rows}
+    </table>
+  `);
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function buildReportEmail(data: ReportData): { subject: string; html: string } {
-  const dateLabel = new Date(data.date).toLocaleDateString('en-IN', {
+  const dateLabel = new Date(data.date + 'T00:00:00Z').toLocaleDateString('en-IN', {
     weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
+    day:     'numeric',
+    month:   'long',
+    year:    'numeric',
     timeZone: 'Asia/Kolkata',
   });
 
-  const daySign = data.portfolio
-    ? ` ${data.portfolio.dayGainPercent >= 0 ? '▲' : '▼'} ${Math.abs(data.portfolio.dayGainPercent).toFixed(2)}%`
-    : '';
+  const dayPct = data.portfolio?.dayGainPercent;
+  const arrow  = dayPct == null ? '' : dayPct >= 0 ? ' ▲' : ' ▼';
+  const subject = `Alpha · ${dateLabel}${arrow}${dayPct != null ? ` ${Math.abs(dayPct).toFixed(2)}%` : ''}`;
 
-  const subject = `Alpha Daily Report — ${dateLabel}${daySign}`;
-
-  const errors = data.errors.length
-    ? `<div style="background:#7f1d1d;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#fca5a5;">
-        ⚠ Some data was unavailable: ${data.errors.join(' · ')}
+  const errorBanner = data.errors.length
+    ? `<div style="background:#161b22;border:1px solid #5c2c0e;border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:12px;color:#d97706;">
+        ⚠ Partial data: ${data.errors.map((e) => e.split(':')[0]).join(' · ')}
       </div>`
     : '';
+
+  const timeIST = new Date().toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit',
+  });
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -247,43 +321,41 @@ export function buildReportEmail(data: ReportData): { subject: string; html: str
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${subject}</title>
 </head>
-<body style="${BASE}">
-  <table width="100%" cellpadding="0" cellspacing="0">
+<body style="${font}background:${C.bg};color:${C.text};margin:0;padding:0;-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:${C.bg};">
     <tr>
-      <td align="center" style="padding:24px 16px;">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+      <td align="center" style="padding:32px 16px 48px;">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
 
           <!-- Header -->
           <tr>
-            <td style="padding-bottom:20px;">
-              <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:2px;color:#64748b;text-transform:uppercase;">Alpha Portfolio</p>
-              <h1 style="margin:4px 0 0 0;font-size:20px;font-weight:700;color:#f1f5f9;">${dateLabel}</h1>
+            <td style="padding-bottom:24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 2px 0;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:${C.muted};">Alpha Portfolio</p>
+                    <h1 style="margin:0;font-size:18px;font-weight:600;color:${C.text};">${dateLabel}</h1>
+                  </td>
+                  ${dayPct != null ? `<td style="text-align:right;vertical-align:middle;">
+                    <span style="font-size:22px;font-weight:700;color:${dayPct >= 0 ? C.green : C.red};">${arrow.trim()} ${Math.abs(dayPct).toFixed(2)}%</span>
+                  </td>` : ''}
+                </tr>
+              </table>
             </td>
           </tr>
 
-          ${errors ? `<tr><td>${errors}</td></tr>` : ''}
+          ${errorBanner ? `<tr><td>${errorBanner}</td></tr>` : ''}
 
-          <!-- AI Commentary -->
           <tr><td>${renderAISummary(data.aiSummary)}</td></tr>
-
-          <!-- Portfolio -->
           <tr><td>${renderPortfolio(data.portfolio)}</td></tr>
-
-          <!-- Market -->
           <tr><td>${renderMarket(data.market)}</td></tr>
-
-          <!-- Exits -->
           <tr><td>${renderExits(data.exits)}</td></tr>
-
-          <!-- Entries -->
           <tr><td>${renderEntries(data.entries)}</td></tr>
 
           <!-- Footer -->
           <tr>
-            <td style="padding-top:8px;padding-bottom:32px;text-align:center;">
-              <p style="margin:0;font-size:11px;color:#334155;">
-                Generated at ${new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })} IST · Alpha Portfolio Tracker
-              </p>
+            <td style="padding-top:16px;text-align:center;">
+              <p style="margin:0;font-size:11px;color:#3d444d;">Generated ${timeIST} IST · Alpha Portfolio Tracker</p>
             </td>
           </tr>
 

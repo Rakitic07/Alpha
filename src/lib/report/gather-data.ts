@@ -38,11 +38,8 @@ async function gatherPortfolioSection(): Promise<PortfolioSection> {
   );
 
   return {
-    dayGainRs: data.dayGain,
     dayGainPercent: data.dayGainPercent,
-    totalPnlRs: data.totalPnl,
     totalPnlPercent: data.totalPnlPercent,
-    totalEquity: data.totalEquity,
     holdingsCount: data.allHoldings.length,
     topGainer,
     topLoser,
