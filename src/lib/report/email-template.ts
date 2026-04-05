@@ -98,9 +98,9 @@ function renderPortfolio(p: ReportData['portfolio']): string {
     ${sectionLabel('Portfolio')}
 
     <!-- Hero metric -->
-    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px;">
-      <span style="font-size:40px;font-weight:700;color:${dayColor};line-height:1;">${arrow} ${Math.abs(p.dayGainPercent).toFixed(2)}%</span>
-      ${alpha != null ? `<span style="font-size:13px;color:${C.muted};">${alpha >= 0 ? '+' : ''}${alpha.toFixed(2)}% vs Nifty 50</span>` : ''}
+    <div style="margin-bottom:18px;">
+      <div style="font-size:40px;font-weight:700;color:${dayColor};line-height:1;margin-bottom:4px;">${arrow} ${Math.abs(p.dayGainPercent).toFixed(2)}%</div>
+      ${alpha != null ? `<div style="font-size:12px;color:${C.muted};">${alpha >= 0 ? '+' : ''}${alpha.toFixed(2)}% vs Nifty 50</div>` : ''}
     </div>
 
     <table width="100%" cellpadding="0" cellspacing="0">
@@ -167,24 +167,29 @@ function adBar(label: string, adv: number, dec: number, unch: number): string {
   const advPct = ((adv / total) * 100).toFixed(0);
   const decPct = ((dec / total) * 100).toFixed(0);
   return `
-    <div style="margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-        <span style="font-size:12px;color:${C.muted};">${label}</span>
-        <span style="font-size:12px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+      <tr>
+        <td style="font-size:12px;color:${C.muted};padding-bottom:4px;">${label}</td>
+        <td style="font-size:12px;text-align:right;padding-bottom:4px;white-space:nowrap;">
           <span style="color:${C.green};">${adv}↑</span>
-          <span style="color:${C.muted};margin:0 4px;">·</span>
+          <span style="color:${C.muted};padding:0 3px;">·</span>
           <span style="color:${C.red};">${dec}↓</span>
-          <span style="color:${C.muted};margin:0 4px;">·</span>
+          <span style="color:${C.muted};padding:0 3px;">·</span>
           <span style="color:${C.muted};">${unch}→</span>
-        </span>
-      </div>
-      <div style="background:${C.border};border-radius:4px;height:6px;overflow:hidden;">
-        <div style="display:flex;height:100%;">
-          <div style="width:${advPct}%;background:${C.green};"></div>
-          <div style="width:${decPct}%;background:${C.red};"></div>
-        </div>
-      </div>
-    </div>`;
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding:0;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:${C.border};border-radius:4px;height:6px;overflow:hidden;">
+            <tr>
+              <td style="width:${advPct}%;background:${C.green};height:6px;font-size:0;">&nbsp;</td>
+              <td style="width:${decPct}%;background:${C.red};height:6px;font-size:0;">&nbsp;</td>
+              <td style="background:${C.border};height:6px;font-size:0;">&nbsp;</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
 }
 
 function renderMarket(m: ReportData['market']): string {
@@ -270,9 +275,9 @@ function renderEntries(entries: EntryCandidate[]): string {
 
     return `<tr>
       <td style="padding:7px 0;font-size:12px;color:${C.muted};width:28px;">${e.rank}</td>
-      <td style="padding:7px 0;font-size:13px;font-weight:600;color:${C.text};">${e.symbol}${newBadge}</td>
-      <td style="padding:7px 0;font-size:12px;color:${C.muted};text-align:center;">${e.athProximityPct.toFixed(1)}%</td>
-      <td style="padding:7px 0;text-align:right;">${capBadge}</td>
+      <td style="padding:7px 0;font-size:13px;font-weight:600;color:${C.text};width:auto;">${e.symbol}${newBadge}</td>
+      <td style="padding:7px 0;font-size:12px;color:${C.muted};text-align:right;width:60px;">${e.athProximityPct.toFixed(1)}%</td>
+      <td style="padding:7px 0;text-align:right;width:50px;">${capBadge}</td>
     </tr>`;
   }).join('');
 
@@ -288,8 +293,8 @@ function renderEntries(entries: EntryCandidate[]): string {
       <tr>
         <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;width:28px;">#</th>
         <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;">Symbol</th>
-        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:center;">ATH%</th>
-        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;">Cap</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;width:60px;">ATH%</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;width:50px;">Cap</th>
       </tr>
       ${rows}
     </table>
