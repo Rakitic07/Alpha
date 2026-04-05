@@ -21,6 +21,17 @@ const NSE_HEADERS = {
 };
 
 /**
+ * Returns true if bhavcopy data is stale (last update > 6 days ago or table is empty).
+ * Market cap doesn't change materially day-to-day, so weekly refresh is sufficient.
+ */
+export async function isBhavcopyStale(): Promise<boolean> {
+  const latest = await prisma.stockMarketCap.findFirst({ orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } });
+  if (!latest) return true;
+  const daysSince = (Date.now() - latest.updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+  return daysSince > 6;
+}
+
+/**
  * Download and parse NSE bhavcopy ZIP for market cap data.
  * Tries the given date, then falls back to up to 3 previous trading days.
  */

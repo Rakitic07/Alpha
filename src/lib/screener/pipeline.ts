@@ -8,7 +8,7 @@ import { prisma, chunkArray, SQLITE_IN_CLAUSE_LIMIT } from '@/lib/db';
 import { ensureInstrumentMaster, getAllSymbols, getAllInstrumentData } from '@/lib/instrument-service';
 import { getFullQuote } from '@/lib/upstox-client';
 import { getCategoriesBatch } from '@/lib/amfi/service';
-import { fetchAndStoreBhavcopy } from './bhavcopy';
+import { fetchAndStoreBhavcopy, isBhavcopyStale } from './bhavcopy';
 import { fetchAndStoreCandles } from './prices';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
@@ -62,11 +62,15 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
 
   pipelineLogger.info(`Starting screener pipeline for ${today}${duringMarket ? ' (market open — using T-1 close)' : ''}`);
 
-  // Step 1: Bhavcopy → market cap data (use T-1 during market hours)
+  // Step 1: Bhavcopy → market cap data (weekly refresh — mcap doesn't change materially daily)
   let bhavcopyUpdated = 0;
   try {
-    const bhavcopy = await fetchAndStoreBhavcopy(today); // today = T-1 if market open
-    bhavcopyUpdated = bhavcopy.updated;
+    if (await isBhavcopyStale()) {
+      const bhavcopy = await fetchAndStoreBhavcopy(today); // today = T-1 if market open
+      bhavcopyUpdated = bhavcopy.updated;
+    } else {
+      pipelineLogger.info('Skipping bhavcopy fetch — market cap data is less than 6 days old');
+    }
   } catch (err) {
     errors.push(`Bhavcopy: ${(err as Error).message}`);
     pipelineLogger.error('Bhavcopy failed:', err);
