@@ -13,7 +13,7 @@ import { fetchAndStoreCandles, patchTodayPrices } from './prices';
 import { detectAndFlushAnomalies } from './corporate-actions';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
-import { todayIST, effectiveTradingDay, isMarketHours } from './dates';
+import { todayIST, effectiveTradingDay, isMarketHours, daysAgo } from './dates';
 import { logger } from '@/lib/logger';
 import { updateJob } from '@/lib/jobs';
 
@@ -197,9 +197,13 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
   // Batch-load ALL prices in one query, group by symbol in memory.
   // This replaces 2000+ individual queries with a single round-trip.
   pipelineLogger.info('Batch loading all prices...');
+  // Load only the last 420 calendar days (~290 trading days).
+  // Scoring needs at most 252 candles (12m Sharpe) + 21-day skip buffer = 273 candles.
+  // ATH is sourced from loadATHMap() (StockATH table), not from this price window.
+  const priceFromDate = daysAgo(420, today);
   type Candle = { close: number; high: number; volume: number };
   const allPrices = await prisma.screenerPrice.findMany({
-    where: { date: { lte: today } }, // exclude any partial intraday candle
+    where: { date: { gte: priceFromDate, lte: today } },
     orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
     select: { symbol: true, close: true, high: true, volume: true },
   });
