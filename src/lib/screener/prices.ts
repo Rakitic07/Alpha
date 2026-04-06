@@ -26,7 +26,13 @@ export async function patchTodayPrices(
   forDate: string,
 ): Promise<{ patched: number; errors: string[] }> {
   const instrumentKeys = instruments.map(i => i.instrumentKey);
-  const ohlcMap = await getOHLC(instrumentKeys, '1d');
+
+  // Chunk to 500 per request — Upstox GET URL limit (~8 KB) fits ~500 keys
+  const ohlcMap = new Map<string, { open: number; high: number; low: number; close: number; volume?: number }>();
+  for (const chunk of chunkArray(instrumentKeys, 500)) {
+    const chunkMap = await getOHLC(chunk, '1d');
+    for (const [key, val] of chunkMap) ohlcMap.set(key, val);
+  }
 
   const rows: Array<{
     symbol: string; instrumentKey: string; date: string;
