@@ -7,7 +7,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
-import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { logger } from '@/lib/logger';
 
@@ -24,21 +23,9 @@ export async function GET(request: NextRequest) {
   cronLogger.info('Starting momentum screener pipeline...');
 
   try {
-    // Run main pipeline
     const result = await runScreenerPipeline();
-
-    // Detect and fix corporate action anomalies
-    let flushed: string[] = [];
-    try {
-      const caResult = await detectAndFlushAnomalies();
-      flushed = caResult.flushed;
-    } catch (err) {
-      result.errors.push(`Corporate action detection: ${(err as Error).message}`);
-    }
-
     return NextResponse.json({
       ...result,
-      corporateActionsFlushed: flushed,
       durationMs: Date.now() - startTime,
     });
   } catch (error) {

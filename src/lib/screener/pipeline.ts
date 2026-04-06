@@ -9,7 +9,8 @@ import { ensureInstrumentMaster, getAllSymbols, getAllInstrumentData } from '@/l
 import { getFullQuote } from '@/lib/upstox-client';
 import { getCategoriesBatch } from '@/lib/amfi/service';
 import { fetchAndStoreBhavcopy, isBhavcopyStale } from './bhavcopy';
-import { fetchAndStoreCandles } from './prices';
+import { fetchAndStoreCandles, patchTodayPrices } from './prices';
+import { detectAndFlushAnomalies } from './corporate-actions';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
 import { todayIST, effectiveTradingDay, isMarketHours } from './dates';
@@ -28,6 +29,7 @@ export interface PipelineResult {
   universeSize: number;
   scored: number;
   ranked: number;
+  corporateActionsFlushed: string[];
   errors: string[];
   durationMs: number;
 }
@@ -95,22 +97,40 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
   pipelineLogger.info(`Loaded ${tradeable.length} tradeable instruments (${instruments.length} total)`);
   await progress(15, `Loaded ${tradeable.length} instruments`);
 
-  // Step 3: Fetch candles (incremental)
+  // Step 3: Patch today's prices via batch OHLC endpoint (~4 API calls for 2000 stocks).
+  // patchTodayPrices is used for the daily run; fetchAndStoreCandles is reserved for
+  // manual gap backfill via /api/admin/backfill-prices.
   let candlesFetched = 0;
   let candlesInserted = 0;
-  await progress(25, 'Fetching candles...');
+  await progress(25, 'Patching today\'s prices...');
   try {
-    const priceResult = await fetchAndStoreCandles(tradeable, today);
-    candlesFetched = priceResult.fetched;
-    candlesInserted = priceResult.inserted;
+    const priceResult = await patchTodayPrices(tradeable, today);
+    candlesFetched = priceResult.patched;
+    candlesInserted = priceResult.patched;
     if (priceResult.errors.length > 0) {
-      errors.push(...priceResult.errors.slice(0, 10)); // Cap error log
+      errors.push(...priceResult.errors.slice(0, 10));
     }
   } catch (err) {
     errors.push(`Prices: ${(err as Error).message}`);
-    pipelineLogger.error('Price ingestion failed:', err);
+    pipelineLogger.error('Price patch failed:', err);
   }
-  await progress(40, 'Candles done');
+  await progress(40, 'Prices patched');
+
+  // Step 3b: Detect corporate action anomalies (>20% drop / >80% jump) and re-fetch
+  // affected stocks individually. Must run BEFORE scoring so prices are consistent
+  // (Upstox adjusts all historical prices retroactively on splits/bonus).
+  let corporateActionsFlushed: string[] = [];
+  try {
+    const caResult = await detectAndFlushAnomalies();
+    corporateActionsFlushed = caResult.flushed;
+    if (caResult.flushed.length > 0) {
+      pipelineLogger.info(`Corporate actions flushed: ${caResult.flushed.join(', ')}`);
+    }
+  } catch (err) {
+    errors.push(`Corporate action detection: ${(err as Error).message}`);
+    pipelineLogger.error('Corporate action detection failed:', err);
+  }
+  await progress(45, 'Corp actions checked');
 
   // Step 4: Circuit limit check — batch fetch full quotes
   const circuitMap = new Map<string, number>(); // symbol → band width %
@@ -499,6 +519,7 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     universeSize: tradeable.length,
     scored: scored.length,
     ranked: scored.length,
+    corporateActionsFlushed,
     errors,
     durationMs: duration,
   };
