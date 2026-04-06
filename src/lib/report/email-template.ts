@@ -276,24 +276,24 @@ function renderEntries(entries: EntryCandidate[]): string {
     return `<tr>
       <td style="padding:7px 0;font-size:12px;color:${C.muted};width:28px;">${e.rank}</td>
       <td style="padding:7px 0;font-size:13px;font-weight:600;color:${C.text};width:auto;">${e.symbol}${newBadge}</td>
-      <td style="padding:7px 0;font-size:12px;color:${C.muted};text-align:right;width:60px;">${e.athProximityPct.toFixed(1)}%</td>
+      <td style="padding:7px 0;font-size:12px;color:${C.muted};text-align:right;width:60px;">${(e.athProximityPct - 100).toFixed(1)}%</td>
       <td style="padding:7px 0;text-align:right;width:50px;">${capBadge}</td>
     </tr>`;
   }).join('');
 
   const newCount = entries.filter((e) => e.isNewEntrant).length;
-  const subtitle = newCount > 0
-    ? `Top 30 (excl. portfolio) &nbsp;·&nbsp; <span style="color:${C.purple};">${newCount} new entrant${newCount > 1 ? 's' : ''}</span>`
-    : 'Top 30 (excl. portfolio)';
+  const newBanner = newCount > 0
+    ? `<p style="margin:-8px 0 14px 0;font-size:12px;color:${C.purple};">${newCount} new entrant${newCount > 1 ? 's' : ''} into top 30</p>`
+    : '';
 
   return card(`
     ${sectionLabel('Entry Candidates')}
-    <p style="margin:-8px 0 14px 0;font-size:12px;color:${C.muted};">${subtitle}</p>
+    ${newBanner}
     <table width="100%" cellpadding="0" cellspacing="0">
       <tr>
         <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;width:28px;">#</th>
         <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;">Symbol</th>
-        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;width:60px;">ATH%</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;width:70px;">From ATH</th>
         <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;width:50px;">Cap</th>
       </tr>
       ${rows}
