@@ -132,11 +132,17 @@ export async function getScreenerData(
     filteredSymbols = new Set(await getCachedFilteredSymbols());
   }
 
+  // Compute rank change from RankingHistory (not stored prevRank) so it's always
+  // correct regardless of how many times the cron ran today.
+  const todayDate = scores[0]?.computedDate ?? null;
+  const prevDayRanks = await loadPrevDayRanksForDisplay(todayDate, rankTypeForScores);
+
   const rankedSymbols = new Set<string>();
   const allRows: ScreenerRow[] = scores.map(s => {
     rankedSymbols.add(s.symbol);
     const inPortfolio = portfolioSymbols.has(s.symbol);
-    const rankChange = s.prevRank !== null ? s.prevRank - s.rank : null;
+    const prevRank = prevDayRanks.get(s.symbol) ?? null;
+    const rankChange = prevRank !== null ? prevRank - s.rank : null;
 
     return {
       rank: s.rank,
@@ -158,7 +164,7 @@ export async function getScreenerData(
       marketCapCr: s.marketCapCr,
       marketCapCategory: s.marketCapCategory,
       sparklineData: s.sparklineData ? JSON.parse(s.sparklineData) : [],
-      prevRank: s.prevRank,
+      prevRank,
       rankChange,
       inPortfolio,
       isPreFiltered: filteredSymbols.size > 0 ? filteredSymbols.has(s.symbol) : undefined,
@@ -379,6 +385,34 @@ export async function getRankHistoriesBatch(
     result[r.symbol].push({ date: r.date, rank: r.rank, compositeScore: r.compositeScore });
   }
   return result;
+}
+
+/**
+ * Load the previous trading day's ranks from RankingHistory.
+ * Used at read time so rank change is always correct regardless of cron re-runs.
+ */
+async function loadPrevDayRanksForDisplay(
+  todayDate: string | null,
+  rankType: string,
+): Promise<Map<string, number>> {
+  if (!todayDate) return new Map();
+
+  const prevDate = await prisma.rankingHistory.findFirst({
+    where: { rankType, date: { lt: todayDate } },
+    select: { date: true },
+    orderBy: { date: 'desc' },
+  });
+
+  if (!prevDate) return new Map();
+
+  const rows = await prisma.rankingHistory.findMany({
+    where: { rankType, date: prevDate.date },
+    select: { symbol: true, rank: true },
+  });
+
+  const map = new Map<string, number>();
+  for (const r of rows) map.set(r.symbol, r.rank);
+  return map;
 }
 
 export async function getRankHistory(
