@@ -13,7 +13,7 @@ import { fetchAndStoreCandles, patchTodayPrices } from './prices';
 import { detectAndFlushAnomalies } from './corporate-actions';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
-import { todayIST, effectiveTradingDay, isMarketHours, daysAgo } from './dates';
+import { todayIST, effectiveTradingDay, resolveLastTradingDay, isMarketHours, daysAgo } from './dates';
 import { logger } from '@/lib/logger';
 import { updateJob } from '@/lib/jobs';
 
@@ -55,8 +55,9 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
   const start = Date.now();
   const TIMEOUT_MS = 270_000; // Bail at 270s — leaves 30s buffer before Vercel's 300s limit
   const duringMarket = isMarketHours();
-  // Use last complete trading day's prices when market is open
-  const today = effectiveTradingDay();
+  // Resolve the last actual trading day (skips weekends + exchange holidays).
+  // Uses Upstox holiday API; falls back to weekday-only if API fails.
+  const today = await resolveLastTradingDay();
   const errors: string[] = [];
 
   /** Returns true if we've exceeded the safety timeout. */

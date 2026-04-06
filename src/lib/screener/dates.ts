@@ -31,15 +31,27 @@ export function isMarketHours(): boolean {
 }
 
 /**
- * The effective trading day for pipeline scoring.
- * During market hours, returns the previous trading day (last complete close).
- * After market close, returns today.
+ * The effective trading day for pipeline scoring (sync, weekend-aware only).
+ * During market hours, returns the previous weekday (last complete close).
+ * After market close on a weekday, returns today.
+ * On weekends, rolls back to the last weekday (Friday).
+ *
+ * NOTE: Does not check exchange holidays (async). Use resolveLastTradingDay()
+ * in the pipeline for holiday-aware resolution.
  */
 export function effectiveTradingDay(): string {
   const now = new Date();
   const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
   if (isMarketHours()) {
     return toDateStr(previousTradingDay(ist));
+  }
+  // On weekends, roll back to the last weekday
+  if (isWeekend(ist)) {
+    const d = new Date(ist);
+    while (isWeekend(d)) {
+      d.setUTCDate(d.getUTCDate() - 1);
+    }
+    return toDateStr(d);
   }
   return toDateStr(ist);
 }
@@ -57,6 +69,41 @@ export function previousTradingDay(d: Date): Date {
     prev.setUTCDate(prev.getUTCDate() - 1);
   } while (isWeekend(prev));
   return prev;
+}
+
+/**
+ * Async holiday-aware resolution of the last actual trading day.
+ * Starts from the sync effectiveTradingDay() result, then checks
+ * the Upstox holiday API and rolls back if necessary.
+ * Falls back to the weekday-only result if the holiday API fails.
+ */
+export async function resolveLastTradingDay(): Promise<string> {
+  // Lazy import to avoid circular dependency
+  const { isMarketHoliday } = await import('@/lib/upstox-client');
+
+  let candidate = effectiveTradingDay();
+  let attempts = 0;
+
+  // Check up to 5 days back for holidays (covers long weekends)
+  while (attempts < 5) {
+    try {
+      const isHoliday = await isMarketHoliday(candidate);
+      if (!isHoliday) return candidate;
+    } catch {
+      // Holiday API failed — trust the weekday-only result
+      return candidate;
+    }
+    // Roll back one more day, skipping weekends
+    const d = fromDateStr(candidate);
+    d.setUTCDate(d.getUTCDate() - 1);
+    while (isWeekend(d)) {
+      d.setUTCDate(d.getUTCDate() - 1);
+    }
+    candidate = toDateStr(d);
+    attempts++;
+  }
+
+  return candidate;
 }
 
 /** Get date N calendar days ago as YYYY-MM-DD */

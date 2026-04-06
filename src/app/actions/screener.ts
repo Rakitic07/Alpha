@@ -358,7 +358,7 @@ export async function syncScreener(): Promise<{ success: boolean; ranked: number
   const job = await createJob('screener-sync', 'Starting...');
   try {
     const result = await runScreenerPipeline(job.id);
-    try { await detectAndFlushAnomalies(); } catch { /* non-fatal */ }
+    // detectAndFlushAnomalies is now called inside runScreenerPipeline (before scoring)
     await completeJob(job.id, { ranked: result.ranked });
     revalidateTag('screener-scores', 'max');  // bust cached score rows
     return { success: true, ranked: result.ranked, jobId: job.id };
