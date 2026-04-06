@@ -5,12 +5,15 @@
 /** Lightweight concurrency limiter (no external dependency).
  *  staggerMs: delay between each worker's initial start — prevents simultaneous burst
  *  that triggers Cloudflare WAF (Error 1015) even when total req/s is within API limits.
+ *  throttleMs: delay after each request within a worker — caps sustained QPS to prevent
+ *  Cloudflare from banning the shared Vercel IP mid-pipeline.
  */
 export async function withConcurrency<T>(
   items: T[],
   fn: (item: T) => Promise<void>,
   limit: number,
   staggerMs = 0,
+  throttleMs = 0,
 ): Promise<{ successes: number; errors: string[]; rateLimited: T[] }> {
   const errors: string[] = [];
   const rateLimited: T[] = [];
@@ -31,6 +34,7 @@ export async function withConcurrency<T>(
           errors.push(`${items[i]}: ${msg}`);
         }
       }
+      if (throttleMs > 0) await new Promise(r => setTimeout(r, throttleMs));
     }
   }
 

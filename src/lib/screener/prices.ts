@@ -130,8 +130,9 @@ export async function fetchAndStoreCandles(
     totalInserted += newRows.length;
   };
 
-  // Phase 1: fetch all stocks with concurrency + stagger
-  const phase1 = await withConcurrency(instrumentsToFetch, fetchStock, 5, 200);
+  // Phase 1: fetch all stocks with concurrency + stagger + per-request throttle
+  // 3 workers × 300ms throttle ≈ 3 req/s sustained — stays under Cloudflare WAF limits
+  const phase1 = await withConcurrency(instrumentsToFetch, fetchStock, 3, 300, 300);
 
   let allErrors = [...phase1.errors];
   let totalSuccesses = phase1.successes;
@@ -142,7 +143,7 @@ export async function fetchAndStoreCandles(
     priceLogger.warn(`${phase1.rateLimited.length} stocks rate-limited — cooling off ${coolOffMs / 1000}s then retrying serially`);
     await new Promise(r => setTimeout(r, coolOffMs));
     priceLogger.info('Cool-off complete, retrying rate-limited stocks...');
-    const phase2 = await withConcurrency(phase1.rateLimited, fetchStock, 1, 0);
+    const phase2 = await withConcurrency(phase1.rateLimited, fetchStock, 1, 0, 500);
     totalSuccesses += phase2.successes;
     allErrors = allErrors.concat(phase2.errors);
     if (phase2.rateLimited.length > 0) {
