@@ -53,10 +53,14 @@ interface InstrumentInfo {
  */
 export async function runScreenerPipeline(jobId?: string): Promise<PipelineResult> {
   const start = Date.now();
+  const TIMEOUT_MS = 270_000; // Bail at 270s — leaves 30s buffer before Vercel's 300s limit
   const duringMarket = isMarketHours();
   // Use last complete trading day's prices when market is open
   const today = effectiveTradingDay();
   const errors: string[] = [];
+
+  /** Returns true if we've exceeded the safety timeout. */
+  const isTimedOut = () => Date.now() - start > TIMEOUT_MS;
 
   const progress = async (pct: number, msg: string) => {
     if (jobId) await updateJob(jobId, pct, msg).catch(() => {});
@@ -114,7 +118,7 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     errors.push(`Prices: ${(err as Error).message}`);
     pipelineLogger.error('Price patch failed:', err);
   }
-  await progress(40, 'Prices patched');
+  await progress(35, 'Prices patched');
 
   // Step 3b: Detect corporate action anomalies (>20% drop / >80% jump) and re-fetch
   // affected stocks individually. Must run BEFORE scoring so prices are consistent
@@ -130,20 +134,26 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     errors.push(`Corporate action detection: ${(err as Error).message}`);
     pipelineLogger.error('Corporate action detection failed:', err);
   }
-  await progress(45, 'Corp actions checked');
+  await progress(40, 'Corp actions checked');
 
   // Step 4: Circuit limit check — batch fetch full quotes
+  // Build a reverse lookup (instrumentKey → symbol) to avoid O(n) scan per quote
+  const keyToSymbol = new Map<string, string>();
+  for (const inst of tradeable) keyToSymbol.set(inst.instrumentKey, inst.symbol);
+
   const circuitMap = new Map<string, number>(); // symbol → band width %
   try {
     const allKeys = tradeable.map(i => i.instrumentKey);
-    // Batch 500 per call (Upstox limit)
-    for (const chunk of chunkArray(allKeys, 500)) {
-      const quotes = await getFullQuote(chunk);
+    const chunks = chunkArray(allKeys, 500);
+    // Upstox rate limit: 50 req/s, 500 req/min.
+    // 4 chunks × 1 req each is well within limits, but add 250ms spacing for safety.
+    for (let i = 0; i < chunks.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 250));
+      const quotes = await getFullQuote(chunks[i]);
       for (const [, quote] of quotes) {
         if (quote.lower_circuit_limit > 0) {
           const bandWidth = (quote.upper_circuit_limit - quote.lower_circuit_limit) / quote.lower_circuit_limit;
-          // Map back to symbol from instrument key
-          const symbol = tradeable.find(i => i.instrumentKey === quote.instrument_token)?.symbol;
+          const symbol = keyToSymbol.get(quote.instrument_token);
           if (symbol) {
             circuitMap.set(symbol, bandWidth);
           }
@@ -166,6 +176,17 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     pipelineLogger.error('ATH update failed:', err);
   }
   await progress(60, 'Updating ATH...');
+
+  // Timeout check: if data-fetching took too long, return partial result
+  if (isTimedOut()) {
+    pipelineLogger.warn('Pipeline timeout after data-fetching steps — returning partial result');
+    errors.push('Pipeline timed out before scoring');
+    return {
+      success: false, date: today, bhavcopyUpdated, candlesFetched, candlesInserted,
+      athUpdated, universeSize: tradeable.length, scored: 0, ranked: 0,
+      corporateActionsFlushed, errors, durationMs: Date.now() - start,
+    };
+  }
 
   // Load market cap + AMFI classification + ATH for scoring
   const mcapMap = new Map<string, number>();
@@ -359,6 +380,17 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
   }
 
   // ── Second pass: score all-universe (mcap >= 1000 Cr + ETF whitelist, no additional filters) ──
+  // Skip if we're running out of time — filtered rankings (primary) are already stored
+  if (isTimedOut()) {
+    pipelineLogger.warn('Pipeline timeout after filtered scoring — skipping all-universe pass');
+    errors.push('Skipped all-universe scoring due to timeout');
+    const duration = Date.now() - start;
+    return {
+      success: true, date: today, bhavcopyUpdated, candlesFetched, candlesInserted,
+      athUpdated, universeSize: tradeable.length, scored: scored.length, ranked: scored.length,
+      corporateActionsFlushed, errors, durationMs: duration,
+    };
+  }
 
   await progress(75, 'Scoring universe...');
 

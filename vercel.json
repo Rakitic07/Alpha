@@ -2,6 +2,12 @@
   "functions": {
     "src/app/api/**": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/**": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/**": {
+      "maxDuration": 300
     }
   },
   "env": {

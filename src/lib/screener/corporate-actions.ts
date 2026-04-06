@@ -79,12 +79,15 @@ export async function detectAndFlushAnomalies(): Promise<{ flushed: string[] }> 
     }
   }
 
-  // Flush detected anomalies concurrently (3 at a time)
+  // Flush detected anomalies serially with 500ms spacing.
+  // Each flushAndRefetchStock calls getHistoricalCandles (1 API call per stock).
+  // Serial avoids burst against the 50 req/s, 500 req/min Upstox rate limit,
+  // and corp action anomalies are typically 0-5 stocks per day.
   if (anomalies.length > 0) {
     const result = await withConcurrency(anomalies, async (a) => {
       await flushAndRefetchStock(a.symbol, a.instrumentKey);
       flushed.push(a.symbol);
-    }, 3);
+    }, 1, 0, 500);
 
     if (result.errors.length > 0) {
       caLogger.error(`${result.errors.length} flush failures:`, result.errors);

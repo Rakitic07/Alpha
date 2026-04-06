@@ -27,11 +27,21 @@ export async function patchTodayPrices(
 ): Promise<{ patched: number; errors: string[] }> {
   const instrumentKeys = instruments.map(i => i.instrumentKey);
 
-  // Chunk to 500 per request — Upstox GET URL limit (~8 KB) fits ~500 keys
+  // Chunk to 500 per request (Upstox batch limit).
+  // Catch per-batch so one failure doesn't kill the entire step.
   const ohlcMap = new Map<string, { open: number; high: number; low: number; close: number; volume?: number }>();
-  for (const chunk of chunkArray(instrumentKeys, 500)) {
-    const chunkMap = await getOHLC(chunk, '1d');
-    for (const [key, val] of chunkMap) ohlcMap.set(key, val);
+  const batchErrors: string[] = [];
+  const chunks = chunkArray(instrumentKeys, 500);
+  for (let i = 0; i < chunks.length; i++) {
+    // 250ms spacing between batches to stay well within 50 req/s rate limit
+    if (i > 0) await new Promise(r => setTimeout(r, 250));
+    try {
+      const chunkMap = await getOHLC(chunks[i], '1d');
+      for (const [key, val] of chunkMap) ohlcMap.set(key, val);
+    } catch (err) {
+      batchErrors.push(`OHLC batch ${i + 1}/${chunks.length}: ${(err as Error).message}`);
+      priceLogger.error(`OHLC batch ${i + 1} failed, continuing with remaining batches`);
+    }
   }
 
   const rows: Array<{
@@ -55,7 +65,7 @@ export async function patchTodayPrices(
   }
 
   if (rows.length === 0) {
-    return { patched: 0, errors: ['No OHLC data returned — market may be closed'] };
+    return { patched: 0, errors: [...batchErrors, 'No OHLC data returned — market may be closed'] };
   }
 
   // Delete then re-insert today's rows (idempotent)
@@ -67,7 +77,7 @@ export async function patchTodayPrices(
   }
 
   priceLogger.info(`Patched ${rows.length} stocks with today's OHLC (${forDate})`);
-  return { patched: rows.length, errors: [] };
+  return { patched: rows.length, errors: batchErrors };
 }
 
 /**
