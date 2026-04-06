@@ -196,20 +196,11 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
   const amfiCategories = await getCategoriesBatch(tradeable.map(i => i.symbol));
   const athMap = await loadATHMap();
 
-  // Load previous day's rankings for rank change calculation (before Step 8 marks them inactive)
-  const prevRanks = new Map<string, number>();
-  const prevScores = await prisma.momentumScore.findMany({
-    where: { isActive: true, rankType: 'filtered' },
-    select: { symbol: true, rank: true },
-  });
-  for (const s of prevScores) prevRanks.set(s.symbol, s.rank);
-
-  const prevAllRanks = new Map<string, number>();
-  const prevAllScores = await prisma.momentumScore.findMany({
-    where: { isActive: true, rankType: 'all' },
-    select: { symbol: true, rank: true },
-  });
-  for (const s of prevAllScores) prevAllRanks.set(s.symbol, s.rank);
+  // Load previous trading day's rankings from RankingHistory for rank change calculation.
+  // Using RankingHistory (not MomentumScore.isActive) makes this robust to same-day re-runs:
+  // on re-run, isActive points to today's first run — but we want *yesterday's* ranks.
+  const prevRanks = await loadPreviousDayRanks(today, 'filtered');
+  const prevAllRanks = await loadPreviousDayRanks(today, 'all');
 
   // Load ranking history for denormalized stats
   const rankingHistory = await loadRankingHistoryForStats('filtered');
@@ -559,6 +550,30 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     errors,
     durationMs: duration,
   };
+}
+
+/**
+ * Load the most recent RankingHistory date BEFORE `today` and return its ranks.
+ * Robust to same-day re-runs: always returns the previous trading session's ranks.
+ */
+async function loadPreviousDayRanks(today: string, rankType: string): Promise<Map<string, number>> {
+  // Find the most recent date strictly before today
+  const prevDate = await prisma.rankingHistory.findFirst({
+    where: { rankType, date: { lt: today } },
+    select: { date: true },
+    orderBy: { date: 'desc' },
+  });
+
+  if (!prevDate) return new Map();
+
+  const rows = await prisma.rankingHistory.findMany({
+    where: { rankType, date: prevDate.date },
+    select: { symbol: true, rank: true },
+  });
+
+  const map = new Map<string, number>();
+  for (const r of rows) map.set(r.symbol, r.rank);
+  return map;
 }
 
 /**
