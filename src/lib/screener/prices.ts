@@ -69,10 +69,12 @@ export async function patchTodayPrices(
   }
 
   // Delete then re-insert today's rows (idempotent)
-  for (const chunk of chunkArray(rows.map(r => r.symbol), SQLITE_IN_CLAUSE_LIMIT)) {
+  // Use larger chunks (500) — Turso batches via HTTP, not raw SQL, so the SQLite
+  // 999-variable limit doesn't apply. This cuts 60 round-trips to ~8.
+  for (const chunk of chunkArray(rows.map(r => r.symbol), 500)) {
     await prisma.screenerPrice.deleteMany({ where: { symbol: { in: chunk }, date: forDate } });
   }
-  for (const chunk of chunkArray(rows, 100)) {
+  for (const chunk of chunkArray(rows, 500)) {
     await prisma.screenerPrice.createMany({ data: chunk });
   }
 
