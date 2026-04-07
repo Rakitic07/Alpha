@@ -24,17 +24,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await runScreenerPipeline();
-    return NextResponse.json({
-      ...result,
-      durationMs: Date.now() - startTime,
-    });
+    const response = { ...result, durationMs: Date.now() - startTime };
+    // Always log the full result so it's visible in Vercel logs
+    cronLogger.info(`Pipeline result: ${JSON.stringify(response)}`);
+    return NextResponse.json(response);
   } catch (error) {
-    cronLogger.error('Screener pipeline failed:', error);
-    return NextResponse.json({
+    const errResponse = {
       success: false,
       error: 'Screener pipeline failed',
       details: (error as Error).message,
       durationMs: Date.now() - startTime,
-    }, { status: 500 });
+    };
+    cronLogger.error(`Pipeline crashed: ${JSON.stringify(errResponse)}`);
+    return NextResponse.json(errResponse, { status: 500 });
   }
 }

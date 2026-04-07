@@ -118,6 +118,23 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     pipelineLogger.error('Price patch failed:', err);
   }
   pipelineLogger.info(`[${elapsed()}] Prices patched: ${candlesFetched}`);
+
+  // Freshness guard: verify prices were actually stored for today.
+  // If patchTodayPrices silently failed (key mismatch, market closed, API error),
+  // abort early rather than scoring on stale data.
+  const todayPriceCount = await prisma.screenerPrice.count({ where: { date: today } });
+  pipelineLogger.info(`[${elapsed()}] Price freshness check: ${todayPriceCount} rows for ${today}`);
+  if (todayPriceCount < 100) {
+    const msg = `Price freshness check failed: only ${todayPriceCount} prices for ${today} (expected 2000+). ` +
+      `OHLC batch may have failed or market may be closed. Aborting to prevent stale rankings.`;
+    pipelineLogger.error(msg);
+    errors.push(msg);
+    return {
+      success: false, date: today, bhavcopyUpdated, candlesFetched, candlesInserted,
+      athUpdated: 0, universeSize: tradeable.length, scored: 0, ranked: 0,
+      corporateActionsFlushed: [], errors, durationMs: Date.now() - start,
+    };
+  }
   await progress(25, 'Prices patched');
 
   // ── Step 3b: Corporate action detection ────────────────────────────────────

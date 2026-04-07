@@ -114,12 +114,12 @@ class Logger {
     }
 }
 
-// Default logger instance
-export const logger = new Logger();
+// Default logger instance — production-enabled so pipeline/cron logs reach Vercel
+export const logger = new Logger({ enabledInProduction: true });
 
 // Pre-configured loggers for common modules
 export const financeLogger = new Logger({ prefix: 'Finance' });
-export const upstoxLogger = new Logger({ prefix: 'Upstox' });
+export const upstoxLogger = new Logger({ prefix: 'Upstox', enabledInProduction: true });
 export const dbLogger = new Logger({ prefix: 'DB' });
 export const apiLogger = new Logger({ prefix: 'API' });
 
