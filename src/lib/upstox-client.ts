@@ -438,28 +438,31 @@ export async function getOHLC(
             const ohlc = data.live_ohlc || data.prev_ohlc;
             
             if (ohlc) {
-                const normalizedKey = responseKey.replace(/:/g, '|');
-                const originalKey = requestKeyLookup.get(responseKey) || 
-                                   requestKeyLookup.get(normalizedKey) || 
-                                   normalizedKey;
-                
-                result.set(originalKey, {
+                const ohlcData = {
                     open: ohlc.open,
                     high: ohlc.high,
                     low: ohlc.low,
                     close: ohlc.close,
                     volume: ohlc.volume
-                });
-                
-                // Also store with normalized key if different
-                if (normalizedKey !== originalKey) {
-                    result.set(normalizedKey, {
-                        open: ohlc.open,
-                        high: ohlc.high,
-                        low: ohlc.low,
-                        close: ohlc.close,
-                        volume: ohlc.volume
-                    });
+                };
+
+                // Use instrument_token (pipe format, e.g. NSE_EQ|INE585B01010) as primary key.
+                // The response key (e.g. NSE_EQ:MARUTI) uses symbol names, not the ISIN-based
+                // instrument keys we send — so requestKeyLookup misses. instrument_token matches.
+                const instrumentToken = data.instrument_token;
+                if (instrumentToken) {
+                    result.set(instrumentToken, ohlcData);
+                    // Also look up original request key in case format differs
+                    const reqKey = requestKeyLookup.get(instrumentToken);
+                    if (reqKey && reqKey !== instrumentToken) {
+                        result.set(reqKey, ohlcData);
+                    }
+                }
+
+                // Also store with response key formats for backward compat
+                const normalizedKey = responseKey.replace(/:/g, '|');
+                if (!result.has(normalizedKey)) {
+                    result.set(normalizedKey, ohlcData);
                 }
             }
         }
