@@ -426,3 +426,47 @@ export async function getRankHistory(
   });
   return history;
 }
+
+/**
+ * Get data freshness info for the settings page.
+ */
+export async function getDataFreshness(): Promise<{
+  latestPriceDate: string | null;
+  priceCount: number;
+  latestRankDate: { filtered: string | null; all: string | null };
+  rankCount: { filtered: number; all: number };
+  totalPriceDates: number;
+  totalRankDates: number;
+}> {
+  const [latestPrice, latestFilteredRank, latestAllRank, filteredCount, allCount] = await Promise.all([
+    prisma.screenerPrice.findFirst({ orderBy: { date: 'desc' }, select: { date: true } }),
+    prisma.rankingHistory.findFirst({ where: { rankType: 'filtered' }, orderBy: { date: 'desc' }, select: { date: true } }),
+    prisma.rankingHistory.findFirst({ where: { rankType: 'all' }, orderBy: { date: 'desc' }, select: { date: true } }),
+    prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered' } }),
+    prisma.momentumScore.count({ where: { isActive: true, rankType: 'all' } }),
+  ]);
+
+  // Count distinct dates
+  const [priceDates, rankDates] = await Promise.all([
+    prisma.screenerPrice.findMany({ select: { date: true }, distinct: ['date'] }),
+    prisma.rankingHistory.findMany({ select: { date: true }, distinct: ['date'] }),
+  ]);
+
+  // Get price count for latest date
+  let priceCount = 0;
+  if (latestPrice) {
+    priceCount = await prisma.screenerPrice.count({ where: { date: latestPrice.date } });
+  }
+
+  return {
+    latestPriceDate: latestPrice?.date ?? null,
+    priceCount,
+    latestRankDate: {
+      filtered: latestFilteredRank?.date ?? null,
+      all: latestAllRank?.date ?? null,
+    },
+    rankCount: { filtered: filteredCount, all: allCount },
+    totalPriceDates: priceDates.length,
+    totalRankDates: rankDates.length,
+  };
+}
