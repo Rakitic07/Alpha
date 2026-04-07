@@ -124,7 +124,7 @@ export async function fetchAndStoreCandles(
     const rows = candles.candles.map(c => ({
       symbol: inst.symbol,
       instrumentKey: inst.instrumentKey,
-      date: toDateStr(new Date(c.timestamp)),
+      date: c.timestamp.slice(0, 10), // Extract YYYY-MM-DD directly from IST timestamp (avoids UTC shift)
       open: c.open,
       high: c.high,
       low: c.low,
