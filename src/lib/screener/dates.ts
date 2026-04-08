@@ -72,10 +72,46 @@ export function previousTradingDay(d: Date): Date {
 }
 
 /**
+ * Hardcoded NSE trading holidays for 2025 and 2026.
+ * Used as a fallback when the Upstox holiday API is unavailable (e.g. token expired).
+ * Source: NSE India official holiday calendar.
+ * Update this list at the start of each calendar year.
+ */
+export const NSE_HOLIDAYS: ReadonlySet<string> = new Set([
+  // 2025
+  '2025-02-26', // Mahashivratri
+  '2025-03-14', // Holi
+  '2025-03-31', // Id-Ul-Fitr (Ramzan Eid)
+  '2025-04-10', // Shri Ram Navami
+  '2025-04-14', // Dr. B.R. Ambedkar Jayanti
+  '2025-04-18', // Good Friday
+  '2025-05-01', // Maharashtra Day
+  '2025-08-15', // Independence Day
+  '2025-08-27', // Ganesh Chaturthi
+  '2025-10-02', // Mahatma Gandhi Jayanti
+  '2025-10-20', // Diwali – Laxmi Puja
+  '2025-10-21', // Diwali – Balipratipada
+  '2025-11-05', // Prakash Gurpurb Sri Guru Nanak Dev Ji
+  '2025-12-25', // Christmas
+  // 2026
+  '2026-01-26', // Republic Day
+  '2026-02-26', // Mahashivratri
+  '2026-03-26', // Holi
+  '2026-04-03', // Good Friday
+  '2026-04-14', // Dr. B.R. Ambedkar Jayanti
+  '2026-05-01', // Maharashtra Day
+  '2026-08-15', // Independence Day (Saturday — market closed anyway)
+  '2026-10-02', // Mahatma Gandhi Jayanti
+  '2026-11-25', // Diwali – Laxmi Puja (approx — update when NSE confirms)
+  '2026-12-25', // Christmas
+]);
+
+/**
  * Async holiday-aware resolution of the last actual trading day.
  * Starts from the sync effectiveTradingDay() result, then checks
  * the Upstox holiday API and rolls back if necessary.
- * Falls back to the weekday-only result if the holiday API fails.
+ * Falls back to NSE_HOLIDAYS hardcoded list if the API call fails
+ * (e.g. when the Upstox token is expired).
  */
 export async function resolveLastTradingDay(): Promise<string> {
   // Lazy import to avoid circular dependency
@@ -86,13 +122,15 @@ export async function resolveLastTradingDay(): Promise<string> {
 
   // Check up to 5 days back for holidays (covers long weekends)
   while (attempts < 5) {
+    let isHoliday = false;
     try {
-      const isHoliday = await isMarketHoliday(candidate);
-      if (!isHoliday) return candidate;
+      isHoliday = await isMarketHoliday(candidate);
     } catch {
-      // Holiday API failed — trust the weekday-only result
-      return candidate;
+      // Upstox API unavailable (e.g. token expired) — use hardcoded fallback
+      isHoliday = NSE_HOLIDAYS.has(candidate);
     }
+    if (!isHoliday) return candidate;
+
     // Roll back one more day, skipping weekends
     const d = fromDateStr(candidate);
     d.setUTCDate(d.getUTCDate() - 1);

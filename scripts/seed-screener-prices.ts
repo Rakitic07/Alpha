@@ -64,7 +64,13 @@ async function fetchDailyCandles(instrumentKey: string, from: string, to: string
     low: c[3],
     close: c[4],
     volume: Math.round(c[5]),
-  }));
+  })).filter((c) => {
+    // Skip weekend dates — Upstox timestamps are IST (e.g. "2026-03-02T00:00:00+05:30")
+    // Extract YYYY-MM-DD directly from the IST timestamp to avoid UTC date shift
+    const dateStr = c.timestamp.slice(0, 10);
+    const dow = new Date(dateStr + 'T12:00:00Z').getUTCDay();
+    return dow !== 0 && dow !== 6; // 0=Sunday, 6=Saturday
+  });
 }
 
 async function withConcurrency<T>(
@@ -112,7 +118,7 @@ async function main() {
       const rows = candles.map((c: { timestamp: string; open: number; high: number; low: number; close: number; volume: number }) => ({
         symbol: inst.symbol,
         instrumentKey: inst.key,
-        date: toDateStr(new Date(c.timestamp)),
+        date: c.timestamp.slice(0, 10), // Extract YYYY-MM-DD directly from IST timestamp to avoid UTC shift
         open: c.open,
         high: c.high,
         low: c.low,
