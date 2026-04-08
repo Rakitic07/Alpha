@@ -221,6 +221,11 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [priceMap, setPriceMap] = useState<Map<string, PriceUpdate>>(new Map());
 
+  // Accumulate price updates in a ref so the WS message handler never calls React setState
+  // directly. A single requestAnimationFrame flushes all ticks received in the same frame.
+  const priceMapRef = useRef<Map<string, PriceUpdate>>(new Map());
+  const rafPendingRef = useRef(false);
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -320,15 +325,20 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
       }
 
       if (updates.length > 0) {
-        setPriceMap((prev) => {
-          const newMap = new Map(prev);
-          for (const update of updates) {
-            newMap.set(update.symbol, update);
-          }
-          return newMap;
-        });
-
-        setLastUpdate(new Date());
+        // Accumulate into ref — zero React work in the message event handler
+        for (const update of updates) {
+          priceMapRef.current.set(update.symbol, update);
+        }
+        // One RAF per frame: flush ref → state for any direct hook consumers
+        if (!rafPendingRef.current) {
+          rafPendingRef.current = true;
+          requestAnimationFrame(() => {
+            rafPendingRef.current = false;
+            setPriceMap(new Map(priceMapRef.current));
+            setLastUpdate(new Date());
+          });
+        }
+        // Notify context/subscribers immediately (they do their own batching)
         onPriceUpdateRef.current?.(updates);
       }
     }

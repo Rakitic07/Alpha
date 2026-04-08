@@ -246,7 +246,7 @@ export default function MarketOverviewClient({
           return currentData; // No updates for this specific view
         }
 
-        // Recalculate advance/decline
+        // Recalculate advance/decline (cheap — O(n) pass, no sort)
         let advancing = 0;
         let declining = 0;
         let unchanged = 0;
@@ -256,29 +256,22 @@ export default function MarketOverviewClient({
           else unchanged++;
         }
 
-        // Recalculate gainers/losers
-        const sorted = [...updatedConstituents].sort((a, b) => b.changePercent - a.changePercent);
-        const topGainers = sorted.filter(c => c.changePercent > 0).slice(0, 10);
-        // sorted is DESC — losers sit at the tail. Slice the last 10, then reverse so biggest loser is first.
-        const losersArr = sorted.filter(c => c.changePercent < 0);
-        const topLosers = losersArr.slice(-Math.min(10, losersArr.length)).reverse();
-
-        updateTimestamp();
-
+        // Store constituents unsorted — sorting moved to useMemo below
         return {
           ...currentData,
           indexValue: newIndexValue,
           indexChange: newIndexChange,
           indexChangePercent: newIndexChangePercent,
-          constituents: sorted,
+          constituents: updatedConstituents,
           advancing,
           declining,
           unchanged,
-          topGainers,
-          topLosers,
         };
       });
     });
+
+    // Call updateTimestamp AFTER the transition (not inside a setState updater)
+    updateTimestamp();
 
   }, [updateTimestamp, startTransition]); // No stale dependencies — uses refs for external state
 
@@ -350,6 +343,22 @@ export default function MarketOverviewClient({
     if (!data?.constituents) return '';
     return data.constituents.map(c => c.instrumentKey).sort().join(',');
   }, [data?.constituents]);
+
+  // Sort constituents and derive movers via useMemo (React render phase, not setTimeout)
+  // constituents are stored unsorted in state; sorting happens here once per render
+  const sortedConstituents = useMemo(() => {
+    if (!data?.constituents) return [];
+    return [...data.constituents].sort((a, b) => b.changePercent - a.changePercent);
+  }, [data?.constituents]);
+
+  const streamingTopGainers = useMemo(
+    () => sortedConstituents.filter(c => c.changePercent > 0).slice(0, 10),
+    [sortedConstituents]
+  );
+  const streamingTopLosers = useMemo(() => {
+    const losers = sortedConstituents.filter(c => c.changePercent < 0);
+    return losers.slice(-Math.min(10, losers.length)).reverse();
+  }, [sortedConstituents]);
 
   useEffect(() => {
     if (showStreaming && data && data.constituents.length > 0) {
@@ -582,7 +591,7 @@ export default function MarketOverviewClient({
                 /* key forces full remount when index changes — prevents stale Nivo layout animation */
                 <MarketHeatmap
                   key={data.indexName}
-                  constituents={data.constituents}
+                  constituents={sortedConstituents}
                   isMobile={isMobile}
                   indexName={data.indexName}
                   indexValue={data.indexValue}
@@ -600,8 +609,8 @@ export default function MarketOverviewClient({
           {/* Top Movers */}
           <motion.div variants={itemVariants}>
             <TopMovers
-              topGainers={data.topGainers}
-              topLosers={data.topLosers}
+              topGainers={isStreaming ? streamingTopGainers : data.topGainers}
+              topLosers={isStreaming ? streamingTopLosers : data.topLosers}
               totalConstituents={data.constituents.length}
               isMobile={isMobile}
             />

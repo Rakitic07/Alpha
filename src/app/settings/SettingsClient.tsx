@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { faStore, faBolt, faKey } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
+import {
     Paper, Button, TextField, Snackbar, Alert, CircularProgress, Switch, Chip
 } from '@mui/material';
 import { SettingsSection } from './SettingsLayout';
@@ -14,16 +14,30 @@ import { setDataLockDate } from '@/app/actions/settings';
 import { refreshSectorMappings } from '@/app/actions/sectors';
 import { getUpstoxTokenStatus } from '@/app/actions/auth';
 import { useLiveData } from '@/context/LiveDataContext';
+import DataFreshnessCard from './DataFreshnessCard';
+import type { LastCronRun } from '@/app/actions/screener';
 
 
 
 
 // ... (other imports)
 
-export default function SettingsClient({ 
-    initialDataLockDate 
-}: { 
-    initialDataLockDate: string | null 
+interface FreshnessData {
+    latestPriceDate: string | null;
+    priceCount: number;
+    latestRankDate: { filtered: string | null; all: string | null };
+    rankCount: { filtered: number; all: number };
+    totalPriceDates: number;
+    totalRankDates: number;
+    lastCronRun: LastCronRun | null;
+}
+
+export default function SettingsClient({
+    initialDataLockDate,
+    freshness,
+}: {
+    initialDataLockDate: string | null;
+    freshness: FreshnessData | null;
 }) {
     // --- Common State ---
     const [recalcJobId, setRecalcJobId] = useState<string | null>(null);
@@ -192,9 +206,12 @@ export default function SettingsClient({
                 </Paper>
             </SettingsSection>
 
-            {/* System Preferences Section */}
+            {/* System Preferences + Data Freshness (8/4 split on lg) */}
             <SettingsSection className="mb-6">
-                <Paper className="glass-card p-4 sm:p-6" sx={{ 
+              <div className="grid grid-cols-12 gap-4">
+                {/* System Preferences — left 8 cols */}
+                <div className="col-span-12 lg:col-span-8">
+                <Paper className="glass-card p-4 sm:p-6 h-full" sx={{
                     backgroundColor: 'rgba(30, 41, 59, 0.4)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
                     background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)'
@@ -327,6 +344,15 @@ export default function SettingsClient({
 
                     </div>
                 </Paper>
+                </div>{/* end col-span-8 */}
+
+                {/* Data Freshness — right 4 cols */}
+                {freshness && (
+                  <div className="col-span-12 lg:col-span-4">
+                    <DataFreshnessCard freshness={freshness} />
+                  </div>
+                )}
+              </div>
             </SettingsSection>
 
 

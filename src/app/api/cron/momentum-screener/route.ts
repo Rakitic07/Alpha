@@ -1,19 +1,37 @@
 /**
  * Momentum Screener Daily Cron
  *
- * Schedule: 0 11 * * 1-5 UTC (4:30 PM IST weekdays)
+ * Schedule: 30 10 * * 1-5 UTC (4:00 PM IST weekdays)
  * Runs the full screener pipeline: fetch candles → compute scores → rank → store.
+ * Persists the run result to AppConfig so the Settings page can surface failures.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/db';
 
 const cronLogger = logger.scope('ScreenerCron');
 
+const LAST_RUN_KEY = 'cron.screener.lastRun';
+
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes (Vercel Pro limit)
+
+async function persistRunResult(result: Record<string, unknown>) {
+  try {
+    const value = JSON.stringify(result);
+    await prisma.appConfig.upsert({
+      where: { key: LAST_RUN_KEY },
+      update: { value },
+      create: { key: LAST_RUN_KEY, value },
+    });
+  } catch (err) {
+    // Don't let persistence failure break the response
+    cronLogger.error(`Failed to persist cron run result: ${err}`);
+  }
+}
 
 export async function GET(request: NextRequest) {
   const authError = verifyCronSecret(request);
@@ -24,18 +42,26 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await runScreenerPipeline();
-    const response = { ...result, durationMs: Date.now() - startTime };
+    const response = {
+      ...result,
+      timestamp: new Date().toISOString(),
+      durationMs: Date.now() - startTime,
+    };
     // Always log the full result so it's visible in Vercel logs
     cronLogger.info(`Pipeline result: ${JSON.stringify(response)}`);
+    // Persist so Settings page can show status without digging through logs
+    await persistRunResult(response);
     return NextResponse.json(response);
   } catch (error) {
     const errResponse = {
       success: false,
       error: 'Screener pipeline failed',
       details: (error as Error).message,
+      timestamp: new Date().toISOString(),
       durationMs: Date.now() - startTime,
     };
     cronLogger.error(`Pipeline crashed: ${JSON.stringify(errResponse)}`);
+    await persistRunResult(errResponse);
     return NextResponse.json(errResponse, { status: 500 });
   }
 }

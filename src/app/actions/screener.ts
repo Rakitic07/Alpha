@@ -427,6 +427,17 @@ export async function getRankHistory(
   return history;
 }
 
+export interface LastCronRun {
+  timestamp: string;
+  success: boolean;
+  date?: string | null;
+  scored?: number;
+  ranked?: number;
+  errors?: string[];
+  durationMs?: number;
+  details?: string; // crash message
+}
+
 /**
  * Get data freshness info for the settings page.
  */
@@ -437,13 +448,15 @@ export async function getDataFreshness(): Promise<{
   rankCount: { filtered: number; all: number };
   totalPriceDates: number;
   totalRankDates: number;
+  lastCronRun: LastCronRun | null;
 }> {
-  const [latestPrice, latestFilteredRank, latestAllRank, filteredCount, allCount] = await Promise.all([
+  const [latestPrice, latestFilteredRank, latestAllRank, filteredCount, allCount, cronConfig] = await Promise.all([
     prisma.screenerPrice.findFirst({ orderBy: { date: 'desc' }, select: { date: true } }),
     prisma.rankingHistory.findFirst({ where: { rankType: 'filtered' }, orderBy: { date: 'desc' }, select: { date: true } }),
     prisma.rankingHistory.findFirst({ where: { rankType: 'all' }, orderBy: { date: 'desc' }, select: { date: true } }),
     prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered' } }),
     prisma.momentumScore.count({ where: { isActive: true, rankType: 'all' } }),
+    prisma.appConfig.findUnique({ where: { key: 'cron.screener.lastRun' } }),
   ]);
 
   // Count distinct dates
@@ -458,6 +471,14 @@ export async function getDataFreshness(): Promise<{
     priceCount = await prisma.screenerPrice.count({ where: { date: latestPrice.date } });
   }
 
+  // Parse last cron run
+  let lastCronRun: LastCronRun | null = null;
+  if (cronConfig?.value) {
+    try {
+      lastCronRun = JSON.parse(cronConfig.value) as LastCronRun;
+    } catch { /* ignore malformed JSON */ }
+  }
+
   return {
     latestPriceDate: latestPrice?.date ?? null,
     priceCount,
@@ -468,5 +489,6 @@ export async function getDataFreshness(): Promise<{
     rankCount: { filtered: filteredCount, all: allCount },
     totalPriceDates: priceDates.length,
     totalRankDates: rankDates.length,
+    lastCronRun,
   };
 }

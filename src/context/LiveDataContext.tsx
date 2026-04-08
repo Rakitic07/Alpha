@@ -88,6 +88,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastBatchAppliedRef = useRef<number>(0);
   const lastPnLSaveRef = useRef<number>(0);
+  // Throttle expensive derived computations (sort, sector calc) to once per 30s
+  const lastExpensiveUpdateRef = useRef<number>(0);
+  const EXPENSIVE_UPDATE_INTERVAL_MS = 30_000;
   const [, startTransition] = useTransition();
 
   // Shared subscribers for other components (like MarketOverview)
@@ -176,12 +179,15 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const applyBatchedUpdates = useCallback(() => {
     const updates = pendingUpdatesRef.current;
     if (updates.size === 0) return;
-    
+
     // Clear pending updates
     pendingUpdatesRef.current = new Map();
-    lastBatchAppliedRef.current = Date.now();
-    
-    
+    const now = Date.now();
+    lastBatchAppliedRef.current = now;
+    // Only run expensive derived computations (sort, movers, sectors) every 30s
+    const runExpensive = now - lastExpensiveUpdateRef.current >= EXPENSIVE_UPDATE_INTERVAL_MS;
+    if (runExpensive) lastExpensiveUpdateRef.current = now;
+
     startTransition(() => setData(currentData => {
       if (!currentData) return currentData;
 
@@ -308,30 +314,39 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Sort for movers
-      const sortedByPercent = [...updatedHoldings].sort((a, b) => b.dayChangePercent - a.dayChangePercent);
-      const topGainers = sortedByPercent.slice(0, 5);
-      const topLosers = sortedByPercent.slice(-5).reverse();
+      // Expensive: sort holdings + recompute movers + sectors — throttled to every 30s
+      let allHoldings = currentData.allHoldings;
+      let topGainers = currentData.topGainers;
+      let topLosers = currentData.topLosers;
+      let sectorAllocations = currentData.sectorAllocations;
 
-      // Update sector allocations with new values
-      const sectorGroups = new Map<string, { value: number; count: number; weightedChange: number }>();
-      for (const holding of updatedHoldings) {
-        const sector = holding.sector || 'Unknown';
-        const existing = sectorGroups.get(sector) || { value: 0, count: 0, weightedChange: 0 };
-        existing.value += holding.currentValue;
-        existing.count += 1;
-        existing.weightedChange += holding.currentValue * holding.dayChangePercent;
-        sectorGroups.set(sector, existing);
+      if (runExpensive) {
+        const sortedByPercent = [...updatedHoldings].sort((a, b) => b.dayChangePercent - a.dayChangePercent);
+        allHoldings = sortedByPercent;
+        topGainers = sortedByPercent.slice(0, 5);
+        topLosers = sortedByPercent.slice(-5).reverse();
+
+        const sectorGroups = new Map<string, { value: number; count: number; weightedChange: number }>();
+        for (const holding of updatedHoldings) {
+          const sector = holding.sector || 'Unknown';
+          const existing = sectorGroups.get(sector) || { value: 0, count: 0, weightedChange: 0 };
+          existing.value += holding.currentValue;
+          existing.count += 1;
+          existing.weightedChange += holding.currentValue * holding.dayChangePercent;
+          sectorGroups.set(sector, existing);
+        }
+        const validTotalEquity = totalEquity || 1;
+        sectorAllocations = Array.from(sectorGroups.entries()).map(([sector, sectorData]) => ({
+          sector,
+          value: sectorData.value,
+          allocation: (sectorData.value / validTotalEquity) * 100,
+          count: sectorData.count,
+          dayChangePercent: sectorData.value > 0 ? sectorData.weightedChange / sectorData.value : 0,
+        })).sort((a, b) => b.allocation - a.allocation);
+      } else {
+        // Still update allHoldings prices (unsorted) — movers order updates next expensive pass
+        allHoldings = updatedHoldings;
       }
-
-      const validTotalEquity = totalEquity || 1;
-      const sectorAllocations = Array.from(sectorGroups.entries()).map(([sector, sectorData]) => ({
-        sector,
-        value: sectorData.value,
-        allocation: (sectorData.value / validTotalEquity) * 100,
-        count: sectorData.count,
-        dayChangePercent: sectorData.value > 0 ? sectorData.weightedChange / sectorData.value : 0
-      })).sort((a, b) => b.allocation - a.allocation);
 
       return {
         ...currentData,
@@ -344,7 +359,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         advances,
         declines,
         breadthByCategory,
-        allHoldings: sortedByPercent,
+        allHoldings,
         topGainers,
         topLosers,
         sectorAllocations,
