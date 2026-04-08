@@ -19,7 +19,7 @@ import { fetchAndStoreCandles, patchTodayPrices } from './prices';
 import { detectAndFlushAnomalies } from './corporate-actions';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
-import { resolveLastTradingDay, isMarketHours, daysAgo, NSE_HOLIDAYS } from './dates';
+import { resolveLastTradingDay, isMarketHours, daysAgo } from './dates';
 import { logger } from '@/lib/logger';
 import { updateJob } from '@/lib/jobs';
 
@@ -77,20 +77,6 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
   };
 
   pipelineLogger.info(`Pipeline start for ${today}${duringMarket ? ' (market open — T-1)' : ''}`);
-
-  // ── Holiday guard ──────────────────────────────────────────────────────────
-  // resolveLastTradingDay() checks the Upstox holiday API, but if the token is
-  // expired it silently falls back to weekday-only. As a belt-and-suspenders check,
-  // also verify against our hardcoded NSE holiday list before doing any work.
-  if (NSE_HOLIDAYS.has(today)) {
-    const msg = `${today} is a listed NSE market holiday — skipping pipeline.`;
-    pipelineLogger.info(msg);
-    return {
-      success: false, date: today, bhavcopyUpdated: 0, candlesFetched: 0, candlesInserted: 0,
-      athUpdated: 0, universeSize: 0, scored: 0, ranked: 0,
-      corporateActionsFlushed: [], errors: [msg], durationMs: Date.now() - start,
-    };
-  }
 
   // ── Step 1: Bhavcopy (weekly refresh) ──────────────────────────────────────
   let bhavcopyUpdated = 0;

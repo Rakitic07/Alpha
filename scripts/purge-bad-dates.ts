@@ -6,8 +6,8 @@
  *   2. Indian market holidays — cron ran on weekday holidays (e.g. Holi, Good Friday)
  *      and stored the previous day's stale OHLC under the holiday date.
  *
- * Holiday detection: fetches NSE holiday list from Upstox API per year (fast — 3 calls).
- * Falls back to NSE_HOLIDAYS hardcoded list if the API is unavailable.
+ * Holiday detection: fetches NSE holiday list from Upstox API.
+ * Weekends are detected locally (no API needed).
  *
  * Safe to run multiple times (idempotent).
  *
@@ -17,7 +17,7 @@
  */
 
 import { prisma } from './lib/db';
-import { NSE_HOLIDAYS } from '../src/lib/screener/dates';
+// No hardcoded holiday list — uses Upstox API for holiday detection
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -46,14 +46,13 @@ async function getAccessToken(): Promise<string> {
 
 
 async function buildHolidaySet(years: number[]): Promise<Set<string>> {
-  // Start with hardcoded list for all years as baseline
-  const combined = new Set<string>(NSE_HOLIDAYS);
+  const combined = new Set<string>();
 
   let token: string | null = null;
   try {
     token = await getAccessToken();
   } catch {
-    console.warn('  No Upstox token — using hardcoded NSE_HOLIDAYS list only');
+    console.warn('  No Upstox token — cannot detect holidays. Only weekends will be purged.');
     return combined;
   }
 
