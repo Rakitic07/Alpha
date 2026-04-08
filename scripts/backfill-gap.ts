@@ -110,7 +110,7 @@ async function main() {
           const rows = candles.map((c: { timestamp: string; open: number; high: number; low: number; close: number; volume: number }) => ({
             symbol: item.symbol,
             instrumentKey: item.instrumentKey,
-            date: new Date(c.timestamp).toISOString().slice(0, 10),
+            date: c.timestamp.slice(0, 10), // Extract YYYY-MM-DD directly from IST timestamp (avoids UTC shift)
             open: c.open,
             high: c.high,
             low: c.low,
@@ -162,7 +162,7 @@ async function main() {
   console.log(`\nDone in ${secs}s: ${completed} stocks, ${totalInserted} rows inserted, ${errors} errors, ${rateLimited} rate-limited`);
 
   // Verify
-  for (const d of ['2026-03-31', '2026-04-01', '2026-04-02', '2026-04-03', '2026-04-07']) {
+  for (const d of ['2026-03-31', '2026-04-01', '2026-04-02', '2026-04-03', '2026-04-06', '2026-04-07']) {
     const count = await prisma.screenerPrice.count({ where: { date: d } });
     console.log(`  Prices for ${d}: ${count}`);
   }
