@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { logger } from '@/lib/logger';
@@ -51,6 +52,8 @@ export async function GET(request: NextRequest) {
     cronLogger.info(`Pipeline result: ${JSON.stringify(response)}`);
     // Persist so Settings page can show status without digging through logs
     await persistRunResult(response);
+    // Bust the screener score cache so the UI immediately reflects new rankings
+    revalidateTag('screener-scores');
     return NextResponse.json(response);
   } catch (error) {
     const errResponse = {
