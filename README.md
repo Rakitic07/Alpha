@@ -13,7 +13,7 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 ## ✨ Features
 
 - **Real-time Dashboard** — Live portfolio P&L with WebSocket price streaming from Upstox
-- **Momentum Screener** — Daily-ranked NSE universe using composite Sharpe + ATH-proximity scoring, with exit signal detection for portfolio holdings
+- **Momentum Screener** — Daily-ranked NSE universe using composite Sharpe ratio scoring with ATH proximity filters, plus exit signal detection for portfolio holdings
 - **Privacy Mode** — Toggle to hide monetary values on desktop (great for screen sharing)
 - **Performance Analytics** — NAV tracking, XIRR, drawdown, benchmark comparisons (NIFTY 50, NIFTY 500 MOMENTUM 50, etc.)
 - **Market Cap Classification** — Automatic Large/Mid/Small/Micro cap breakdown using AMFI data
@@ -31,7 +31,7 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) v18+ and npm
+- [Node.js](https://nodejs.org/) v20+ and npm
 - A [Neon](https://neon.tech/) account (free tier is sufficient)
 - An [Upstox](https://upstox.com/) demat account
 - [Android Studio](https://developer.android.com/studio) *(Optional: only needed if building the Android app)*
@@ -116,12 +116,26 @@ UPSTOX_ANALYTICS_TOKEN=your-analytics-token
 # Install dependencies
 npm install
 
-# Push database schema to Neon
+# Push database schema to Neon (creates all tables)
 npm run db:setup
 ```
 
 > [!IMPORTANT]
-> **Database Initialization**: You MUST specify `DATABASE_URL` in your `.env.local` for the script to connect to Neon. Run `npm run db:setup` to create the tables in your Neon database. If you see a "no such table" error in the app, it means this step was skipped or failed.
+> **Database Initialization**: You MUST have `DATABASE_URL` set in `.env.local` before running this. The command creates all tables in your Neon database from the Prisma schema. If you see a "relation does not exist" error in the app later, this step was skipped or failed.
+
+<details>
+<summary>Troubleshooting: Common Neon connection issues</summary>
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `ECONNRESET` or `ConnectionClosed (P1017)` | Neon compute auto-suspends after 5 min of inactivity. First connection after idle may fail. | Simply retry the command — the second attempt succeeds once compute wakes up. |
+| `DeprecationWarning: sslmode=require` | The `pg` driver deprecated `sslmode=require`. | Use `sslmode=verify-full` in your connection string. The app handles this automatically. |
+| `no such table` / `relation does not exist` | Schema not pushed to Neon. | Run `npx prisma db push` to create tables. |
+| `Can't reach database server` | Wrong connection string or Neon project paused. | Verify `DATABASE_URL` in `.env.local` matches your Neon dashboard. Check that your Neon project is active. |
+
+**Tip**: If running local scripts (backfills, etc.) behind a corporate proxy, you may need `NODE_TLS_REJECT_UNAUTHORIZED=0` as a prefix to bypass SSL inspection.
+
+</details>
 
 ---
 
@@ -308,12 +322,14 @@ Scores the full NSE equity universe daily after market close. Mirrors the backte
 ### Formula
 
 ```
-Composite Score = 0.5 × avgSharpe + 0.5 × athProximity
+Composite Score = avgSharpe = mean(Sharpe_12m, Sharpe_6m, Sharpe_3m)
 ```
 
-- **avgSharpe** = mean of Sharpe(12m), Sharpe(6m), Sharpe(3m) — annualized, sample std, risk-free = 0
-- **Sharpe windows**: 12m (252 days), 6m (126 days), 3m (62 days ending 21 days ago)
-- **athProximity** = currentClose / allTimeHigh — range [0, 1]
+- **Sharpe** = (mean daily return × 252) / (std × √252) — annualized, sample std, risk-free rate = 0
+- **12-month**: 252 trading days ending today
+- **6-month**: 126 trading days ending today
+- **3-month**: 62 trading days ending **21 days ago** (effectively a 4m→1m window — the most recent month is skipped to reduce noise from mean reversion)
+- **ATH proximity** is an **entry filter** (≥70% of ATH), **not** a score component
 
 ### Filters (all must pass)
 
@@ -325,19 +341,22 @@ Composite Score = 0.5 × avgSharpe + 0.5 × athProximity
 | ATH proximity | Within 30% of all-time high |
 | Volume | Median daily turnover ≥ ₹1 Cr (126-day lookback) |
 | Circuit band | ≥ 15% (excludes 2%/5% circuit stocks) |
-| History | ≥ 269 trading days of data |
+| History | ≥ 269 trading days of data (252 + 21 skip days) |
 
 ### One-Time Setup (first deploy)
 
 ```bash
-# Backfill ~18 months of daily candles (~2000 stocks, ~30 mins)
-npx ts-node -e "require('./scripts/seed-screener-prices.ts')"
+# 1. Backfill ~18 months of daily candles (~2000 stocks, ~30 mins)
+npx tsx scripts/seed-screener-prices.ts
 
-# Seed all-time highs from monthly candles since 2000 (~7 mins)
-npx ts-node -e "require('./scripts/seed-ath.ts')"
+# 2. Seed all-time highs from monthly candles since 2000 (~7 mins)
+npx tsx scripts/seed-ath.ts
 
-# Backfill 50 days of ranking history
-npx ts-node -e "require('./scripts/backfill-rankings.ts')"
+# 3. Run the screener pipeline once to score and rank all stocks
+npx tsx scripts/run-pipeline.ts
+
+# 4. Backfill 50 days of ranking history (~5 mins)
+npx tsx src/scripts/backfill-rank-history.ts
 ```
 
 After backfill, the daily cron (`/api/cron/momentum-screener`, weekdays 4:30 PM IST) keeps everything up to date incrementally.
@@ -537,22 +556,23 @@ Only needed if you want to auto-import orders from Zerodha Kite. Not required fo
 
 ## ❓ Known Limitations & Troubleshooting
 
-### Troubleshooting Missing Tables
-If you encounter an error like:
-`relation "DailyPortfolioSnapshot" does not exist`
+### Troubleshooting
 
-This means your Neon database hasn't been initialized with the Prisma schema. To fix this, run:
-```bash
-npm run db:setup
-# or directly:
-npx prisma db push
-```
+| Problem | Solution |
+|---------|----------|
+| `relation "..." does not exist` | Run `npm run db:setup` (or `npx prisma db push`) to create tables |
+| `ECONNRESET` on first script run | Neon compute was asleep — retry the command once |
+| Screener shows 0 stocks | Run the one-time backfill scripts (see [Screener Setup](#one-time-setup-first-deploy)) |
+| Stale data after cron runs | Check that `CRON_SECRET` matches between Vercel env and cron-job.org URLs |
+| WebSocket disconnects | Auto-reconnect handles this; refresh page if data appears frozen |
+| `prisma generate` errors | Run `npm install` first, then `npx prisma generate` |
 
 ### Known Limitations
 1. **Index History** — NIFTY500 MOMENTUM 50 historical data before Sep 30, 2024 requires CSV backfill
-3. **Corporate Actions** — Must be manually entered (no API auto-detection for splits/bonuses)
-4. **Real-time WebSocket** — May disconnect during market hours; auto-reconnect handles this
-5. **AMFI Data** — PDF upload is manual; AMFI releases classification data twice per year
+2. **Corporate Actions** — Must be manually entered (no API auto-detection for splits/bonuses)
+3. **Real-time WebSocket** — May disconnect during market hours; auto-reconnect handles this
+4. **AMFI Data** — PDF upload is manual; AMFI releases classification data twice per year
+5. **Neon Cold Start** — First DB connection after 5 min idle may fail with ECONNRESET (auto-suspend). Retry succeeds.
 
 ---
 

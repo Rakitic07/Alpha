@@ -52,12 +52,12 @@ export default function RulesInfoModal({ open, onClose }: RulesInfoModalProps) {
             <Section title="Scoring Formula">
               <div className="space-y-2 text-sm text-gray-300">
                 <p className="font-mono text-xs text-gray-400 bg-slate-800/50 rounded-lg p-3">
-                  Composite = 0.5 × avgSharpe + 0.5 × athProximity
+                  Composite Score = avgSharpe = mean(Sharpe_12m, Sharpe_6m, Sharpe_3m)
                 </p>
                 <div className="space-y-1.5">
-                  <p><span className="text-gray-500">avgSharpe</span> = (Sharpe12m + Sharpe6m + Sharpe3m) / 3</p>
-                  <p><span className="text-gray-500">Sharpe</span> = (mean × 252) / (std × √252) — annualized, sample std</p>
-                  <p><span className="text-gray-500">athProximity</span> = currentClose / ATH — range [0, 1]</p>
+                  <p><span className="text-gray-500">Sharpe</span> = (mean × 252) / (std × √252) — annualized, sample std, rf = 0</p>
+                  <p><span className="text-gray-500">3m window</span> = 62 days ending 21 days ago (4m→1m, skips recent month)</p>
+                  <p><span className="text-gray-500">ATH proximity</span> = entry filter only (≥70% of ATH), not part of score</p>
                 </div>
               </div>
             </Section>

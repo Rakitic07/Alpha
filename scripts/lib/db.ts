@@ -14,8 +14,7 @@ import { Pool } from 'pg';
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) throw new Error('Missing DATABASE_URL env var');
 
-// Strip channel_binding=require and normalise sslmode to verify-full
-// (suppresses pg deprecation warning ahead of pg v9 semantics change)
+// Strip channel_binding and normalise sslmode to verify-full
 const urlObj = new URL(dbUrl);
 urlObj.searchParams.delete('channel_binding');
 urlObj.searchParams.set('sslmode', 'verify-full');
@@ -23,7 +22,7 @@ const safeDbUrl = urlObj.toString();
 
 const pool = new Pool({
   connectionString: safeDbUrl,
-  ssl: { rejectUnauthorized: false }, // Safe for scripts running behind TLS inspection proxies
+  ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
 
