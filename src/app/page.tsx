@@ -51,8 +51,6 @@ export default function LivePage() {
     initialize,
     hasAnimatedInitial,
     setHasAnimatedInitial,
-    showDynamicTitle,
-    setShowDynamicTitle,
     connectionError,
     pnlHistory,
     privacyMode,
@@ -103,10 +101,6 @@ export default function LivePage() {
       setDownloading(false);
     }
   }, []);
-
-  const handleToggleDynamicTitle = useCallback(() => {
-    setShowDynamicTitle(!showDynamicTitle);
-  }, [showDynamicTitle, setShowDynamicTitle]);
 
   if (loading && !data) {
      // ... (keeping loading check)
@@ -175,11 +169,9 @@ export default function LivePage() {
             lastRefreshed={lastRefreshed}
             loading={loading}
             downloading={downloading}
-            showDynamicTitle={showDynamicTitle}
             isMobile={isMobile}
             onRefresh={fetchData}
             onDownloadSnapshot={handleDownloadSnapshot}
-            onToggleDynamicTitle={handleToggleDynamicTitle}
             itemVariants={itemVariants}
             marketStatus={data.marketStatus}
             dataDate={data.dataDate}

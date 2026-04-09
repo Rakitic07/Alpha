@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCamera, faRotateRight, faTag, faCalendar } from '@fortawesome/free-solid-svg-icons';
+import { faCamera, faRotateRight, faCalendar } from '@fortawesome/free-solid-svg-icons';
 
 import type { Variants } from 'framer-motion';
 
@@ -12,11 +12,9 @@ interface LiveHeaderProps {
     lastRefreshed: Date | null;
     loading: boolean;
     downloading: boolean;
-    showDynamicTitle: boolean;
     isMobile: boolean;
     onRefresh: () => void;
     onDownloadSnapshot: () => void;
-    onToggleDynamicTitle: () => void;
     itemVariants: Variants;
     marketStatus?: 'OPEN' | 'CLOSED' | 'UNKNOWN';
     dataDate?: string;
@@ -27,11 +25,9 @@ const LiveHeader = memo(function LiveHeader({
     lastRefreshed,
     loading,
     downloading,
-    showDynamicTitle,
     isMobile,
     onRefresh,
     onDownloadSnapshot,
-    onToggleDynamicTitle,
     itemVariants,
     marketStatus,
     dataDate
@@ -109,20 +105,6 @@ const LiveHeader = memo(function LiveHeader({
 
                     {/* Action Buttons Group */}
                     <div className="flex items-center gap-1.5">
-                        {!isMobile && (
-                            <button
-                                onClick={onToggleDynamicTitle}
-                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-                                    showDynamicTitle
-                                        ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
-                                        : 'bg-white/5 hover:bg-white/10 text-gray-500 border border-transparent'
-                                }`}
-                                title={showDynamicTitle ? "Disable Dynamic Title" : "Enable Dynamic Title"}
-                            >
-                                <FontAwesomeIcon icon={faTag} className="w-2 h-2" />
-                            </button>
-                        )}
-
                         <button
                             onClick={onRefresh}
                             disabled={loading}
