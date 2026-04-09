@@ -85,7 +85,11 @@ export default function LivePage() {
           cacheBust: true,
           quality: 0.95,
           pixelRatio: 2,
-          backgroundColor: '#0f172a' // match bg-slate-900
+          backgroundColor: '#0f172a', // match bg-slate-900
+          filter: (node) => {
+            if (node instanceof Element && node.id === 'market-overview') return false;
+            return true;
+          },
         });
 
         const link = document.createElement('a');
