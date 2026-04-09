@@ -35,7 +35,11 @@ function createPrismaClient(): PrismaClient {
 
   dbLogger.info('Connected to Neon Postgres');
 
-  const pool = new Pool({ connectionString: dbUrl });
+  // Normalise sslmode: replace 'require' with 'verify-full' to suppress pg deprecation
+  // warning and adopt the explicit secure behaviour ahead of pg v9.
+  const safeUrl = dbUrl.replace(/sslmode=require/g, 'sslmode=verify-full');
+
+  const pool = new Pool({ connectionString: safeUrl });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }

@@ -14,9 +14,11 @@ import { Pool } from 'pg';
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) throw new Error('Missing DATABASE_URL env var');
 
-// Strip channel_binding=require — use URL API to avoid mangling the connection string
+// Strip channel_binding=require and normalise sslmode to verify-full
+// (suppresses pg deprecation warning ahead of pg v9 semantics change)
 const urlObj = new URL(dbUrl);
 urlObj.searchParams.delete('channel_binding');
+urlObj.searchParams.set('sslmode', 'verify-full');
 const safeDbUrl = urlObj.toString();
 
 const pool = new Pool({
