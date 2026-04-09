@@ -79,6 +79,9 @@ export default function LivePage() {
       const element = document.getElementById('live-dashboard-content');
       if (element) {
         const { toPng } = await import('html-to-image');
+        // Temporarily collapse min-height so the capture doesn't include blank space below content
+        const prevMinHeight = element.style.minHeight;
+        element.style.minHeight = 'auto';
         const dataUrl = await toPng(element, {
           cacheBust: true,
           quality: 0.95,
@@ -89,6 +92,7 @@ export default function LivePage() {
             return true;
           },
         });
+        element.style.minHeight = prevMinHeight;
 
         const link = document.createElement('a');
         link.download = `market-dashboard-${new Date().toISOString().split('T')[0]}.png`;
