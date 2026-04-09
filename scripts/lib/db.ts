@@ -1,6 +1,6 @@
 /**
- * Standalone Prisma client for scripts (bypasses server-only restriction).
- * Loads .env.local for DATABASE_URL.
+ * Standalone Prisma client for scripts.
+ * Loads .env.local for DATABASE_URL (Neon Postgres).
  */
 
 import { config } from 'dotenv';
@@ -8,28 +8,26 @@ config({ path: '.env.local' });
 config({ path: '.env' });
 
 import { PrismaClient } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
-function createClient(): PrismaClient {
-  const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) throw new Error('Missing DATABASE_URL in .env.local');
+const dbUrl = process.env.DATABASE_URL;
+if (!dbUrl) throw new Error('Missing DATABASE_URL env var');
 
-  const parsedUrl = new URL(dbUrl);
-  const authToken = parsedUrl.searchParams.get('authToken') ?? undefined;
-  parsedUrl.searchParams.delete('authToken');
-  parsedUrl.searchParams.delete('sslmode');
+// Strip channel_binding=require — use URL API to avoid mangling the connection string
+const urlObj = new URL(dbUrl);
+urlObj.searchParams.delete('channel_binding');
+const safeDbUrl = urlObj.toString();
 
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+const pool = new Pool({
+  connectionString: safeDbUrl,
+  ssl: { rejectUnauthorized: false }, // Safe for scripts running behind TLS inspection proxies
+});
+const adapter = new PrismaPg(pool);
 
-  const adapter = new PrismaLibSql({ url: parsedUrl.toString(), authToken });
-  return new PrismaClient({ adapter });
-}
+export const prisma = new PrismaClient({ adapter });
 
-export const prisma = createClient();
-
-export const SQLITE_IN_CLAUSE_LIMIT = 50;
-
-export function chunkArray<T>(array: T[], chunkSize: number = SQLITE_IN_CLAUSE_LIMIT): T[][] {
+export function chunkArray<T>(array: T[], chunkSize: number = 500): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < array.length; i += chunkSize) {
     chunks.push(array.slice(i, i + chunkSize));

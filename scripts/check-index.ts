@@ -1,21 +1,11 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
 import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 async function main() {
-  const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) process.exit(1);
-
-  const parsedUrl = new URL(dbUrl);
-  const tursoAuth = parsedUrl.searchParams.get('authToken') ?? undefined;
-  parsedUrl.searchParams.delete('sslmode');
-  parsedUrl.searchParams.delete('authToken');
-
-  const adapter = new PrismaLibSql({ url: parsedUrl.toString(), authToken: tursoAuth });
-  const prisma = new PrismaClient({ adapter });
+  const prisma = new PrismaClient();
 
   try {
       console.log('Checking IndexHistory for Jan 30 - Feb 1 2026...');

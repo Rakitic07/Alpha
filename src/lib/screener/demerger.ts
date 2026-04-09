@@ -112,11 +112,11 @@ export async function adjustDemergerPrices(
   // Use raw SQL for bulk update efficiency
   await prisma.$executeRawUnsafe(
     `UPDATE "ScreenerPrice"
-     SET "open" = "open" * ?,
-         "high" = "high" * ?,
-         "low"  = "low"  * ?,
-         "close"= "close"* ?
-     WHERE "symbol" = ? AND "date" < ?`,
+     SET "open" = "open" * $1,
+         "high" = "high" * $2,
+         "low"  = "low"  * $3,
+         "close"= "close"* $4
+     WHERE "symbol" = $5 AND "date" < $6`,
     ratio, ratio, ratio, ratio,
     symbol, exDate,
   );
@@ -141,10 +141,10 @@ export async function adjustDemergerPrices(
     dmLogger.info(`${symbol}: ATH ${athRow.ath.toFixed(2)} → ${newATH.toFixed(2)}`);
   }
 
-  // Record for idempotency (raw SQL — table created outside Prisma generate)
+  // Record for idempotency
   await prisma.$executeRawUnsafe(
     `INSERT INTO "ScreenerDemerger" ("symbol", "exDate", "ratio", "appliedAt")
-     VALUES (?, ?, ?, datetime('now'))`,
+     VALUES ($1, $2, $3, NOW())`,
     symbol, exDate, ratio,
   );
 

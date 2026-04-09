@@ -1,72 +1,26 @@
-import { createClient } from '@libsql/client';
-import * as fs from 'fs';
 import * as cp from 'child_process';
 import * as dotenv from 'dotenv';
+import { existsSync } from 'fs';
 import { join } from 'path';
 
 // Load env
 const envLocalPath = join(process.cwd(), '.env.local');
-if (fs.existsSync(envLocalPath)) {
+if (existsSync(envLocalPath)) {
   dotenv.config({ path: envLocalPath });
 }
 dotenv.config();
 
 const dbUrl = process.env.DATABASE_URL;
-if (!dbUrl || !dbUrl.includes('libsql://')) {
-  console.error('❌ Please set correct DATABASE_URL in .env.local starting with libsql://');
+if (!dbUrl || !dbUrl.startsWith('postgresql')) {
+  console.error('❌ Please set correct DATABASE_URL in .env.local starting with postgresql://');
   process.exit(1);
 }
 
 async function main() {
   try {
-    // 1. Generate schema SQL
-    console.log('⏳ Generating schema SQL from Prisma...');
-    cp.execSync('npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > prisma/setup.sql', { stdio: 'inherit' });
-
-    // 2. Read SQL
-    const sql = fs.readFileSync('prisma/setup.sql', 'utf8');
-
-    // 3. Connect to Turso
-    console.log('🔄 Connecting to Turso...');
-
-    // Filter out [dotenv] lines and other non-SQL junk that might have been captured
-    const cleanSql = sql
-      .split('\n')
-      .filter(line => !line.includes('[dotenv@'))
-      .join('\n');
-
-    const dbUrl = process.env.DATABASE_URL;
-    const parsedUrl = new URL(dbUrl as string);
-    const authToken = parsedUrl.searchParams.get('authToken') ?? process.env.TURSO_AUTH_TOKEN;
-
-    parsedUrl.searchParams.delete('authToken');
-    parsedUrl.searchParams.delete('sslmode');
-
-    const client = createClient({
-      url: parsedUrl.toString(),
-      authToken,
-    });
-
-    // 4. Execute SQL
-    console.log('🚀 Applying schema to Turso database...');
-
-    // Split the SQL file into individual statements to execute them
-    // executeMultiple in @libsql/client sometimes has limits, so we run them sequentially
-    const statements = cleanSql
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    for (const stmt of statements) {
-      await client.execute(stmt);
-    }
-
-    console.log('✅ Successfully pushed schema to Turso database!');
-
-    // Cleanup
-    if (fs.existsSync('prisma/setup.sql')) {
-      fs.unlinkSync('prisma/setup.sql');
-    }
+    // Push schema to Neon Postgres
+    console.log('🚀 Pushing schema to Neon Postgres...');
+    cp.execSync('npx prisma db push', { stdio: 'inherit' });
 
     // Generate Prisma Client
     console.log('⏳ Generating Prisma Client...');

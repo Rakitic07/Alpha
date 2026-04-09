@@ -55,11 +55,11 @@ async function main() {
     console.log('Step 1: Ensuring ScreenerDemerger table exists...');
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "ScreenerDemerger" (
-        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "id" SERIAL PRIMARY KEY,
         "symbol" TEXT NOT NULL,
         "exDate" TEXT NOT NULL,
-        "ratio" REAL NOT NULL,
-        "appliedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        "ratio" DOUBLE PRECISION NOT NULL,
+        "appliedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
     await prisma.$executeRawUnsafe(`
@@ -131,7 +131,7 @@ async function main() {
     // Get close before ex-date
     const beforeRows = await prisma.$queryRawUnsafe<Array<{ date: string; close: number }>>(
       `SELECT "date", "close" FROM "ScreenerPrice"
-       WHERE "symbol" = ? AND "date" < ?
+       WHERE "symbol" = $1 AND "date" < $2
        ORDER BY "date" DESC LIMIT 1`,
       symbol, exDate,
     );
@@ -139,7 +139,7 @@ async function main() {
     // Get open on/after ex-date
     const afterRows = await prisma.$queryRawUnsafe<Array<{ date: string; open: number }>>(
       `SELECT "date", "open" FROM "ScreenerPrice"
-       WHERE "symbol" = ? AND "date" >= ?
+       WHERE "symbol" = $1 AND "date" >= $2
        ORDER BY "date" ASC LIMIT 1`,
       symbol, exDate,
     );
@@ -172,20 +172,20 @@ async function main() {
 
     if (!DRY_RUN) {
       // Count affected rows
-      const countResult = await prisma.$queryRawUnsafe<Array<{ cnt: number }>>(
-        `SELECT COUNT(*) as cnt FROM "ScreenerPrice" WHERE "symbol" = ? AND "date" < ?`,
+      const countResult = await prisma.$queryRawUnsafe<Array<{ cnt: bigint }>>(
+        `SELECT COUNT(*) as cnt FROM "ScreenerPrice" WHERE "symbol" = $1 AND "date" < $2`,
         symbol, exDate,
       );
-      const rowCount = countResult[0]?.cnt ?? 0;
+      const rowCount = Number(countResult[0]?.cnt ?? 0);
 
       // Adjust OHLC for all pre-exDate rows
       await prisma.$executeRawUnsafe(
         `UPDATE "ScreenerPrice"
-         SET "open" = "open" * ?,
-             "high" = "high" * ?,
-             "low"  = "low"  * ?,
-             "close"= "close"* ?
-         WHERE "symbol" = ? AND "date" < ?`,
+         SET "open" = "open" * $1,
+             "high" = "high" * $2,
+             "low"  = "low"  * $3,
+             "close"= "close"* $4
+         WHERE "symbol" = $5 AND "date" < $6`,
         ratio, ratio, ratio, ratio,
         symbol, exDate,
       );
@@ -193,7 +193,7 @@ async function main() {
 
       // Adjust StockATH
       const athRows = await prisma.$queryRawUnsafe<Array<{ ath: number; athDate: string }>>(
-        `SELECT "ath", "athDate" FROM "StockATH" WHERE "symbol" = ?`,
+        `SELECT "ath", "athDate" FROM "StockATH" WHERE "symbol" = $1`,
         symbol,
       );
       if (athRows.length > 0) {
@@ -203,7 +203,7 @@ async function main() {
         // Find max high in adjusted ScreenerPrice
         const maxHighRows = await prisma.$queryRawUnsafe<Array<{ high: number; date: string }>>(
           `SELECT "high", "date" FROM "ScreenerPrice"
-           WHERE "symbol" = ? ORDER BY "high" DESC LIMIT 1`,
+           WHERE "symbol" = $1 ORDER BY "high" DESC LIMIT 1`,
           symbol,
         );
 
@@ -213,8 +213,8 @@ async function main() {
           ? maxHighRows[0].date : athRows[0].athDate;
 
         await prisma.$executeRawUnsafe(
-          `UPDATE "StockATH" SET "ath" = ?, "athDate" = ?, "updatedAt" = datetime('now')
-           WHERE "symbol" = ?`,
+          `UPDATE "StockATH" SET "ath" = $1, "athDate" = $2, "updatedAt" = NOW()
+           WHERE "symbol" = $3`,
           newATH, newATHDate, symbol,
         );
         console.log(`    → ATH: ₹${oldATH.toFixed(2)} → ₹${newATH.toFixed(2)}`);
@@ -223,7 +223,7 @@ async function main() {
       // Record for idempotency
       await prisma.$executeRawUnsafe(
         `INSERT INTO "ScreenerDemerger" ("symbol", "exDate", "ratio", "appliedAt")
-         VALUES (?, ?, ?, datetime('now'))`,
+         VALUES ($1, $2, $3, NOW())`,
         symbol, exDate, ratio,
       );
     }

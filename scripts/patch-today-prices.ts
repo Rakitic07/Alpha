@@ -9,7 +9,7 @@ import { config } from 'dotenv';
 config({ path: '.env.local' });
 config({ path: '.env' });
 
-import { prisma, chunkArray, SQLITE_IN_CLAUSE_LIMIT } from './lib/db';
+import { prisma, chunkArray } from './lib/db';
 
 const TOKEN = process.env.UPSTOX_ANALYTICS_TOKEN;
 if (!TOKEN) throw new Error('Missing UPSTOX_ANALYTICS_TOKEN in .env.local');
@@ -75,7 +75,7 @@ async function main() {
 
   // Delete today's rows then batch insert
   const symbols = rows.map(r => r.symbol);
-  for (const chunk of chunkArray(symbols, SQLITE_IN_CLAUSE_LIMIT)) {
+  for (const chunk of chunkArray(symbols, 500)) {
     await prisma.screenerPrice.deleteMany({ where: { symbol: { in: chunk }, date: today } });
   }
   for (const chunk of chunkArray(rows, 100)) {

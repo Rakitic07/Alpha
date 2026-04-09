@@ -32,7 +32,7 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) v18+ and npm
-- [Turso CLI](https://docs.turso.tech/cli/installation) (for database)
+- A [Neon](https://neon.tech/) account (free tier is sufficient)
 - An [Upstox](https://upstox.com/) demat account
 - [Android Studio](https://developer.android.com/studio) *(Optional: only needed if building the Android app)*
 
@@ -52,40 +52,28 @@ That's it! No OAuth app, no redirect URLs, no daily token refresh needed.
 
 ---
 
-### Step 2: Create a Turso Database
+### Step 2: Create a Neon Postgres Database
 
-```bash
-# Install Turso CLI
-brew install tursodatabase/tap/turso   # macOS
-# or: curl -sSfL https://get.tur.so/install.sh | bash
-
-# Sign up & Login
-turso auth signup
-turso auth login
-
-# Create your database
-turso db create alpha-portfolio
-
-# Get your database URL
-turso db show alpha-portfolio --url
-# Output: libsql://alpha-portfolio-<your-username>.turso.io
-
-# Create an auth token
-turso db tokens create alpha-portfolio
-# Output: eyJhb... (save this!)
-```
+1. Sign up at [neon.tech](https://neon.tech/) (or connect via Vercel integration)
+2. Create a new project (e.g., `alpha-portfolio`)
+3. Go to your project's **Dashboard → Connection Details**
+4. Copy the **connection string** — it looks like:
+   ```
+   postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+   ```
 
 <details>
-<summary>💰 Turso Free Tier Limits</summary>
+<summary>💰 Neon Free Tier Limits</summary>
 
 | Feature | Free Tier |
 |---------|-----------|
-| Databases | 500 |
-| Storage | 9 GB |
-| Row Reads | 1B/month |
+| Storage | 0.5 GB |
+| Projects | 10 |
+| Compute | 100 CU-hours/month (0.25 CU) |
 | Row Writes | Unlimited |
 
-More than enough for personal portfolio tracking.
+**Is 100 CU-hours/month enough?**  
+Yes — easily. At 0.25 CU, that's 400 hours of active compute. Our workload (daily pipeline cron ~2 min/day + web queries) uses roughly 3–4 CU-hours/month — about 4% of the limit. The compute auto-suspends when idle (5 min timeout), so you're only billed for actual active time.
 
 </details>
 
@@ -106,8 +94,8 @@ cp .env.example .env
 Edit `.env.local` with your values:
 
 ```bash
-# Database
-DATABASE_URL=libsql://alpha-portfolio-<your-username>.turso.io?authToken=eyJhb...your-token
+# Database (Neon Postgres)
+DATABASE_URL=postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
 
 # Upstox Analytics Token
 UPSTOX_ANALYTICS_TOKEN=your-analytics-token
@@ -128,12 +116,12 @@ UPSTOX_ANALYTICS_TOKEN=your-analytics-token
 # Install dependencies
 npm install
 
-# Push database schema to Turso
+# Push database schema to Neon
 npm run db:setup
 ```
 
 > [!IMPORTANT]
-> **Database Initialization**: You MUST specify `DATABASE_URL` in your `.env.local` for the script to connect to Turso. Run `npm run db:setup` to create the tables in your Turso database. If you see a "no such table" error in the app, it means this step was skipped or failed.
+> **Database Initialization**: You MUST specify `DATABASE_URL` in your `.env.local` for the script to connect to Neon. Run `npm run db:setup` to create the tables in your Neon database. If you see a "no such table" error in the app, it means this step was skipped or failed.
 
 ---
 
@@ -190,7 +178,7 @@ git push -u origin main
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `DATABASE_URL` | `libsql://...?authToken=eyJhb...` | Turso URL + Auth Token |
+| `DATABASE_URL` | `postgresql://user:pass@host.neon.tech/dbname?sslmode=require` | Neon connection string |
 | `UPSTOX_ANALYTICS_TOKEN` | Your analytics token | From Developer Apps → Analytics tab. Mark as **Sensitive** |
 | `CRON_SECRET` | A random string | Required for cron endpoint auth |
 
@@ -372,8 +360,8 @@ Holdings held < 14 days are **LOCKED** (min hold protection, displayed in yellow
 ### Tech Stack
 
 - **Framework**: Next.js 16 (App Router, Turbopack)
-- **Database**: Turso (SQLite at the edge)
-- **ORM**: Prisma with libsql adapter
+- **Database**: Neon Postgres (serverless PostgreSQL)
+- **ORM**: Prisma
 - **Market Data**: Upstox API (REST + WebSocket)
 - **Styling**: TailwindCSS + Material UI
 - **Charts**: Recharts + Nivo
@@ -403,8 +391,8 @@ Holdings held < 14 days are **LOCKED** (min hold protection, displayed in yellow
 │  └─────────┘ └───────┘ └───┬───┘ └───────┘ └───────┘             │
 ├──────────────────────────────┼──────────────────────────────────────┤
 │                        ┌─────▼─────┐                                │
-│                        │   Turso   │                                │
-│                        │  Database │                                │
+│                        │   Neon    │                                │
+│                        │ Postgres  │                                │
 │                        └───────────┘                                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -516,7 +504,7 @@ If you want to auto-sync orders from Zerodha Kite:
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | Turso database URL with `?authToken=` appended |
+| `DATABASE_URL` | Neon Postgres connection string (`postgresql://...?sslmode=require`) |
 | `UPSTOX_ANALYTICS_TOKEN` | Long-lived (1-year) read-only token. Generate at Developer Apps → Analytics tab. |
 
 ### Optional — Personalization
@@ -551,10 +539,12 @@ Only needed if you want to auto-import orders from Zerodha Kite. Not required fo
 
 ### Troubleshooting Missing Tables
 If you encounter an error like:
-`SQLITE_UNKNOWN: SQLite error: no such table: main.DailyPortfolioSnapshot`
+`relation "DailyPortfolioSnapshot" does not exist`
 
-This means your database hasn't been initialized with the Prisma schema. To fix this, run:
+This means your Neon database hasn't been initialized with the Prisma schema. To fix this, run:
 ```bash
+npm run db:setup
+# or directly:
 npx prisma db push
 ```
 

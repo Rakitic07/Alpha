@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -205,18 +204,7 @@ async function main() {
   
   // Connect to database (needed for symbol mappings even in dry-run)
   console.log('\nConnecting to database...');
-  const dbUrl = process.env.DATABASE_URL!;
-  const parsedUrl = new URL(dbUrl);
-  const authTok = parsedUrl.searchParams.get('authToken') ?? undefined;
-  parsedUrl.searchParams.delete('sslmode');
-  parsedUrl.searchParams.delete('authToken');
-
-  const adapter = new PrismaLibSql({
-    url: parsedUrl.toString(),
-    authToken: authTok,
-  });
-  
-  const prisma = new PrismaClient({ adapter });
+  const prisma = new PrismaClient();
   
   try {
     // Fetch symbol mappings to resolve renamed symbols

@@ -1,16 +1,17 @@
 /**
- * Create ScreenerDemerger table via raw SQL (bypasses Prisma CLI ESM issues).
+ * Create ScreenerDemerger table via raw SQL.
+ * Not needed if prisma db push works — this is a fallback.
  */
 import { prisma } from './lib/db';
 
 async function main() {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "ScreenerDemerger" (
-      "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+      "id" SERIAL PRIMARY KEY,
       "symbol" TEXT NOT NULL,
       "exDate" TEXT NOT NULL,
-      "ratio" REAL NOT NULL,
-      "appliedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      "ratio" DOUBLE PRECISION NOT NULL,
+      "appliedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
   await prisma.$executeRawUnsafe(`
