@@ -85,8 +85,34 @@ export async function detectAndFlushAnomalies(): Promise<{ flushed: string[] }> 
   // and corp action anomalies are typically 0-5 stocks per day.
   if (anomalies.length > 0) {
     const result = await withConcurrency(anomalies, async (a) => {
-      await flushAndRefetchStock(a.symbol, a.instrumentKey);
+      const rowsInserted = await flushAndRefetchStock(a.symbol, a.instrumentKey);
       flushed.push(a.symbol);
+
+      // After flush, check whether the fresh price history has a lower max high
+      // than the stored ATH. If so, Upstox no longer carries the old highs —
+      // this is the demerger/restructuring case where pre-event prices are gone.
+      // Only lower StockATH here, never raise it (not every >20% drop is a demerger;
+      // for normal drops Upstox keeps full history so max(fresh highs) ≥ storedATH).
+      if (rowsInserted > 0) {
+        const athRow = await prisma.stockATH.findUnique({ where: { symbol: a.symbol } });
+        if (athRow) {
+          const freshAth = await prisma.screenerPrice.findFirst({
+            where: { symbol: a.symbol },
+            select: { high: true, date: true },
+            orderBy: { high: 'desc' },
+          });
+          if (freshAth && freshAth.high < athRow.ath) {
+            caLogger.warn(
+              `${a.symbol}: resetting ATH ${athRow.ath.toFixed(2)} → ${freshAth.high.toFixed(2)} ` +
+              `(post-event history only, peak on ${freshAth.date})`
+            );
+            await prisma.stockATH.update({
+              where: { symbol: a.symbol },
+              data: { ath: freshAth.high, athDate: freshAth.date, updatedAt: new Date() },
+            });
+          }
+        }
+      }
     }, 1, 0, 500);
 
     if (result.errors.length > 0) {
