@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     // Persist so Settings page can show status without digging through logs
     await persistRunResult(response);
     // Bust the screener score cache so the UI immediately reflects new rankings
-    revalidateTag('screener-scores');
+    revalidateTag('screener-scores', 'max');
     return NextResponse.json(response);
   } catch (error) {
     const errResponse = {
