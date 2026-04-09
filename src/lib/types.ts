@@ -25,6 +25,7 @@ export interface PortfolioHolding {
   sector?: string;
   priceHistory?: { date: string; close: number }[];
   holdingPeriodDays?: number;
+  upcomingDemerger?: { exDate: string; daysUntil: number };
 }
 
 /**

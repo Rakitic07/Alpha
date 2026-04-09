@@ -118,6 +118,22 @@ const SectorChip = memo(function SectorChip({ sector }: { sector?: string }) {
     );
 });
 
+const DemergerChip = memo(function DemergerChip({ demerger }: { demerger?: { exDate: string; daysUntil: number } }) {
+    if (!demerger) return null;
+    return (
+        <span
+            className="text-[0.55rem] px-1.5 py-0.5 rounded-full font-medium tracking-wide cursor-help"
+            style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.20)',
+                color: '#fbbf24',
+            }}
+            title={`Demerger ex-date: ${demerger.exDate} (${demerger.daysUntil} day${demerger.daysUntil !== 1 ? 's' : ''})`}
+        >
+            Demerger {demerger.daysUntil}d
+        </span>
+    );
+});
+
 // Memoized row component for virtualization
 interface HoldingRowProps {
     holding: PortfolioHolding;
@@ -140,6 +156,7 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
                     <div className="hidden md:flex gap-1 flex-wrap">
                         <MarketCapChip category={h.marketCapCategory} />
                         <SectorChip sector={h.sector} />
+                        <DemergerChip demerger={h.upcomingDemerger} />
                     </div>
                 </div>
             </StyledTableCell>

@@ -252,6 +252,17 @@ model StockATH {
   updatedAt     DateTime @default(now())
 }
 
+// Demerger adjustments applied to ScreenerPrice (idempotency tracking)
+model ScreenerDemerger {
+  id        Int      @id @default(autoincrement())
+  symbol    String
+  exDate    String   // YYYY-MM-DD
+  ratio     Float    // open(exDate) / close(dayBefore) — typically 0.3-0.95
+  appliedAt DateTime @default(now())
+
+  @@unique([symbol, exDate])
+}
+
 // Daily computed momentum scores (full scored universe)
 model MomentumScore {
   id                Int      @id @default(autoincrement())

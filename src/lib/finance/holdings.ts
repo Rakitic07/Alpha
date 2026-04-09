@@ -7,6 +7,7 @@ import { getLTP, hasValidToken } from '../upstox-client';
 import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '../amfi';
 import { isMarketOpenAsync } from '../marketHours';
 import { financeLogger } from '@/lib/logger';
+import { fetchNSECorporateActions } from '@/lib/nse-api';
 import { computePortfolioState } from './recalculation';
 import { Holding, MarketCapResult } from './types';
 
@@ -174,6 +175,35 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
             holdingPeriodDays: holdingPeriodDaysMap.get(h.symbol)
         };
     });
+
+    // Enrich with upcoming demerger alerts (next 90 days)
+    try {
+      const now = new Date();
+      const futureDate = new Date(now);
+      futureDate.setDate(futureDate.getDate() + 90);
+      const demergerActions = await fetchNSECorporateActions(now, futureDate, 'DEMERGER');
+      if (demergerActions && demergerActions.length > 0) {
+        const holdingSymbols = new Set(validHoldings.map(h => h.symbol));
+        for (const action of demergerActions) {
+          if (action.series !== 'EQ' || !holdingSymbols.has(action.symbol)) continue;
+          // Parse NSE date "24-Apr-2025"
+          const { parse: parseDateFns } = await import('date-fns');
+          const exDate = parseDateFns(action.exDate, 'dd-MMM-yyyy', new Date());
+          if (isNaN(exDate.getTime())) continue;
+          const daysUntil = differenceInDays(exDate, now);
+          if (daysUntil < 0) continue; // Already past
+          const holding = validHoldings.find(h => h.symbol === action.symbol);
+          if (holding) {
+            (holding as Record<string, unknown>).upcomingDemerger = {
+              exDate: format(exDate, 'dd-MMM-yyyy'),
+              daysUntil,
+            };
+          }
+        }
+      }
+    } catch (err) {
+      financeLogger.warn('[Portfolio] Upcoming demerger check failed:', (err as Error).message);
+    }
 
     return validHoldings.sort((a, b) => b.currentValue - a.currentValue);
 }

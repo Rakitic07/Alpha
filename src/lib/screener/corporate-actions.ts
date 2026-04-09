@@ -83,12 +83,6 @@ export async function detectAndFlushAnomalies(): Promise<{ flushed: string[] }> 
   // Each flushAndRefetchStock calls getHistoricalCandles (1 API call per stock).
   // Serial avoids burst against the 50 req/s, 500 req/min Upstox rate limit,
   // and corp action anomalies are typically 0-5 stocks per day.
-  //
-  // NOTE: StockATH is NOT updated here. Detection catches splits, bonuses, and
-  // demergers alike — we can't distinguish them from price data alone. For splits
-  // and bonuses Upstox adjusts prices retroactively so the ATH will self-correct
-  // on the next monthly candle refresh. For demergers (Upstox serves only
-  // post-event prices) the ATH must be corrected manually via the StockATH table.
   if (anomalies.length > 0) {
     const result = await withConcurrency(anomalies, async (a) => {
       await flushAndRefetchStock(a.symbol, a.instrumentKey);

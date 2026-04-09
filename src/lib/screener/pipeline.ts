@@ -18,6 +18,7 @@ import { fetchAndStoreBhavcopy, isBhavcopyStale } from './bhavcopy';
 import { fetchAndStoreCandles, patchTodayPrices } from './prices';
 import { detectAndFlushAnomalies } from './corporate-actions';
 import { updateATHFromPrices, loadATHMap } from './ath';
+import { detectAndAdjustDemergers } from './demerger';
 import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
 import { resolveLastTradingDay, isMarketHours, daysAgo } from './dates';
 import { logger } from '@/lib/logger';
@@ -149,7 +150,28 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
     errors.push(`Corp action: ${(err as Error).message}`);
   }
   pipelineLogger.info(`[${elapsed()}] Corp actions done`);
-  await progress(30, 'Corp actions done');
+  await progress(28, 'Corp actions done');
+
+  // ── Step 3c: Demerger price adjustment ─────────────────────────────────────
+  // Runs after flush (3b) so refetched data gets adjusted,
+  // and before ATH update (5) so ATH sees correct prices.
+  // Uses NSE API to identify demergers specifically (not splits/bonuses).
+  let demergerAdjusted: string[] = [];
+  try {
+    const universeSymbols = new Set(tradeable.map(i => i.symbol));
+    const demergerResult = await detectAndAdjustDemergers(universeSymbols);
+    demergerAdjusted = demergerResult.adjusted;
+    if (demergerResult.adjusted.length > 0) {
+      pipelineLogger.info(`Demerger adjusted: ${demergerResult.adjusted.join(', ')}`);
+    }
+    if (demergerResult.errors.length > 0) {
+      errors.push(...demergerResult.errors);
+    }
+  } catch (err) {
+    errors.push(`Demerger: ${(err as Error).message}`);
+  }
+  pipelineLogger.info(`[${elapsed()}] Demerger check done`);
+  await progress(30, 'Demerger check done');
 
   // ── Step 4: Load mcap EARLY for filtering ──────────────────────────────────
   // Load mcap before the big price query so we can filter to scoreable stocks only

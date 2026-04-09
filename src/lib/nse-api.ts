@@ -285,13 +285,14 @@ export async function fetchNSEIndexHistory(
  */
 export async function fetchNSECorporateActions(
     fromDate: Date,
-    toDate: Date
+    toDate: Date,
+    subject?: string, // e.g. 'DEMERGER' to filter by action type
 ): Promise<NSECorporateAction[] | null> {
     try {
         const fromDateStr = formatDateDMY(fromDate);
         const toDateStr = formatDateDMY(toDate);
-        
-        apiLogger.info(`[NSE] Fetching corporate actions from ${fromDateStr} to ${toDateStr}...`);
+
+        apiLogger.info(`[NSE] Fetching corporate actions from ${fromDateStr} to ${toDateStr}${subject ? ` (subject=${subject})` : ''}...`);
 
         // 1. Get Cookies
         const cookies = await getNSECookies();
@@ -306,7 +307,8 @@ export async function fetchNSECorporateActions(
             'X-Requested-With': 'XMLHttpRequest'
         };
 
-        const apiUrl = `https://www.nseindia.com/api/corporates-corporateActions?index=equities&from_date=${fromDateStr}&to_date=${toDateStr}`;
+        let apiUrl = `https://www.nseindia.com/api/corporates-corporateActions?index=equities&from_date=${fromDateStr}&to_date=${toDateStr}`;
+        if (subject) apiUrl += `&subject=${encodeURIComponent(subject)}`;
         const apiRes = await fetch(apiUrl, { headers: apiHeaders });
 
         if (!apiRes.ok) {
