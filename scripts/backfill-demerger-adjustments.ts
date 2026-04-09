@@ -160,8 +160,8 @@ async function main() {
     const ratio = openAfter / closeBefore;
 
     // Sanity check
-    if (ratio < 0.3 || ratio > 0.95) {
-      skipped.push({ symbol, reason: `ratio ${ratio.toFixed(4)} out of [0.3, 0.95] range` });
+    if (ratio < 0.3 || ratio > 0.99) {
+      skipped.push({ symbol, reason: `ratio ${ratio.toFixed(4)} out of [0.3, 0.99] range` });
       continue;
     }
 

@@ -94,10 +94,12 @@ export async function adjustDemergerPrices(
 
   const ratio = afterRow.open / beforeRow.close;
 
-  // Sanity: demerger shouldn't remove >70% of value or increase it
-  if (ratio < 0.3 || ratio > 0.95) {
+  // Sanity: demerger shouldn't remove >70% of value or leave price unchanged
+  // Upper bound 0.99: anything higher is likely normal daily volatility, not a demerger
+  // Lower bound 0.30: parent retaining <30% of value would be extreme
+  if (ratio < 0.3 || ratio > 0.99) {
     dmLogger.warn(
-      `${symbol}: ratio ${ratio.toFixed(4)} out of range [0.3, 0.95] ` +
+      `${symbol}: ratio ${ratio.toFixed(4)} out of range [0.3, 0.99] ` +
       `(${beforeRow.date} close=${beforeRow.close}, ${afterRow.date} open=${afterRow.open}) — skipping`
     );
     return null;
