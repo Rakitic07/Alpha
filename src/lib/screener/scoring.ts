@@ -8,7 +8,6 @@
 // ── Backtest DEFAULT_PARAMS (engine.py:522-548) — LOCKED ──
 export const PARAMS = {
   sharpeWeight: 1.0,
-  proximityWeight: 0.0,
   skipMonths: 1,             // = 21 trading days, applied to 3m window only
   athProximityPct: 30,       // entry: within 30% of ATH
   athWindow: 'full' as const,
@@ -228,9 +227,9 @@ export function scoreStock(
     return null;
   }
 
-  // Composite score (engine.py:157-158)
+  // Composite score (engine.py:157-158): pure Sharpe average
   const avgSharpe = (sharpe12m + sharpe6m + sharpe3m) / 3;
-  const compositeScore = PARAMS.sharpeWeight * avgSharpe + PARAMS.proximityWeight * proximity;
+  const compositeScore = PARAMS.sharpeWeight * avgSharpe;
 
   // % above/below 200 DMA
   const aboveDma200Pct = dma200 > 0 ? ((currentClose - dma200) / dma200) * 100 : 0;

@@ -49,7 +49,7 @@ async function main() {
 
   const t0 = Date.now();
   console.log(`\n=== Rank History Backfill ===`);
-  console.log(`Params: sharpeWeight=${PARAMS.sharpeWeight}, proximityWeight=${PARAMS.proximityWeight}, skipMonths=${PARAMS.skipMonths}`);
+  console.log(`Params: sharpeWeight=${PARAMS.sharpeWeight}, skipMonths=${PARAMS.skipMonths}`);
 
   // ── 1. Load all price data once ────────────────────────────────────────────
   console.log('\n[1/4] Loading price data...');

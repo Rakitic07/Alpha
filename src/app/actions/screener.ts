@@ -238,7 +238,7 @@ export async function getScreenerData(
           const s3  = sharpeRatio(computeReturns(c3));
           if (Number.isFinite(s12) && Number.isFinite(s6) && Number.isFinite(s3)) {
             avgSharpe = (s12 + s6 + s3) / 3;
-            compositeScore = PARAMS.sharpeWeight * avgSharpe + PARAMS.proximityWeight * athProximity;
+            compositeScore = PARAMS.sharpeWeight * avgSharpe;
           }
         }
 

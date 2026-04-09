@@ -41,7 +41,7 @@ async function main() {
   const today = effectiveTradingDay();
   const t0    = Date.now();
 
-  console.log(`\n=== Rescore (S${PARAMS.sharpeWeight * 10}/P${PARAMS.proximityWeight * 10} skip=${PARAMS.skipMonths > 0 ? 'Y' : 'N'}) — ${today} ===\n`);
+  console.log(`\n=== Rescore (S${PARAMS.sharpeWeight * 10} skip=${PARAMS.skipMonths > 0 ? 'Y' : 'N'}) — ${today} ===\n`);
 
   // ── Load data ────────────────────────────────────────────────────────────────
   console.log('[1/5] Loading prices...');
