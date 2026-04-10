@@ -77,9 +77,11 @@ export default function LivePage() {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const element = document.getElementById('live-dashboard-content');
+      const marketOverview = document.getElementById('market-overview');
       if (element) {
         const { toPng } = await import('html-to-image');
-        // Use scrollHeight/scrollWidth to avoid capturing flex-container whitespace
+        // Hide market-overview via display:none so it's excluded from layout/height
+        if (marketOverview) marketOverview.style.display = 'none';
         const contentHeight = element.scrollHeight;
         const contentWidth = element.scrollWidth;
         const dataUrl = await toPng(element, {
@@ -88,12 +90,9 @@ export default function LivePage() {
           pixelRatio: 2,
           height: contentHeight,
           width: contentWidth,
-          backgroundColor: '#0f172a', // match bg-slate-900
-          filter: (node) => {
-            if (node instanceof Element && node.id === 'market-overview') return false;
-            return true;
-          },
+          backgroundColor: '#0f172a',
         });
+        if (marketOverview) marketOverview.style.display = '';
 
         const link = document.createElement('a');
         link.download = `market-dashboard-${new Date().toISOString().split('T')[0]}.png`;
