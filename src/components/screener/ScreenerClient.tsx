@@ -529,18 +529,23 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             </span>
                           ) : null;
                         })()}
-                        {row.circuitBandPct != null && row.circuitBandPct < 15 && (
-                          <span
-                            className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-medium border tracking-wide ${
-                              row.circuitBandPct <= 5
-                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                            }`}
-                            title={`Circuit band: ${row.circuitBandPct}%`}
-                          >
-                            {Math.round(row.circuitBandPct)}%
-                          </span>
-                        )}
+                        {/* Circuit filter badge: bandWidth < 15% means restricted (2% or 5% filter) */}
+                        {row.circuitBandPct != null && row.circuitBandPct < 15 && (() => {
+                          // Map band width → actual circuit filter: ~4% → 2%, ~10.5% → 5%
+                          const filter = row.circuitBandPct <= 5 ? 2 : 5;
+                          return (
+                            <span
+                              className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-medium border tracking-wide ${
+                                filter <= 2
+                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              }`}
+                              title={`Circuit filter: ±${filter}%`}
+                            >
+                              {filter}%
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">
                         {row.companyName}
