@@ -63,7 +63,7 @@ type ScoredStock = {
   passesFilters: boolean; // true = in filtered set, false = all-universe only
 };
 
-export async function runScreenerPipeline(jobId?: string): Promise<PipelineResult> {
+export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set<string>): Promise<PipelineResult> {
   const start = Date.now();
   const TIMEOUT_MS = 270_000;
   const duringMarket = isMarketHours();
@@ -293,7 +293,7 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
   for (const inst of scoreableInsts) {
     try {
       const bandWidth = circuitMap.get(inst.symbol);
-      if (bandWidth !== undefined && bandWidth < 0.15) continue;
+      // Circuit filter only applies to pre-filtered list (not all-universe)
 
       const candles = pricesBySymbol.get(inst.symbol);
       if (!candles || candles.length < 269) continue;
@@ -310,8 +310,10 @@ export async function runScreenerPipeline(jobId?: string): Promise<PipelineResul
       if (!allResult) continue;
 
       // Also check if it passes filters (for the filtered set)
+      // Circuit band < 15% excludes from pre-filtered, but portfolio holdings are exempt
       const filteredResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH);
-      const passesFilters = filteredResult !== null;
+      const passesCircuit = bandWidth === undefined || bandWidth >= 0.15 || !!portfolioSymbols?.has(inst.symbol);
+      const passesFilters = filteredResult !== null && passesCircuit;
 
       const sparkline = closes.slice(-50);
 

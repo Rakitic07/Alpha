@@ -42,7 +42,16 @@ export async function GET(request: NextRequest) {
   cronLogger.info('Starting momentum screener pipeline...');
 
   try {
-    const result = await runScreenerPipeline();
+    // Quick query for active portfolio symbols (exempt from circuit band filter)
+    const txns = await prisma.transaction.findMany({ select: { symbol: true, type: true, quantity: true } });
+    const qtyMap = new Map<string, number>();
+    for (const t of txns) {
+      const q = qtyMap.get(t.symbol) ?? 0;
+      qtyMap.set(t.symbol, t.type === 'BUY' ? q + t.quantity : q - t.quantity);
+    }
+    const portfolioSymbols = new Set([...qtyMap.entries()].filter(([, q]) => q > 0.01).map(([s]) => s));
+
+    const result = await runScreenerPipeline(undefined, portfolioSymbols);
     const response = {
       ...result,
       timestamp: new Date().toISOString(),

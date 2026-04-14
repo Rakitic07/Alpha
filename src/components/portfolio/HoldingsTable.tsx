@@ -134,6 +134,35 @@ const DemergerChip = memo(function DemergerChip({ demerger }: { demerger?: { exD
     );
 });
 
+const CircuitBandChip = memo(function CircuitBandChip({ bandPct }: { bandPct?: number | null }) {
+    if (bandPct === undefined) return null; // data not loaded yet
+    if (bandPct === null) {
+        // No circuit limits → F&O stock
+        return (
+            <span className="text-[0.55rem] px-1.5 py-0.5 rounded-full font-medium tracking-wide"
+                style={{ backgroundColor: 'rgba(148, 163, 184, 0.15)', color: '#94a3b8' }}
+                title="No circuit limits (F&O stock)">
+                F&O
+            </span>
+        );
+    }
+    let color: string, bg: string;
+    if (bandPct <= 5) {
+        color = '#f87171'; bg = 'rgba(248, 113, 113, 0.15)'; // red
+    } else if (bandPct <= 10) {
+        color = '#fbbf24'; bg = 'rgba(251, 191, 36, 0.15)'; // amber
+    } else {
+        color = '#4ade80'; bg = 'rgba(74, 222, 128, 0.12)'; // green
+    }
+    return (
+        <span className="text-[0.55rem] px-1.5 py-0.5 rounded-full font-medium tracking-wide"
+            style={{ backgroundColor: bg, color }}
+            title={`Circuit band: ${bandPct}%`}>
+            {bandPct}%
+        </span>
+    );
+});
+
 // Memoized row component for virtualization
 interface HoldingRowProps {
     holding: PortfolioHolding;
@@ -156,6 +185,7 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
                     <div className="hidden md:flex gap-1 flex-wrap">
                         <MarketCapChip category={h.marketCapCategory} />
                         <SectorChip sector={h.sector} />
+                        <CircuitBandChip bandPct={h.circuitBandPct} />
                         <DemergerChip demerger={h.upcomingDemerger} />
                     </div>
                 </div>
@@ -380,6 +410,7 @@ export default function HoldingsTable({ holdings }: { holdings: PortfolioHolding
                   <div className="hidden md:flex gap-1 flex-wrap">
                     <MarketCapChip category={h.marketCapCategory} />
                     <SectorChip sector={h.sector} />
+                    <CircuitBandChip bandPct={h.circuitBandPct} />
                   </div>
                 </div>
               </StyledTableCell>

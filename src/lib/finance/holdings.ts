@@ -3,7 +3,7 @@ import { startOfDay, format, differenceInDays } from 'date-fns';
 import xirr from 'xirr';
 import { unstable_cache } from 'next/cache';
 import { getInstrumentKeys } from '../instrument-service';
-import { getLTP, hasValidToken } from '../upstox-client';
+import { getLTP, getFullQuote, hasValidToken } from '../upstox-client';
 import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '../amfi';
 import { isMarketOpenAsync } from '../marketHours';
 import { financeLogger } from '@/lib/logger';
@@ -203,6 +203,37 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
       }
     } catch (err) {
       financeLogger.warn('[Portfolio] Upcoming demerger check failed:', (err as Error).message);
+    }
+
+    // Enrich with circuit band data from Upstox full quote
+    try {
+      const instrumentKeyMap = await getInstrumentKeys(symbols);
+      const instrumentKeys = Array.from(instrumentKeyMap.values());
+      if (instrumentKeys.length > 0) {
+        const keyToSymbol = new Map<string, string>();
+        for (const [symbol, key] of instrumentKeyMap.entries()) keyToSymbol.set(key, symbol);
+
+        const quotes = await getFullQuote(instrumentKeys);
+        for (const [key, quote] of quotes) {
+          const symbol = keyToSymbol.get(key);
+          if (!symbol) continue;
+          const holding = validHoldings.find(h => h.symbol === symbol);
+          if (!holding) continue;
+          const lower = quote.lower_circuit_limit;
+          const upper = quote.upper_circuit_limit;
+          if (lower > 0) {
+            const bandWidth = (upper - lower) / lower;
+            // Round to nearest standard band: 2, 5, 10, 20
+            const pct = Math.round(bandWidth * 100);
+            (holding as Record<string, unknown>).circuitBandPct = pct <= 3 ? 2 : pct <= 7 ? 5 : pct <= 15 ? 10 : 20;
+          } else {
+            // No circuit limits → F&O stock
+            (holding as Record<string, unknown>).circuitBandPct = null;
+          }
+        }
+      }
+    } catch (err) {
+      financeLogger.warn('[Portfolio] Circuit band check failed:', (err as Error).message);
     }
 
     return validHoldings.sort((a, b) => b.currentValue - a.currentValue);
