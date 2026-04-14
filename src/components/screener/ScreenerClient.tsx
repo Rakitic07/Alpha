@@ -529,7 +529,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             </span>
                           ) : null;
                         })()}
-                        {row.circuitBandPct != null && row.circuitBandPct <= 10 && (
+                        {row.circuitBandPct != null && row.circuitBandPct < 15 && (
                           <span
                             className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-medium border tracking-wide ${
                               row.circuitBandPct <= 5
@@ -538,7 +538,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             }`}
                             title={`Circuit band: ${row.circuitBandPct}%`}
                           >
-                            {row.circuitBandPct}%
+                            {Math.round(row.circuitBandPct)}%
                           </span>
                         )}
                       </div>
