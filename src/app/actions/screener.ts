@@ -24,6 +24,7 @@ export interface ScreenerRow {
   marketCapCr: number;
   marketCapCategory: string | null;
   sparklineData: number[];
+  circuitBandPct: number | null;
   prevRank: number | null;
   rankChange: number | null;
   inPortfolio: boolean;
@@ -164,6 +165,7 @@ export async function getScreenerData(
       marketCapCr: s.marketCapCr,
       marketCapCategory: s.marketCapCategory,
       sparklineData: s.sparklineData ? JSON.parse(s.sparklineData) : [],
+      circuitBandPct: s.circuitBandPct ?? null,
       prevRank,
       rankChange,
       inPortfolio,
@@ -265,6 +267,7 @@ export async function getScreenerData(
           marketCapCr,
           marketCapCategory,
           sparklineData: closes.slice(-50),
+          circuitBandPct: null,
           prevRank: null,
           rankChange: null,
           inPortfolio: true,
