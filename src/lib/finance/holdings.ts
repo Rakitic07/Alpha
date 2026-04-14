@@ -3,7 +3,7 @@ import { startOfDay, format, differenceInDays } from 'date-fns';
 import xirr from 'xirr';
 import { unstable_cache } from 'next/cache';
 import { getInstrumentKeys } from '../instrument-service';
-import { getLTP, getFullQuote, hasValidToken } from '../upstox-client';
+import { getLTP, hasValidToken } from '../upstox-client';
 import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '../amfi';
 import { isMarketOpenAsync } from '../marketHours';
 import { financeLogger } from '@/lib/logger';
@@ -203,46 +203,6 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
       }
     } catch (err) {
       financeLogger.warn('[Portfolio] Upcoming demerger check failed:', (err as Error).message);
-    }
-
-    // Enrich with circuit band data from Upstox full quote
-    try {
-      const instrumentKeyMap = await getInstrumentKeys(symbols);
-      const instrumentKeys = Array.from(instrumentKeyMap.values());
-      if (instrumentKeys.length > 0) {
-        const keyToSymbol = new Map<string, string>();
-        for (const [symbol, key] of instrumentKeyMap.entries()) keyToSymbol.set(key, symbol);
-
-        const quotes = await getFullQuote(instrumentKeys);
-        // Response keys use NSE_EQ:SYMBOL format (not ISIN), so also build symbol-based lookup
-        const symbolSet = new Set(symbols);
-        let enriched = 0;
-        for (const [key, quote] of quotes) {
-          // Try ISIN-based lookup first, then extract symbol from response key (NSE_EQ:SYMBOL → SYMBOL)
-          let symbol = keyToSymbol.get(key);
-          if (!symbol) {
-            const parts = key.split(/[:|]/);
-            const candidate = parts[parts.length - 1];
-            if (symbolSet.has(candidate)) symbol = candidate;
-          }
-          if (!symbol) continue;
-          const holding = validHoldings.find(h => h.symbol === symbol);
-          if (!holding) continue;
-          const lower = quote.lower_circuit_limit;
-          const upper = quote.upper_circuit_limit;
-          if (lower > 0) {
-            const bandWidth = (upper - lower) / lower;
-            const pct = Math.round(bandWidth * 100);
-            (holding as Record<string, unknown>).circuitBandPct = pct <= 3 ? 2 : pct <= 7 ? 5 : pct <= 15 ? 10 : 20;
-          } else {
-            (holding as Record<string, unknown>).circuitBandPct = null;
-          }
-          enriched++;
-        }
-        financeLogger.info(`[Portfolio] Circuit band: enriched ${enriched}/${validHoldings.length} holdings`);
-      }
-    } catch (err) {
-      financeLogger.warn('[Portfolio] Circuit band check failed:', (err as Error).message);
     }
 
     return validHoldings.sort((a, b) => b.currentValue - a.currentValue);

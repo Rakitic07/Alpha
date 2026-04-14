@@ -26,7 +26,6 @@ export interface PortfolioHolding {
   priceHistory?: { date: string; close: number }[];
   holdingPeriodDays?: number;
   upcomingDemerger?: { exDate: string; daysUntil: number };
-  circuitBandPct?: number | null; // Circuit band width % (2, 5, 10, 20, null = no circuit / F&O)
 }
 
 /**
