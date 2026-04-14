@@ -214,8 +214,17 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
         for (const [symbol, key] of instrumentKeyMap.entries()) keyToSymbol.set(key, symbol);
 
         const quotes = await getFullQuote(instrumentKeys);
+        // Response keys use NSE_EQ:SYMBOL format (not ISIN), so also build symbol-based lookup
+        const symbolSet = new Set(symbols);
+        let enriched = 0;
         for (const [key, quote] of quotes) {
-          const symbol = keyToSymbol.get(key);
+          // Try ISIN-based lookup first, then extract symbol from response key (NSE_EQ:SYMBOL → SYMBOL)
+          let symbol = keyToSymbol.get(key);
+          if (!symbol) {
+            const parts = key.split(/[:|]/);
+            const candidate = parts[parts.length - 1];
+            if (symbolSet.has(candidate)) symbol = candidate;
+          }
           if (!symbol) continue;
           const holding = validHoldings.find(h => h.symbol === symbol);
           if (!holding) continue;
@@ -223,14 +232,14 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
           const upper = quote.upper_circuit_limit;
           if (lower > 0) {
             const bandWidth = (upper - lower) / lower;
-            // Round to nearest standard band: 2, 5, 10, 20
             const pct = Math.round(bandWidth * 100);
             (holding as Record<string, unknown>).circuitBandPct = pct <= 3 ? 2 : pct <= 7 ? 5 : pct <= 15 ? 10 : 20;
           } else {
-            // No circuit limits → F&O stock
             (holding as Record<string, unknown>).circuitBandPct = null;
           }
+          enriched++;
         }
+        financeLogger.info(`[Portfolio] Circuit band: enriched ${enriched}/${validHoldings.length} holdings`);
       }
     } catch (err) {
       financeLogger.warn('[Portfolio] Circuit band check failed:', (err as Error).message);
