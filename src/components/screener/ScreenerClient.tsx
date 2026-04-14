@@ -529,20 +529,29 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             </span>
                           ) : null;
                         })()}
-                        {/* Circuit filter badge: bandWidth < 15% means restricted (2% or 5% filter) */}
-                        {row.circuitBandPct != null && row.circuitBandPct < 15 && (() => {
-                          // Map band width → actual circuit filter: ~4% → 2%, ~10.5% → 5%
-                          const filter = row.circuitBandPct <= 5 ? 2 : 5;
+                        {/* Circuit filter badge */}
+                        {(() => {
+                          const bw = row.circuitBandPct;
+                          if (bw === undefined) return null;
+                          // Map band width → actual circuit filter
+                          let label: string, cls: string;
+                          if (bw === null || bw > 100) {
+                            label = 'F&O'; cls = 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30';
+                          } else if (bw <= 5) {
+                            label = '2%'; cls = 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+                          } else if (bw <= 12) {
+                            label = '5%'; cls = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+                          } else if (bw <= 25) {
+                            label = '10%'; cls = 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+                          } else {
+                            label = '20%'; cls = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+                          }
                           return (
                             <span
-                              className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-medium border tracking-wide ${
-                                filter <= 2
-                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                              }`}
-                              title={`Circuit filter: ±${filter}%`}
+                              className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-medium border tracking-wide ${cls}`}
+                              title={`Circuit filter: ±${label}`}
                             >
-                              {filter}%
+                              {label}
                             </span>
                           );
                         })()}
