@@ -298,8 +298,9 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         case 'symbol': cmp = a.symbol.localeCompare(b.symbol); break;
         case 'mcap':   cmp = a.marketCapCr - b.marketCapCr; break;
         case 'dd':     cmp = a.athProximity - b.athProximity; break;
-        case 'score':  cmp = a.compositeScore - b.compositeScore; break;
-        default:       cmp = a.rank - b.rank;
+        case 'score':      cmp = a.compositeScore - b.compositeScore; break;
+        case 'rankChange': cmp = (a.rankChange ?? 0) - (b.rankChange ?? 0); break;
+        default:           cmp = a.rank - b.rank;
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
