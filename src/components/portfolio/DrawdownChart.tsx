@@ -76,6 +76,17 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
     drawdownPercent: d.drawdown !== null ? d.drawdown * 100 : 0
   }));
 
+  // One tick per unique year-month (first occurrence in chartData)
+  const monthTicks = (() => {
+    const seen = new Set<string>();
+    const ticks: string[] = [];
+    for (const d of chartData) {
+      const ym = d.dateStr.slice(0, 7);
+      if (!seen.has(ym)) { seen.add(ym); ticks.push(d.dateStr); }
+    }
+    return ticks;
+  })();
+
   // Calculate min drawdown for Y-axis domain
   const minDrawdown = Math.min(...chartData.map(d => d.drawdownPercent));
   const yDomainMin = Math.floor(minDrawdown - 2);
@@ -143,7 +154,8 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
           <XAxis 
             dataKey="dateStr" 
             stroke="#6b7280" 
-            tickFormatter={(value) => format(parseISO(value), 'dd MMM')}
+            tickFormatter={(value) => format(parseISO(value), "MMM ''yy")}
+            ticks={monthTicks}
             tick={{ fill: '#9ca3af', fontSize: 10 }}
             tickLine={{ stroke: '#4b5563' }}
             axisLine={{ stroke: '#374151' }}

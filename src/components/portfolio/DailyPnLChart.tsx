@@ -81,6 +81,17 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
       dailyPnL: d.dailyPnL ?? 0
     }));
 
+  // One tick per unique year-month (first occurrence in chartData)
+  const monthTicks = (() => {
+    const seen = new Set<string>();
+    const ticks: string[] = [];
+    for (const d of chartData) {
+      const ym = d.dateStr.slice(0, 7);
+      if (!seen.has(ym)) { seen.add(ym); ticks.push(d.dateStr); }
+    }
+    return ticks;
+  })();
+
   const handleDateRangeChange = (_event: React.MouseEvent<HTMLElement>, newRange: DateRange | null) => {
     if (newRange !== null) {
       setDateRange(newRange);
@@ -162,7 +173,8 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
           <XAxis 
             dataKey="dateStr" 
             stroke="#6b7280" 
-            tickFormatter={(value) => format(parseISO(value), 'dd MMM')}
+            tickFormatter={(value) => format(parseISO(value), "MMM ''yy")}
+            ticks={monthTicks}
             tick={{ fill: '#9ca3af', fontSize: 11 }}
             tickLine={{ stroke: '#4b5563' }}
             axisLine={{ stroke: '#374151' }}
