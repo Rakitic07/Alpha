@@ -478,26 +478,22 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
           const isDimmed = hoveredSeries && !isHovered;
 
           return (
-            <button 
+            <button
               key={item.key}
               onClick={() => setVisible(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
               onMouseEnter={() => setHoveredSeries(item.key)}
               onMouseLeave={() => setHoveredSeries(null)}
+              title={isHidden ? `Show ${item.label}` : `Hide ${item.label}`}
               className={`
                 flex items-center gap-2 py-1 transition-all duration-200 cursor-pointer
-                ${isHidden ? 'opacity-40 grayscale' : ''}
-                ${isHovered 
-                    ? 'scale-105 opacity-100' 
-                    : isDimmed 
-                        ? 'opacity-30 blur-[0.5px]' 
-                        : 'opacity-70 hover:opacity-100'}
+                ${isHovered ? 'scale-105' : isDimmed && !isHidden ? 'opacity-40' : ''}
               `}
             >
-              <span 
-                className="w-6 h-1.5 rounded-full shadow-sm" 
-                style={{ backgroundColor: item.color }} 
+              <span
+                className="w-6 h-1.5 rounded-full shadow-sm flex-shrink-0 transition-opacity duration-200"
+                style={{ backgroundColor: item.color, opacity: isHidden ? 0.25 : 1 }}
               />
-              <span className={`text-[11px] font-medium tracking-wide ${isHidden ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
+              <span className={`text-[11px] font-medium tracking-wide transition-colors duration-200 ${isHidden ? 'text-zinc-600' : 'text-gray-300'}`}>
                 {item.label}
               </span>
             </button>
