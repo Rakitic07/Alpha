@@ -143,7 +143,7 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
           <XAxis 
             dataKey="dateStr" 
             stroke="#6b7280" 
-            tickFormatter={(value) => format(parseISO(value), 'MMM dd')}
+            tickFormatter={(value) => format(parseISO(value), 'dd MMM')}
             tick={{ fill: '#9ca3af', fontSize: 10 }}
             tickLine={{ stroke: '#4b5563' }}
             axisLine={{ stroke: '#374151' }}
