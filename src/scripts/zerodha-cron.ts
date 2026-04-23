@@ -95,14 +95,19 @@ async function main() {
         const { ingestOrdersWithDeduplication } = await import('../lib/import-service');
         const { prisma } = await import('../lib/db');
 
-        // Warm up the Neon compute concurrently with Kite login.
-        // Neon cold-start can take ~2 minutes; we retry until the connection
-        // is live so the ingest step never hits a socket timeout.
-        async function warmupDb(maxAttempts = 4, delayMs = 30000): Promise<void> {
+        // Warm up the Neon compute via HTTP before using the pg TCP pool.
+        // The neon() HTTP function wakes the serverless compute without needing
+        // a long-lived TCP connection, avoiding the ~2-min cold-start hang.
+        async function warmupDb(maxAttempts = 4, delayMs = 5000): Promise<void> {
+            const { neon } = await import('@neondatabase/serverless');
+            const dbUrl = process.env.DATABASE_URL!;
+            const sql = neon(dbUrl);
             for (let i = 0; i < maxAttempts; i++) {
                 try {
-                    await prisma.$queryRaw`SELECT 1`;
-                    console.log(`[DB] Connection warm (attempt ${i + 1}).`);
+                    await sql`SELECT 1`;
+                    console.log(`[DB] HTTP warmup succeeded (attempt ${i + 1}).`);
+                    // Give pg pool a moment to establish its first connection.
+                    await new Promise(resolve => setTimeout(resolve, 500));
                     return;
                 } catch (err: unknown) {
                     if (i === maxAttempts - 1) throw err;
