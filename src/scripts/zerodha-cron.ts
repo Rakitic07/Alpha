@@ -95,11 +95,24 @@ async function main() {
         const { ingestOrdersWithDeduplication } = await import('../lib/import-service');
         const { prisma } = await import('../lib/db');
 
-        // Warm up the Neon DB connection concurrently with Kite login
-        // so the compute is awake by the time we need to query it.
-        const dbWarmup = prisma.$queryRaw`SELECT 1`.catch((e: Error) => {
-            console.warn('[DB] Warmup ping failed (non-fatal):', e.message);
-        });
+        // Warm up the Neon compute concurrently with Kite login.
+        // Neon cold-start can take ~2 minutes; we retry until the connection
+        // is live so the ingest step never hits a socket timeout.
+        async function warmupDb(maxAttempts = 4, delayMs = 30000): Promise<void> {
+            for (let i = 0; i < maxAttempts; i++) {
+                try {
+                    await prisma.$queryRaw`SELECT 1`;
+                    console.log(`[DB] Connection warm (attempt ${i + 1}).`);
+                    return;
+                } catch (err: unknown) {
+                    if (i === maxAttempts - 1) throw err;
+                    const errMsg = err instanceof Error ? err.message : String(err);
+                    console.warn(`[DB] Warmup attempt ${i + 1} failed: ${errMsg}. Retrying in ${delayMs / 1000}s...`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                }
+            }
+        }
+        const dbWarmup = warmupDb();
 
         // 1. Validate Configuration
         const configCheck = validateKiteConfig();
