@@ -1,16 +1,10 @@
 import 'server-only';
 import { PrismaClient } from '@prisma/client';
-import { PrismaNeon } from '@prisma/adapter-neon';
-import { neonConfig } from '@neondatabase/serverless';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { dbLogger } from '@/lib/logger';
 
 const globalForPrisma = global as unknown as { prisma_v2: PrismaClient };
-
-// Node.js < 22 has no global WebSocket; polyfill with the `ws` package.
-if (typeof globalThis.WebSocket === 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  neonConfig.webSocketConstructor = require('ws');
-}
 
 /**
  * Splits an array into chunks for batched queries.
@@ -41,11 +35,14 @@ function createPrismaClient(): PrismaClient {
 
   dbLogger.info('Connected to Neon Postgres');
 
-  // Use @neondatabase/serverless instead of pg.Pool.
-  // The Neon WebSocket endpoint handles cold-start reconnections without
-  // the ~2-minute proxy timeout that the TCP/pg driver hits.
-  // PrismaNeon accepts a PoolConfig and creates the pool internally.
-  const adapter = new PrismaNeon({ connectionString: dbUrl, max: 5, idleTimeoutMillis: 30000 });
+  const pool = new Pool({
+    connectionString: dbUrl,
+    max: 5,
+    idleTimeoutMillis: 30000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+  });
+  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
 
