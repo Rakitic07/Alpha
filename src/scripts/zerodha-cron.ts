@@ -93,6 +93,13 @@ async function main() {
 
         const { getAuthenticatedKiteClient, fetchExecutedOrders, validateKiteConfig } = await import('../lib/kite-client');
         const { ingestOrdersWithDeduplication } = await import('../lib/import-service');
+        const { prisma } = await import('../lib/db');
+
+        // Warm up the Neon DB connection concurrently with Kite login
+        // so the compute is awake by the time we need to query it.
+        const dbWarmup = prisma.$queryRaw`SELECT 1`.catch((e: Error) => {
+            console.warn('[DB] Warmup ping failed (non-fatal):', e.message);
+        });
 
         // 1. Validate Configuration
         const configCheck = validateKiteConfig();
@@ -125,6 +132,7 @@ async function main() {
         }));
 
         // 5. Ingest with Deduplication
+        await dbWarmup;
         console.log('Processing import...');
         const result = await ingestOrdersWithDeduplication(
             orders,

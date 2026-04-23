@@ -39,7 +39,14 @@ function createPrismaClient(): PrismaClient {
   // warning and adopt the explicit secure behaviour ahead of pg v9.
   const safeUrl = dbUrl.replace(/sslmode=require/g, 'sslmode=verify-full');
 
-  const pool = new Pool({ connectionString: safeUrl });
+  const pool = new Pool({
+    connectionString: safeUrl,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 5,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
