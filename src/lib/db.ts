@@ -41,7 +41,6 @@ function createPrismaClient(): PrismaClient {
 
   const pool = new Pool({
     connectionString: safeUrl,
-    connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
     max: 5,
     keepAlive: true,
