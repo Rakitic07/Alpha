@@ -93,11 +93,11 @@ async function main() {
 
         const { getAuthenticatedKiteClient, fetchExecutedOrders, validateKiteConfig } = await import('../lib/kite-client');
         const { ingestOrdersWithDeduplication } = await import('../lib/import-service');
-        const { prisma } = await import('../lib/db');
 
-        // Warm up the Neon compute via HTTP before using the pg TCP pool.
-        // The neon() HTTP function wakes the serverless compute without needing
-        // a long-lived TCP connection, avoiding the ~2-min cold-start hang.
+        // Wake the Neon serverless compute via the neon() HTTP endpoint before
+        // the pg TCP pool dials it. This runs right before the first Prisma
+        // query so the compute is still hot by the time queries land — firing
+        // it earlier races against Neon's scale-to-zero during Kite login.
         async function warmupDb(maxAttempts = 4, delayMs = 5000): Promise<void> {
             const { neon } = await import('@neondatabase/serverless');
             const dbUrl = process.env.DATABASE_URL!;
@@ -106,8 +106,6 @@ async function main() {
                 try {
                     await sql`SELECT 1`;
                     console.log(`[DB] HTTP warmup succeeded (attempt ${i + 1}).`);
-                    // Give pg pool a moment to establish its first connection.
-                    await new Promise(resolve => setTimeout(resolve, 500));
                     return;
                 } catch (err: unknown) {
                     if (i === maxAttempts - 1) throw err;
@@ -117,7 +115,6 @@ async function main() {
                 }
             }
         }
-        const dbWarmup = warmupDb();
 
         // 1. Validate Configuration
         const configCheck = validateKiteConfig();
@@ -149,8 +146,8 @@ async function main() {
             orderTimestamp: o.orderTimestamp
         }));
 
-        // 5. Ingest with Deduplication
-        await dbWarmup;
+        // 5. Ingest with Deduplication (warm Neon immediately before first query)
+        await warmupDb();
         console.log('Processing import...');
         const result = await ingestOrdersWithDeduplication(
             orders,

@@ -41,6 +41,9 @@ function createPrismaClient(): PrismaClient {
     idleTimeoutMillis: 30000,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
+    // Bound TCP dial time so a cold Neon compute fails fast instead of hanging
+    // for ~2 minutes. The cron's neon() HTTP warmup wakes the compute first.
+    connectionTimeoutMillis: 10_000,
   });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
