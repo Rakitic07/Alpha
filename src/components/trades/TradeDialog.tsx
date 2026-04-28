@@ -122,16 +122,18 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
         <Dialog 
             open={isOpen} 
             onClose={onClose}
-            PaperProps={{
-                className: "glass-card",
-                sx: { 
-                  backgroundImage: 'none',
-                  backgroundColor: 'rgba(31, 41, 55, 0.9)', 
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '1rem',
-                  maxWidth: '450px',
-                  width: '100%'
+            slotProps={{
+                paper: {
+                    className: "glass-card",
+                    sx: { 
+                      backgroundImage: 'none',
+                      backgroundColor: 'rgba(31, 41, 55, 0.9)', 
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: '1rem',
+                      maxWidth: '450px',
+                      width: '100%'
+                    }
                 }
             }}
         >
@@ -141,7 +143,6 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
                     {initialData ? 'Edit Trade' : 'Add Trade'}
                 </span>
             </DialogTitle>
-            
             <form onSubmit={handleSubmit}>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, py: 4 }}>
                     <DatePicker
@@ -157,8 +158,10 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
                             textField: {
                                 fullWidth: true,
                                 required: true,
-                                InputLabelProps: { shrink: true, style: { color: '#9ca3af' } },
-                                sx: { 
+                                slotProps: {
+                                    inputLabel: { shrink: true, style: { color: '#9ca3af' } }
+                                },
+                                sx: {
                                     '& .MuiInputBase-root': { color: 'white' },
                                     '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
                                     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
@@ -173,21 +176,23 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
                         placeholder="e.g. INFY"
                         fullWidth
                         required
-                        InputLabelProps={{ style: { color: '#9ca3af' } }}
-                        InputProps={{
-                            sx: { color: 'white', '& .MuiOutlinedInput-notchedOutline': { borderColor: symbolError ? '#ef4444' : 'rgba(255,255,255,0.1)' } },
-                            endAdornment: (
-                                <InputAdornment position="end">
-                                    {validating && <CircularProgress size={20} sx={{ color: '#9ca3af' }} />}
-                                    {!validating && ltp && <span className="text-green-400 text-sm font-medium">₹{ltp.toFixed(2)}</span>}
-                                </InputAdornment>
-                            )
-                        }}
                         error={!!symbolError}
                         helperText={symbolError}
                         value={formData.symbol}
                         onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})}
-                    />
+                        slotProps={{
+                            input: {
+                                sx: { color: 'white', '& .MuiOutlinedInput-notchedOutline': { borderColor: symbolError ? '#ef4444' : 'rgba(255,255,255,0.1)' } },
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        {validating && <CircularProgress size={20} sx={{ color: '#9ca3af' }} />}
+                                        {!validating && ltp && <span className="text-green-400 text-sm font-medium">₹{ltp.toFixed(2)}</span>}
+                                    </InputAdornment>
+                                )
+                            },
+
+                            inputLabel: { style: { color: '#9ca3af' } }
+                        }} />
 
                     <div className="flex flex-col gap-2">
                          <span className="text-sm font-medium text-gray-400">Type</span>
@@ -239,26 +244,6 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
                             type="number"
                             required
                             fullWidth
-                            InputLabelProps={{ style: { color: '#9ca3af' } }}
-                            InputProps={{
-                                inputProps: { min: 1, step: "1" },
-                                sx: { 
-                                    color: 'white', 
-                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
-                                    '& input[type=number]': {
-                                        MozAppearance: 'textfield',
-                                        appearance: 'textfield'
-                                    },
-                                    '& input[type=number]::-webkit-outer-spin-button': {
-                                        WebkitAppearance: 'none',
-                                        margin: 0
-                                    },
-                                    '& input[type=number]::-webkit-inner-spin-button': {
-                                        WebkitAppearance: 'none',
-                                        margin: 0
-                                    }
-                                }
-                            }}
                             value={formData.quantity.toString()}
                             onChange={e => {
                                 const val = e.target.value;
@@ -270,35 +255,59 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
                                 if (!/^\d+$/.test(val)) return;
                                 setFormData({...formData, quantity: parseInt(val, 10)})
                             }}
-                        />
+                            slotProps={{
+                                input: {
+                                    inputProps: { min: 1, step: "1" },
+                                    sx: { 
+                                        color: 'white', 
+                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                                        '& input[type=number]': {
+                                            MozAppearance: 'textfield',
+                                            appearance: 'textfield'
+                                        },
+                                        '& input[type=number]::-webkit-outer-spin-button': {
+                                            WebkitAppearance: 'none',
+                                            margin: 0
+                                        },
+                                        '& input[type=number]::-webkit-inner-spin-button': {
+                                            WebkitAppearance: 'none',
+                                            margin: 0
+                                        }
+                                    }
+                                },
+
+                                inputLabel: { style: { color: '#9ca3af' } }
+                            }} />
                         <TextField
                             label="Price (₹)"
                             type="number"
                             required
                             fullWidth
-                            InputLabelProps={{ style: { color: '#9ca3af' } }}
-                            InputProps={{
-                                inputProps: { min: 0, step: "any" },
-                                sx: { 
-                                    color: 'white', 
-                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
-                                    '& input[type=number]': {
-                                        MozAppearance: 'textfield',
-                                        appearance: 'textfield'
-                                    },
-                                    '& input[type=number]::-webkit-outer-spin-button': {
-                                        WebkitAppearance: 'none',
-                                        margin: 0
-                                    },
-                                    '& input[type=number]::-webkit-inner-spin-button': {
-                                        WebkitAppearance: 'none',
-                                        margin: 0
-                                    }
-                                }
-                            }}
                             value={formData.price.toString()}
                             onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})}
-                        />
+                            slotProps={{
+                                input: {
+                                    inputProps: { min: 0, step: "any" },
+                                    sx: { 
+                                        color: 'white', 
+                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                                        '& input[type=number]': {
+                                            MozAppearance: 'textfield',
+                                            appearance: 'textfield'
+                                        },
+                                        '& input[type=number]::-webkit-outer-spin-button': {
+                                            WebkitAppearance: 'none',
+                                            margin: 0
+                                        },
+                                        '& input[type=number]::-webkit-inner-spin-button': {
+                                            WebkitAppearance: 'none',
+                                            margin: 0
+                                        }
+                                    }
+                                },
+
+                                inputLabel: { style: { color: '#9ca3af' } }
+                            }} />
                     </div>
                     
                     {/* Preview */}

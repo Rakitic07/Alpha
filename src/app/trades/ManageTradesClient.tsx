@@ -655,30 +655,32 @@ export default function ManageTradesClient({
                         onChange={(e) => {
                             setFilterValue(e.target.value);
                         }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon sx={{ color: 'gray' }} />
-                                </InputAdornment>
-                            ),
-                            endAdornment: filterValue && (
-                                <InputAdornment position="end">
-                                    <IconButton onClick={() => setFilterValue("")} size="small">
-                                        <CloseIcon sx={{ color: 'gray' }} />
-                                    </IconButton>
-                                </InputAdornment>
-                            ),
-                            sx: { 
-                                backgroundColor: 'rgba(255,255,255,0.05)', 
-                                borderRadius: '0.75rem',
-                                '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-                                color: 'white',
-                                height: '40px',
-                            }
-                        }}
                         sx={{ width: '320px' }}
                         variant="outlined"
                         size="small"
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon sx={{ color: 'gray' }} />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: filterValue && (
+                                    <InputAdornment position="end">
+                                        <IconButton onClick={() => setFilterValue("")} size="small">
+                                            <CloseIcon sx={{ color: 'gray' }} />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                                sx: { 
+                                    backgroundColor: 'rgba(255,255,255,0.05)', 
+                                    borderRadius: '0.75rem',
+                                    '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
+                                    color: 'white',
+                                    height: '40px',
+                                }
+                            }
+                        }}
                     />
 
                     <ToggleButtonGroup
@@ -793,7 +795,6 @@ export default function ManageTradesClient({
                     </Tooltip>
                 </div>
             </div>
-
             <Collapse in={showUploadSection}>
                 <div className="glass-card p-4 space-y-4">
                     <form onSubmit={handleValidateAndPreview} className="space-y-3">
@@ -963,7 +964,6 @@ export default function ManageTradesClient({
                     </div>
                 </div>
             </Collapse>
-            
             {flattenedItems.length > 0 ? (
                  <Paper className="glass-card" sx={{ height: 'calc(100vh - 180px)', backgroundColor: 'transparent', backgroundImage: 'none', boxShadow: 'none', overflow: 'hidden' }}>
                     <TableVirtuoso
@@ -1207,50 +1207,47 @@ export default function ManageTradesClient({
                      </Table>
                  </TableContainer>
              )}
-             
             {/* Pagination Removed */}
             <Box sx={{ display: 'none' }}>
                 {/* Placeholder to keep layout if needed, but we removed it */}
             </Box>
-
             <TradeDialog 
                 isOpen={isDialogOpen}
                 onClose={() => setIsDialogOpen(false)}
                 onSubmit={handleSubmit}
                 initialData={editingTrade}
             />
-
-
             {/* Delete Confirmation Dialog */}
-             <Dialog
-                open={deleteConfirmation.open}
-                onClose={cancelDelete}
-                PaperProps={{
-                    className: "glass-card",
-                    sx: { 
-                        backgroundColor: 'rgba(31, 41, 55, 0.95)', 
-                        backdropFilter: 'blur(20px)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                        color: 'white'
-                    }
-                }}
-            >
-                <DialogTitle sx={{ color: 'white' }}>Confirm Delete</DialogTitle>
-                <DialogContent>
-                    <div className="text-gray-300">
-                        Are you sure you want to delete this trade? This action cannot be undone.
-                    </div>
-                </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={cancelDelete} sx={{ color: 'gray' }}>
-                        Cancel
-                    </Button>
-                    <Button onClick={confirmDelete} color="error" autoFocus>
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
+            <Dialog
+               open={deleteConfirmation.open}
+               onClose={cancelDelete}
+               slotProps={{
+                   paper: {
+                       className: "glass-card",
+                       sx: { 
+                           backgroundColor: 'rgba(31, 41, 55, 0.95)', 
+                           backdropFilter: 'blur(20px)',
+                           border: '1px solid rgba(255, 255, 255, 0.08)',
+                           color: 'white'
+                       }
+                   }
+               }}
+           >
+               <DialogTitle sx={{ color: 'white' }}>Confirm Delete</DialogTitle>
+               <DialogContent>
+                   <div className="text-gray-300">
+                       Are you sure you want to delete this trade? This action cannot be undone.
+                   </div>
+               </DialogContent>
+               <DialogActions sx={{ p: 2 }}>
+                   <Button onClick={cancelDelete} sx={{ color: 'gray' }}>
+                       Cancel
+                   </Button>
+                   <Button onClick={confirmDelete} color="error" autoFocus>
+                       Delete
+                   </Button>
+               </DialogActions>
+           </Dialog>
             <Snackbar 
                 open={snackbar.open} 
                 autoHideDuration={6000} 
@@ -1266,7 +1263,6 @@ export default function ManageTradesClient({
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-
             {/* Upload Preview Modal */}
             <UploadPreviewModal
                 isOpen={isPreviewOpen}

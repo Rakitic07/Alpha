@@ -48,7 +48,7 @@ export default function GlobalError({
         <Typography variant="h6" color="error">
           Something went wrong
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           {error.message || 'An unexpected error occurred'}
         </Typography>
         <Button

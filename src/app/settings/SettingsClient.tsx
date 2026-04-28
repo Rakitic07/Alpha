@@ -205,7 +205,6 @@ export default function SettingsClient({
                     </div>
                 </Paper>
             </SettingsSection>
-
             {/* System Preferences + Data Freshness (8/4 split on lg) */}
             <SettingsSection className="mb-6">
               <div className="grid grid-cols-12 gap-4">
@@ -267,18 +266,19 @@ export default function SettingsClient({
                             </div>
                             <div className="flex gap-2 items-center flex-wrap">
                                  <TextField
-                                    size="small"
-                                    type="date"
-                                    value={dataLockDate}
-                                    onChange={(e) => setDataLockDateState(e.target.value)}
-                                    InputLabelProps={{ shrink: true, sx: { color: '#94a3b8' } }}
-                                    InputProps={{ sx: { color: 'white', fontSize: '0.8rem' } }}
-                                    sx={{ 
-                                        minWidth: '140px',
-                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
-                                        '& .MuiInputBase-input': { py: '6px' }
-                                    }}
-                                />
+                                     size="small"
+                                     type="date"
+                                     value={dataLockDate}
+                                     onChange={(e) => setDataLockDateState(e.target.value)}
+                                     sx={{ 
+                                         minWidth: '140px',
+                                         '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                                         '& .MuiInputBase-input': { py: '6px' }
+                                     }}
+                                     slotProps={{
+                                         input: { sx: { color: 'white', fontSize: '0.8rem' } },
+                                         inputLabel: { shrink: true, sx: { color: '#94a3b8' } }
+                                     }} />
                                  <Button
                                     variant="contained"
                                     onClick={handleSaveDataLock}
@@ -354,9 +354,6 @@ export default function SettingsClient({
                 )}
               </div>
             </SettingsSection>
-
-
-
             {/* Snackbar for feedback */}
             <Snackbar 
                 open={snackbar.open} 

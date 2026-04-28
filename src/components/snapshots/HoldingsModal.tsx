@@ -113,12 +113,14 @@ export default function HoldingsModal({ open, onClose, date, holdings, isLoading
             onClose={onClose}
             maxWidth="md"
             fullWidth
-            PaperProps={{
-                style: {
-                    backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                    backdropFilter: 'blur(16px)',
-                    color: 'white',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+            slotProps={{
+                paper: {
+                    style: {
+                        backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                        backdropFilter: 'blur(16px)',
+                        color: 'white',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }
                 }
             }}
         >

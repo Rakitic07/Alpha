@@ -85,7 +85,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 ? `Failed to load ${this.props.componentName}`
                 : 'Something went wrong'}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
               {this.state.error?.message || 'An unexpected error occurred'}
             </Typography>
           </Box>
@@ -134,7 +134,7 @@ export function ChartErrorBoundary({
             border: '1px dashed rgba(0, 0, 0, 0.1)',
           }}
         >
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             Unable to load {componentName}
           </Typography>
         </Box>

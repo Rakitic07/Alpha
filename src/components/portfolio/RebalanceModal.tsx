@@ -156,42 +156,44 @@ const BufferedNumberInput = ({
     };
 
     return (
-        <TextField
-            type="number"
-            size="small"
-            value={localValue}
-            onChange={(e) => setLocalValue(e.target.value)}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
-            disabled={disabled}
-            sx={{ 
-            width: width,
-            ...hideSpinners,
-            '& .MuiInputBase-root': {
-                height: height, // Apply height to root to ensure input fills it
-                pl: startAdornment ? 0 : 1 // Remove left padding if startAdornment exists
-            },
-            '& .MuiInputBase-input': { 
-                textAlign: 'center', 
-                color: disabled ? '#6b7280' : '#fff',
-                py: 0.8,
-                height: height ? 'auto' : undefined, // Let flex handle it if height is set on root
-                fontWeight: 600,
-                fontSize: fontSize
-            },
-            '& .MuiOutlinedInput-notchedOutline': { 
-                borderColor: disabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.15)' 
-            },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: 'rgba(255,255,255,0.3)'
-            }
-            }}
-            InputProps={{
-            startAdornment: startAdornment ? <InputAdornment position="start" sx={{ mr: 0 }}>{startAdornment}</InputAdornment> : undefined,
-            endAdornment: endAdornment ? <InputAdornment position="end">{endAdornment}</InputAdornment> : undefined,
-            }}
-            inputProps={{ min, max, step }}
-        />
+      <TextField
+        type="number"
+        size="small"
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        sx={{ 
+        width: width,
+        ...hideSpinners,
+        '& .MuiInputBase-root': {
+            height: height, // Apply height to root to ensure input fills it
+            pl: startAdornment ? 0 : 1 // Remove left padding if startAdornment exists
+        },
+        '& .MuiInputBase-input': { 
+            textAlign: 'center', 
+            color: disabled ? '#6b7280' : '#fff',
+            py: 0.8,
+            height: height ? 'auto' : undefined, // Let flex handle it if height is set on root
+            fontWeight: 600,
+            fontSize: fontSize
+        },
+        '& .MuiOutlinedInput-notchedOutline': { 
+            borderColor: disabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.15)' 
+        },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'rgba(255,255,255,0.3)'
+        }
+        }}
+        slotProps={{
+          input: {
+          startAdornment: startAdornment ? <InputAdornment position="start" sx={{ mr: 0 }}>{startAdornment}</InputAdornment> : undefined,
+          endAdornment: endAdornment ? <InputAdornment position="end">{endAdornment}</InputAdornment> : undefined,
+          },
+
+          htmlInput: { min, max, step }
+        }} />
     );
 };
 
@@ -455,13 +457,17 @@ export default function RebalanceModal({
       open={open}
       onClose={onClose}
       fullScreen
-      TransitionComponent={SlideUp}
-      PaperProps={{
-        className: "glass-card",
-        sx: {
-          backgroundImage: 'none',
-          backgroundColor: 'rgba(11, 15, 25, 0.98)',
-          backdropFilter: 'blur(20px)',
+      slots={{
+        transition: SlideUp
+      }}
+      slotProps={{
+        paper: {
+          className: "glass-card",
+          sx: {
+            backgroundImage: 'none',
+            backgroundColor: 'rgba(11, 15, 25, 0.98)',
+            backdropFilter: 'blur(20px)',
+          }
         }
       }}
     >
@@ -510,20 +516,6 @@ export default function RebalanceModal({
                           {...params}
                           placeholder="Add Stock (e.g. TCS)"
                           size="small"
-                          InputProps={{
-                            ...params.InputProps,
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <FontAwesomeIcon icon={faPlus} className="text-gray-500" size="sm" />
-                                </InputAdornment>
-                            ),
-                            endAdornment: (
-                              <>
-                                {searchLoading ? <CircularProgress size={16} /> : null}
-                                {params.InputProps.endAdornment}
-                              </>
-                            ),
-                          }}
                           sx={{
                             '& .MuiInputBase-root': { 
                                 bgcolor: 'rgba(255,255,255,0.03)', 
@@ -532,6 +524,24 @@ export default function RebalanceModal({
                                 color: 'white'
                             },
                             '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                          }}
+                          slotProps={{
+                            ...params.slotProps,
+
+                            input: {
+                              ...params.slotProps.input,
+                              startAdornment: (
+                                  <InputAdornment position="start">
+                                      <FontAwesomeIcon icon={faPlus} className="text-gray-500" size="sm" />
+                                  </InputAdornment>
+                              ),
+                              endAdornment: (
+                                <>
+                                  {searchLoading ? <CircularProgress size={16} /> : null}
+                                  {params.slotProps.input.endAdornment}
+                                </>
+                              ),
+                            }
                           }}
                         />
                       )}
@@ -731,9 +741,6 @@ export default function RebalanceModal({
                             onChange={(e) => setLocalCashflow(e.target.value)}
                             onBlur={handleCashflowCommit}
                             onKeyDown={handleCashflowKeyDown}
-                            InputProps={{
-                                startAdornment: <Typography sx={{ color: '#9ca3af', mr: 0.5, fontSize: '0.8rem' }}>₹</Typography>
-                            }}
                             sx={{
                                 ...hideSpinners,
                                 '& .MuiInputBase-root': { 
@@ -745,6 +752,11 @@ export default function RebalanceModal({
                                     height: 36
                                 },
                                 '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                            }}
+                            slotProps={{
+                              input: {
+                                  startAdornment: <Typography sx={{ color: '#9ca3af', mr: 0.5, fontSize: '0.8rem' }}>₹</Typography>
+                              }
                             }}
                         />
                    </Box>

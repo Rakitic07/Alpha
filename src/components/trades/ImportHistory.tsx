@@ -104,7 +104,6 @@ export default function ImportHistory() {
             </Button>
         )}
       </div>
-
       {batches.length === 0 ? (
           <p className="text-gray-400 text-center py-4">No import history found.</p>
       ) : (
@@ -138,21 +137,22 @@ export default function ImportHistory() {
             ))}
           </div>
       )}
-
       {/* Confirmation Dialog */}
       <Dialog
         open={dialogOpen}
         onClose={() => !loading && setDialogOpen(false)}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
-        PaperProps={{
-            className: "glass-card",
-            sx: { 
-                backgroundColor: 'rgba(31, 41, 55, 0.95)', 
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                color: 'white'
-            }
+        slotProps={{
+          paper: {
+              className: "glass-card",
+              sx: { 
+                  backgroundColor: 'rgba(31, 41, 55, 0.95)', 
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: 'white'
+              }
+          }
         }}
       >
         <DialogTitle id="alert-dialog-title" sx={{ color: 'white' }}>
@@ -172,7 +172,6 @@ export default function ImportHistory() {
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* Snackbar Status */}
       <Snackbar 
         open={snackbar.open} 

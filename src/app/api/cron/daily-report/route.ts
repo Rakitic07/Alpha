@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Skip on NSE trading holidays
-  const isHoliday = !force && await isTradingHoliday(today);
+  const isHoliday = !force && (await isTradingHoliday(today));
   if (isHoliday) {
     cronLogger.info(`Skipping daily report — ${today} is a trading holiday`);
     return NextResponse.json({ status: 'skipped', reason: 'Trading holiday', date: today, tip: 'Add ?force=true to bypass' });

@@ -154,15 +154,16 @@ export default function SymbolMappingsCard({ initialMappings }: SymbolMappingsCa
                     </div>
                 </div>
             </Paper>
-
             {/* View Details Modal with Virtualized Table */}
             <Dialog
                 open={viewModalOpen}
                 onClose={() => setViewModalOpen(false)}
                 maxWidth="sm"
                 fullWidth
-                PaperProps={{
-                    style: { backgroundColor: '#1e293b', color: 'white', maxHeight: '80vh' }
+                slotProps={{
+                    paper: {
+                        style: { backgroundColor: '#1e293b', color: 'white', maxHeight: '80vh' }
+                    }
                 }}
             >
                 <DialogTitle sx={{ color: 'white', pb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -220,13 +221,14 @@ export default function SymbolMappingsCard({ initialMappings }: SymbolMappingsCa
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Add Symbol Mapping Dialog */}
             <Dialog
                 open={addDialogOpen}
                 onClose={handleAddDialogClose}
-                PaperProps={{
-                    style: { backgroundColor: '#1e293b', color: 'white', minWidth: '360px' }
+                slotProps={{
+                    paper: {
+                        style: { backgroundColor: '#1e293b', color: 'white', minWidth: '360px' }
+                    }
                 }}
             >
                 <DialogTitle sx={{ pb: 1 }}>Add Symbol Mapping</DialogTitle>
@@ -239,9 +241,10 @@ export default function SymbolMappingsCard({ initialMappings }: SymbolMappingsCa
                             placeholder="e.g. ZOMATO"
                             fullWidth
                             size="small"
-                            InputLabelProps={{ sx: { color: '#94a3b8' } }}
-                            InputProps={{ sx: { color: 'white', fontFamily: 'monospace' } }}
-                        />
+                            slotProps={{
+                                input: { sx: { color: 'white', fontFamily: 'monospace' } },
+                                inputLabel: { sx: { color: '#94a3b8' } }
+                            }} />
 
                         <div className="flex justify-center">
                             <span className="text-xl text-gray-500">↓</span>
@@ -254,9 +257,10 @@ export default function SymbolMappingsCard({ initialMappings }: SymbolMappingsCa
                             placeholder="e.g. ETERNAL"
                             fullWidth
                             size="small"
-                            InputLabelProps={{ sx: { color: '#94a3b8' } }}
-                            InputProps={{ sx: { color: 'white', fontFamily: 'monospace' } }}
-                        />
+                            slotProps={{
+                                input: { sx: { color: 'white', fontFamily: 'monospace' } },
+                                inputLabel: { sx: { color: '#94a3b8' } }
+                            }} />
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
@@ -274,13 +278,14 @@ export default function SymbolMappingsCard({ initialMappings }: SymbolMappingsCa
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Delete Confirmation Dialog */}
             <Dialog
                 open={deleteConfirm.open}
                 onClose={() => setDeleteConfirm({ open: false, id: null, symbol: '' })}
-                PaperProps={{
-                    style: { backgroundColor: '#1e293b', color: 'white' }
+                slotProps={{
+                    paper: {
+                        style: { backgroundColor: '#1e293b', color: 'white' }
+                    }
                 }}
             >
                 <DialogTitle sx={{ color: 'white' }}>Delete Mapping?</DialogTitle>
@@ -298,7 +303,6 @@ export default function SymbolMappingsCard({ initialMappings }: SymbolMappingsCa
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Snackbar */}
             <Snackbar
                 open={snackbar.open}

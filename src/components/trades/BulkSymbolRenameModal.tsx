@@ -125,16 +125,18 @@ export default function BulkSymbolRenameModal({
     <Dialog 
       open={isOpen} 
       onClose={onClose}
-      PaperProps={{
-        className: "glass-card",
-        sx: { 
-          backgroundImage: 'none',
-          backgroundColor: 'rgba(31, 41, 55, 0.9)', 
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '1rem',
-          maxWidth: '450px',
-          width: '100%'
+      slotProps={{
+        paper: {
+          className: "glass-card",
+          sx: { 
+            backgroundImage: 'none',
+            backgroundColor: 'rgba(31, 41, 55, 0.9)', 
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '1rem',
+            maxWidth: '450px',
+            width: '100%'
+          }
         }
       }}
     >
@@ -144,7 +146,6 @@ export default function BulkSymbolRenameModal({
           Bulk Rename Symbol
         </span>
       </DialogTitle>
-      
       <form onSubmit={handleSubmit}>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, py: 4 }}>
           <p className="text-sm text-gray-400">
@@ -162,31 +163,36 @@ export default function BulkSymbolRenameModal({
                       {...params} 
                       label="Current Symbol" 
                       required
-                      InputLabelProps={{ style: { color: '#9ca3af' } }}
                       sx={{ 
                           '& .MuiInputBase-root': { color: 'white' },
                           '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
                           '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
                           '& .MuiSvgIcon-root': { color: '#9ca3af' }
                       }}
+                      slotProps={{
+                        ...params.slotProps,
+                        inputLabel: { style: { color: '#9ca3af' } }
+                      }}
                   />
               )}
-              PaperComponent={({ children }) => (
-                  <Paper sx={{ backgroundColor: '#1f2937', color: 'white' }}>{children}</Paper>
-              )}
+              slots={{
+                paper: ({ children }) => (
+                    <Paper sx={{ backgroundColor: '#1f2937', color: 'white' }}>{children}</Paper>
+                )
+              }}
           />
 
           <TextField
-              label="New Symbol"
-              placeholder="e.g. RELIANCE"
-              fullWidth
-              required
-              value={newSymbol}
-              onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
-              error={!!symbolError}
-              helperText={symbolError}
-              InputLabelProps={{ style: { color: '#9ca3af' } }}
-              InputProps={{
+            label="New Symbol"
+            placeholder="e.g. RELIANCE"
+            fullWidth
+            required
+            value={newSymbol}
+            onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
+            error={!!symbolError}
+            helperText={symbolError}
+            slotProps={{
+              input: {
                   sx: { color: 'white', '& .MuiOutlinedInput-notchedOutline': { borderColor: symbolError ? '#ef4444' : 'rgba(255,255,255,0.1)' } },
                   endAdornment: (
                       <InputAdornment position="end">
@@ -194,8 +200,10 @@ export default function BulkSymbolRenameModal({
                           {!validating && ltp && <span className="text-green-400 text-sm font-medium">₹{ltp.toFixed(2)}</span>}
                       </InputAdornment>
                   )
-              }}
-          />
+              },
+
+              inputLabel: { style: { color: '#9ca3af' } }
+            }} />
 
           {oldSymbol && newSymbol && !symbolError && (
             <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-white/10">

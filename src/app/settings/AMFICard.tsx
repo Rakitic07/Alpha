@@ -202,15 +202,16 @@ export default function AMFICard() {
                     </div>
                 </div>
             </Paper>
-
             {/* History Modal */}
             <Dialog
                 open={historyModalOpen}
                 onClose={() => setHistoryModalOpen(false)}
                 maxWidth="sm"
                 fullWidth
-                PaperProps={{
-                    style: { backgroundColor: '#1e293b', color: 'white', maxHeight: '80vh' }
+                slotProps={{
+                    paper: {
+                        style: { backgroundColor: '#1e293b', color: 'white', maxHeight: '80vh' }
+                    }
                 }}
             >
                 <DialogTitle sx={{ color: 'white', pb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -276,7 +277,6 @@ export default function AMFICard() {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Snackbar */}
             <Snackbar
                 open={snackbar.open}
