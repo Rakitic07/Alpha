@@ -6,6 +6,7 @@ import os from 'os';
 import { unstable_cache } from 'next/cache';
 import { getIndexQuotes, hasValidToken } from '@/lib/upstox-client';
 import { logger } from '@/lib/logger';
+import { istTimeParts } from '@/lib/tz';
 
 const nseLogger = logger.scope('NSE');
 
@@ -25,11 +26,7 @@ const CACHE_FILE = path.join(os.tmpdir(), 'index_cache.json');
 async function fetchNseIndicesInternal(): Promise<MarketIndex[]> {
     try {
         // Time Check: 9 AM to 4 PM IST
-        const now = new Date();
-        const istTime = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-        const istDate = new Date(istTime);
-        const hour = istDate.getHours();
-        
+        const { hour } = istTimeParts();
         const isMarketHours = hour >= 9 && hour < 16;
         
         // Check if we should use cache (outside market hours)

@@ -6,6 +6,7 @@
 
 import { getAccessToken } from './auth';
 import { MarketHoliday, MarketTiming, UpstoxError } from './types';
+import { istDayOfWeek, istTimeParts, todayISTYmd } from '@/lib/tz';
 
 const BASE_URL = 'https://api.upstox.com/v2';
 
@@ -173,9 +174,13 @@ export async function isTradingHoliday(date: Date | string): Promise<boolean> {
   const dateStr = typeof date === 'string' ? date : formatDate(date);
   const year = parseInt(dateStr.substring(0, 4), 10);
 
-  // Check if weekend first (no API call needed)
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const dayOfWeek = dateObj.getDay();
+  // Check if weekend first (no API call needed). Anchor weekday lookup to IST
+  // so a `new Date()` argument resolves to the right Indian trading day even
+  // when the server runs in UTC.
+  const dayOfWeek =
+    typeof date === 'string'
+      ? istDayOfWeek(new Date(`${date}T12:00:00+05:30`))
+      : istDayOfWeek(date);
   if (dayOfWeek === 0 || dayOfWeek === 6) {
     return true; // Weekend
   }
@@ -243,37 +248,29 @@ export async function isMarketOpen(): Promise<boolean> {
     return false;
   }
 
+  const minutesInIST = (): number => {
+    const { hour, minute } = istTimeParts(now);
+    return hour * 60 + minute;
+  };
+  const NSE_OPEN_MINUTES = 9 * 60 + 15;
+  const NSE_CLOSE_MINUTES = 15 * 60 + 30;
+
   try {
     const timings = await getMarketTimings(dateStr);
     const nseTimings = timings.find((t) => t.exchange === 'NSE');
 
     if (!nseTimings) {
       // If no timings found, use default NSE hours (9:15 AM - 3:30 PM IST)
-      const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-      const hours = istNow.getHours();
-      const minutes = istNow.getMinutes();
-      const currentMinutes = hours * 60 + minutes;
-
-      const marketOpen = 9 * 60 + 15; // 9:15 AM
-      const marketClose = 15 * 60 + 30; // 3:30 PM
-
-      return currentMinutes >= marketOpen && currentMinutes <= marketClose;
+      const currentMinutes = minutesInIST();
+      return currentMinutes >= NSE_OPEN_MINUTES && currentMinutes <= NSE_CLOSE_MINUTES;
     }
 
     const nowMs = now.getTime();
     return nowMs >= nseTimings.start_time && nowMs <= nseTimings.end_time;
   } catch (error) {
     console.error('[Market Info] Failed to check market status:', error);
-    // On error, use time-based fallback
-    const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const hours = istNow.getHours();
-    const minutes = istNow.getMinutes();
-    const currentMinutes = hours * 60 + minutes;
-
-    const marketOpen = 9 * 60 + 15;
-    const marketClose = 15 * 60 + 30;
-
-    return currentMinutes >= marketOpen && currentMinutes <= marketClose;
+    const currentMinutes = minutesInIST();
+    return currentMinutes >= NSE_OPEN_MINUTES && currentMinutes <= NSE_CLOSE_MINUTES;
   }
 }
 
@@ -281,11 +278,10 @@ export async function isMarketOpen(): Promise<boolean> {
 // Utility Functions
 // ============================================================================
 
+// IST trading-day YYYY-MM-DD. Use IST so the result matches the Indian market
+// calendar even when the server runs in UTC.
 function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return todayISTYmd(date);
 }
 
 /**

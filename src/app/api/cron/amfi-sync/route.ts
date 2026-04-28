@@ -23,20 +23,20 @@ import {
 } from '@/lib/amfi';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { apiLogger } from '@/lib/logger';
+import { istDateParts } from '@/lib/tz';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// List of periods to try in order (most recent first)
+// List of periods to try in order (most recent first). Anchored to the IST
+// calendar so the H1/H2 boundary aligns with India.
 function getPeriodsToTry(): AMFIPeriod[] {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    
+    const { year, month } = istDateParts();
+
     const periods: AMFIPeriod[] = [];
-    
+
     // Start from current expected period and go backwards
-    if (month < 6) {
+    if (month <= 6) {
         // Jan-Jun: Try H2 of previous year, then H1 of previous year
         periods.push({ year: year - 1, halfYear: 'H2' });
         periods.push({ year: year - 1, halfYear: 'H1' });
@@ -45,7 +45,7 @@ function getPeriodsToTry(): AMFIPeriod[] {
         periods.push({ year, halfYear: 'H1' });
         periods.push({ year: year - 1, halfYear: 'H2' });
     }
-    
+
     return periods;
 }
 

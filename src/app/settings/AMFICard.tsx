@@ -16,7 +16,7 @@ import { initializeJob, triggerRecalculatePortfolio } from '@/app/actions';
 export default function AMFICard() {
     const [amfiFile, setAmfiFile] = useState<File | null>(null);
     const [amfiYear, setAmfiYear] = useState<number>(new Date().getFullYear());
-    const [amfiHalf, setAmfiHalf] = useState<'H1' | 'H2'>(new Date().getMonth() < 6 ? 'H1' : 'H1');
+    const [amfiHalf, setAmfiHalf] = useState<'H1' | 'H2'>(new Date().getMonth() < 6 ? 'H1' : 'H2');
     const [isUploadingAMFI, setIsUploadingAMFI] = useState(false);
     const [amfiHistory, setAmfiHistory] = useState<Array<{ period: string; count: number; updatedAt: string }>>([]);
     const [amfiStatus, setAmfiStatus] = useState<{ needsUpdate: boolean; message: string; appliedPeriod: string } | null>(null);

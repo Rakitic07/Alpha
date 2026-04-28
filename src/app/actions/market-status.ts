@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getMarketTimings, MarketTiming, hasValidToken } from '@/lib/upstox-client';
+import { todayISTYmd } from '@/lib/tz';
 
 export interface MarketStatusResult {
     isOpen: boolean;
@@ -55,8 +56,7 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
       // If market traded today and has closed, the effective data date is today
       // (even if today's EOD snapshot hasn't been written to DB yet)
       if (!isOpen && nseTimings.every(t => t.end_time < now)) {
-          const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-          lastDataDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          lastDataDate = todayISTYmd();
       }
 
       let status = isOpen ? 'Live' : 'Closed';

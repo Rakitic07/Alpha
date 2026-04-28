@@ -10,6 +10,7 @@ import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '@/lib/amfi';
 import { isMarketOpenAsync } from '@/lib/marketHours';
 import { subDays } from 'date-fns';
 import { logger } from '@/lib/logger';
+import { istTimeParts, todayUTCMidnightForISTDay } from '@/lib/tz';
 
 const liveActionsLogger = logger.scope('LiveActions');
 
@@ -39,25 +40,16 @@ export type MarketStatus = 'OPEN' | 'CLOSED' | 'UNKNOWN';
 
 // Helper to check if we're in pre-market hours (before 9:15 AM IST)
 function isPreMarketHours(): boolean {
-  const now = new Date();
-  const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const hours = istTime.getHours();
-  const minutes = istTime.getMinutes();
-  const totalMinutes = hours * 60 + minutes;
+  const { hour, minute } = istTimeParts();
+  const totalMinutes = hour * 60 + minute;
   const marketOpenMinutes = 9 * 60 + 15; // 9:15 AM
   return totalMinutes < marketOpenMinutes;
 }
 
-// Helper to get today's date in IST as a Date object at start of day (UTC)
+// Helper to get today's date in IST as a Date object at start of day (UTC).
+// This matches how trading-day rows are stored in the DB.
 function getTodayIST(): Date {
-  const now = new Date();
-  // Convert to IST and get date string (YYYY-MM-DD)
-  const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const year = istTime.getFullYear();
-  const month = String(istTime.getMonth() + 1).padStart(2, '0');
-  const day = String(istTime.getDate()).padStart(2, '0');
-  // Return as UTC date at start of day (how dates are stored in DB)
-  return new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+  return todayUTCMidnightForISTDay();
 }
 
 // Helper to get the last N trading days' stock prices from history

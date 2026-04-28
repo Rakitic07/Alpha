@@ -6,6 +6,7 @@ import { getInstrumentKey, getInstrumentKeys } from '../instrument-service';
 import { fetchNSEHistory } from '../nse-api';
 import { getMarketStatus } from '../market-holidays-cache';
 import { financeLogger } from '@/lib/logger';
+import { istTimeParts } from '@/lib/tz';
 import { StockQuote, StockHistoryResult, SplitEvent, RequestCache } from './types';
 
 // Feature flag for Upstox migration - set to true to use Upstox as primary data source
@@ -167,13 +168,12 @@ export async function updateStockHistory(
          if (isEOD) financeLogger.info(`[UpdateStockHistory] EOD Detected via API (Close Time: ${status.closeTime.toLocaleTimeString()})`);
     } else {
          // Fallback to static schedule (use IST hours, not server-local hours)
-         const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-         isEOD = istNow.getHours() >= 16; // After 4:00 PM IST
+         isEOD = istTimeParts().hour >= 16; // After 4:00 PM IST
          financeLogger.info(`[UpdateStockHistory] EOD Detected via Static Fallback (No API status)`);
     }
 
     // Check if Upstox is available
-    const upstoxAvailable = USE_UPSTOX && await hasValidToken();
+    const upstoxAvailable = USE_UPSTOX && (await hasValidToken());
     financeLogger.info(`[UpdateStockHistory] Data source: ${upstoxAvailable ? 'Upstox' : 'Yahoo Finance (fallback)'}`);
 
     // Pre-fetch live quotes for all symbols if we are looking for "Today"

@@ -9,6 +9,7 @@
 
 import { getMarketHolidays, getMarketTimings, hasValidToken, type MarketHoliday, type MarketTiming } from './upstox-client';
 import { logger } from '@/lib/logger';
+import { istDateParts, istDayOfWeek, istTimeParts, todayISTYmd } from '@/lib/tz';
 
 const marketLogger = logger.scope('Market');
 
@@ -38,7 +39,7 @@ const serverTimingsCache = new Map<string, TimingsCache>();
  * Uses server-side memory cache + client-side localStorage fallback
  */
 async function getCachedHolidays(): Promise<MarketHoliday[]> {
-    const currentYear = new Date().getFullYear();
+    const currentYear = istDateParts().year;
     const now = Date.now();
     
     // 1. Try server-side in-memory cache first (works on both server and client)
@@ -110,10 +111,12 @@ async function getCachedHolidays(): Promise<MarketHoliday[]> {
  */
 export async function isTradingHoliday(date: Date | string): Promise<boolean> {
     try {
-        // Convert date to YYYY-MM-DD format
-        const dateStr = typeof date === 'string' 
-            ? date 
-            : date.toISOString().split('T')[0];
+        // Convert date to YYYY-MM-DD format. For Date inputs, use the IST
+        // trading-day calendar so a `new Date()` argument resolves to the
+        // right Indian session even when the server runs in UTC.
+        const dateStr = typeof date === 'string'
+            ? date
+            : todayISTYmd(date);
         
         const holidays = await getCachedHolidays();
         
@@ -155,10 +158,7 @@ export async function isTradingHoliday(date: Date | string): Promise<boolean> {
  */
 export async function getTodayHoliday(): Promise<MarketHoliday | null> {
     try {
-        const now = new Date();
-        const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const today = `${istTime.getFullYear()}-${String(istTime.getMonth() + 1).padStart(2, '0')}-${String(istTime.getDate()).padStart(2, '0')}`;
-
+        const today = todayISTYmd();
         const holidays = await getCachedHolidays();
         return holidays.find(h => h.date === today) || null;
     } catch (error) {
@@ -256,9 +256,7 @@ export interface MarketStatus {
  */
 export async function getMarketStatus(): Promise<MarketStatus> {
     const now = new Date();
-    // Use Indian Standard Time (IST) for date string
-    const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-    const today = `${istTime.getFullYear()}-${String(istTime.getMonth() + 1).padStart(2, '0')}-${String(istTime.getDate()).padStart(2, '0')}`;
+    const today = todayISTYmd(now);
 
     // 1. Check Holiday first
     const isHoliday = await isTradingHoliday(today);
@@ -356,23 +354,22 @@ export async function getMarketStatus(): Promise<MarketStatus> {
     // 3. Check Weekend AFTER timings API check
     // This ensures special sessions (like budget day) detected via API are still marked as open
     // But normal weekends without API data fall back to closed
-    const day = istTime.getDay();
+    const day = istDayOfWeek(now);
     if (day === 0 || day === 6) {
         return { isOpen: false, reason: 'Market closed on weekends' };
     }
-    
+
     // 4. Fallback Static Logic (9:15 - 15:30) - only for weekdays with no timings
-    const hours = istTime.getHours();
-    const minutes = istTime.getMinutes();
-    const totalMinutes = hours * 60 + minutes;
-    
+    const { hour, minute } = istTimeParts(now);
+    const totalMinutes = hour * 60 + minute;
+
     const startMinutes = 9 * 60 + 15; // 9:15 AM
     const endMinutes = 15 * 60 + 30;  // 3:30 PM
-    
+
     if (totalMinutes >= startMinutes && totalMinutes < endMinutes) {
         return { isOpen: true, reason: 'Market is Live (Static Schedule)' };
     }
-    
+
     return { isOpen: false, reason: 'Market Closed (Static Schedule)' };
 }
 

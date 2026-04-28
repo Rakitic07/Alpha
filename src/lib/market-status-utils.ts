@@ -1,13 +1,13 @@
+import { istDayOfWeek, istTimeParts } from '@/lib/tz';
+
 export const isMarketOpen = (): boolean => {
   const now = new Date();
-  
-  // Use Indian Standard Time (IST)
-  const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  
-  const day = istTime.getDay();
-  const hours = istTime.getHours();
-  const minutes = istTime.getMinutes();
-  const totalMinutes = hours * 60 + minutes;
+
+  // Use Indian Standard Time (IST). Routed through `tz.ts` so the result is
+  // correct regardless of the host's local timezone.
+  const day = istDayOfWeek(now);
+  const { hour, minute } = istTimeParts(now);
+  const totalMinutes = hour * 60 + minute;
 
   // NSE market hours (sync fallback; authoritative status from Upstox Market Timings API)
   const startMinutes = 9 * 60 + 15;  // 9:15 AM

@@ -20,6 +20,7 @@
 
 import { prisma, chunkArray } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { istDateParts } from '@/lib/tz';
 import type {
   AMFICategory,
   AMFIPeriod,
@@ -46,12 +47,13 @@ const amfiLogger = logger.scope('AMFI');
  * @returns The AMFI period to use for classification
  */
 export function getApplicablePeriod(snapshotDate: Date = new Date()): AMFIPeriod {
-  const year = snapshotDate.getFullYear();
-  const month = snapshotDate.getMonth(); // 0-11
+  // Anchor to the IST calendar so the H1/H2 boundary fires at midnight IST
+  // (not UTC) — avoids ~5.5 h of "wrong half" twice a year.
+  const { year, month } = istDateParts(snapshotDate);
 
-  // If we're in Jan-Jun (months 0-5), use previous year's H2 data
-  // If we're in Jul-Dec (months 6-11), use current year's H1 data
-  if (month < 6) {
+  // If we're in Jan-Jun (months 1-6), use previous year's H2 data
+  // If we're in Jul-Dec (months 7-12), use current year's H1 data
+  if (month <= 6) {
     return { year: year - 1, halfYear: 'H2' };
   } else {
     return { year, halfYear: 'H1' };

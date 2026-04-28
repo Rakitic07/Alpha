@@ -2,11 +2,18 @@
  * Date utilities for the momentum screener pipeline.
  */
 
-/** Format a Date to YYYY-MM-DD string */
+/**
+ * Format a Date to YYYY-MM-DD string.
+ *
+ * Uses UTC calendar parts because the rest of the screener pipeline (and the
+ * `todayIST()` helper below) deliberately constructs Date objects whose UTC
+ * date matches the IST trading day. Using local-TZ getters here would shift
+ * the date by one whenever the server runs in IST (e.g. local dev).
+ */
 export function toDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
@@ -110,9 +117,9 @@ export async function resolveLastTradingDay(): Promise<string> {
   return candidate;
 }
 
-/** Get date N calendar days ago as YYYY-MM-DD */
+/** Get date N calendar days ago as YYYY-MM-DD (anchored to IST when no `from` is given) */
 export function daysAgo(n: number, from?: string): string {
-  const d = from ? fromDateStr(from) : new Date();
+  const d = fromDateStr(from ?? todayIST());
   d.setUTCDate(d.getUTCDate() - n);
   return toDateStr(d);
 }

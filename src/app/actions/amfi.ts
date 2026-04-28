@@ -3,6 +3,7 @@
 import { parseAMFIExcel, syncAMFIClassifications, AMFIPeriod, getCurrentAMFIPeriod } from '@/lib/amfi';
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
+import { istDateParts } from '@/lib/tz';
 
 /**
  * Get AMFI upload history from database
@@ -43,23 +44,24 @@ export async function checkAMFIStatus(): Promise<{
         const now = new Date();
         const currentPeriod = getCurrentAMFIPeriod(now);
         const periodStr = `${currentPeriod.year}_${currentPeriod.halfYear}`;
-        
-        // Calculate which period's data we need (rolling logic)
-        // Jan-Jun needs previous year's H2, Jul-Dec needs current year's H1
-        const month = now.getMonth();
+
+        // Calculate which period's data we need (rolling logic) using the
+        // IST calendar so the half-year boundary aligns with India.
+        // Jan-Jun needs previous year's H2, Jul-Dec needs current year's H1.
+        const { year, month } = istDateParts(now);
         let neededYear: number;
         let neededHalf: 'H1' | 'H2';
-        
-        if (month < 6) {
+
+        if (month <= 6) {
             // Jan-Jun: need previous year's H2
-            neededYear = now.getFullYear() - 1;
+            neededYear = year - 1;
             neededHalf = 'H2';
         } else {
             // Jul-Dec: need current year's H1
-            neededYear = now.getFullYear();
+            neededYear = year;
             neededHalf = 'H1';
         }
-        
+
         const neededPeriodStr = `${neededYear}_${neededHalf}`;
         
         // Check if we have data for the needed period

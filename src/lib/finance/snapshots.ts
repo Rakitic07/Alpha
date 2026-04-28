@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { startOfDay, format, differenceInDays, subYears } from 'date-fns';
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { financeLogger } from '@/lib/logger';
+import { istDateParts, istDayOfWeek } from '@/lib/tz';
 import { getPortfolioHoldings, calculatePortfolioXIRR, computeMarketCapSegmentation } from './holdings';
 
 export async function getDashboardHistory(days?: number) {
@@ -387,9 +388,11 @@ async function getDashboardStatsInternal() {
 
     // Get latest weekly snapshot for weekly return
     // If we're at the start of a new week (Monday-Thursday) and the latest weekly snapshot
-    // is from this week with 0 return, show the previous week's data instead
+    // is from this week with 0 return, show the previous week's data instead.
+    // Anchor to the IST trading week so this branch fires on the right day even
+    // when the server runs in UTC.
     const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 5 = Friday
+    const dayOfWeek = istDayOfWeek(today); // 0 = Sunday, 1 = Monday, ..., 5 = Friday
 
     let weeklySnapshotToUse = await prisma.weeklyPortfolioSnapshot.findFirst({
         orderBy: { date: 'desc' }
@@ -419,9 +422,9 @@ async function getDashboardStatsInternal() {
         orderBy: { date: 'desc' }
     });
 
-    // Calculate YTD return: from first daily snapshot of current year
-    const currentYear = new Date().getFullYear();
-    const startOfYear = new Date(currentYear, 0, 1);
+    // Calculate YTD return: from first daily snapshot of current year (IST).
+    const currentYear = istDateParts().year;
+    const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
 
     const firstOfYear = await prisma.dailyPortfolioSnapshot.findFirst({
         where: { date: { gte: startOfYear } },
