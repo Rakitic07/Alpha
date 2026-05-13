@@ -268,7 +268,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   await progress(50, 'Loading prices...');
 
   // ── Step 7: Load prices (only for scoreable stocks) ────────────────────────
-  const priceFromDate = daysAgo(420, today);
+  const priceFromDate = daysAgo(500, today);
   type Candle = { close: number; high: number; volume: number };
 
   // Only load prices for scoreable stocks — cuts query size ~50%
