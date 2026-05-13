@@ -362,7 +362,15 @@ async function computeStats(
 export async function syncScreener(): Promise<{ success: boolean; ranked: number; error?: string; jobId: string }> {
   const job = await createJob('screener-sync', 'Starting...');
   try {
-    const result = await runScreenerPipeline(job.id);
+    const txns = await prisma.transaction.findMany({ select: { symbol: true, type: true, quantity: true } });
+    const qtyMap = new Map<string, number>();
+    for (const t of txns) {
+      const q = qtyMap.get(t.symbol) ?? 0;
+      qtyMap.set(t.symbol, t.type === 'BUY' ? q + t.quantity : q - t.quantity);
+    }
+    const portfolioSymbols = new Set([...qtyMap.entries()].filter(([, q]) => q > 0.01).map(([s]) => s));
+
+    const result = await runScreenerPipeline(job.id, portfolioSymbols);
     // detectAndFlushAnomalies is now called inside runScreenerPipeline (before scoring)
     await completeJob(job.id, { ranked: result.ranked });
     revalidateTag('screener-scores', 'max');  // bust cached score rows
