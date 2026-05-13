@@ -508,6 +508,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                                 : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                             }`}
                             title={[
+                              exit.isUnranked ? '① Dropped from screener universe' :
                               exit.byRank   ? '① Rank > 50' : '',
                               exit.byFilter ? '② Below 200 DMA & outside 25% of ATH' : '',
                               exit.protected ? '🔒 Min hold not met (< 14 days)' : '',

@@ -34,6 +34,7 @@ export interface ScreenerRow {
     byRank: boolean;    // rank > 50
     byFilter: boolean;  // below 200 DMA AND athProximity < 0.75
     protected: boolean; // last BUY within 14 days (min hold rule)
+    isUnranked: boolean; // not in screener universe (e.g. BE category)
   };
 }
 
@@ -297,12 +298,13 @@ export async function getScreenerData(
   if (portfolioSymArr.length > 0) {
     for (const row of allRows) {
       if (!row.inPortfolio) continue;
-      const byRank   = row.isUnranked === true || row.rank > 50;
+      const isUnranked = row.isUnranked === true;
+      const byRank   = isUnranked || row.rank > 50;
       const byFilter = !row.dmaSwatches.above200 && row.athProximity < 0.75;
       if (!byRank && !byFilter) continue;
       const ageDays     = holdingAgeDays.get(row.symbol) ?? 9999;
       const isProtected = ageDays < 14;
-      row.exitSignal = { byRank, byFilter, protected: isProtected };
+      row.exitSignal = { byRank, byFilter, protected: isProtected, isUnranked };
     }
   }
 
