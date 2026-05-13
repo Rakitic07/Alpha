@@ -45,6 +45,7 @@ interface InstrumentData {
     isin?: string;
     name: string;
     exchange: string;
+    instrumentType: string; // EQ, BE (trade-to-trade), INDEX, etc.
 }
 
 // In-memory caches
@@ -236,15 +237,17 @@ async function loadInstruments(exchange: 'NSE' | 'BSE') {
             // Uppercase symbol for consistent lookup (enables O(1) case-insensitive search)
             const symbol = rawSymbol.toUpperCase();
             
-            // Only include EQUITY and INDEX types
+            // Only include EQUITY, BE (trade-to-trade), and INDEX types
+            // BE stocks are valid equities with settlement restrictions (no intraday)
             const type = instr.instrument_type?.toUpperCase();
-            if (type !== 'EQ' && type !== 'EQUITY' && type !== 'INDEX') continue;
+            if (type !== 'EQ' && type !== 'EQUITY' && type !== 'BE' && type !== 'INDEX') continue;
             
             const instrData: InstrumentData = {
                 key: instr.instrument_key,
                 isin: instr.isin,
                 name: instr.name || instr.short_name || symbol,
                 exchange,
+                instrumentType: type || 'EQ',
             };
             
             map.set(symbol, instrData);
@@ -403,6 +406,34 @@ export async function getAllInstrumentData(symbols: string[]): Promise<Map<strin
 export async function isValidSymbol(symbol: string): Promise<boolean> {
     const key = await getInstrumentKey(symbol);
     return key !== undefined;
+}
+
+/**
+ * Check if a symbol is a BE (trade-to-trade) category stock.
+ * BE stocks have settlement restrictions and are excluded from screener rankings.
+ */
+export async function isBECategory(symbol: string): Promise<boolean> {
+    await ensureInstrumentMaster();
+    const cleanSymbol = symbol.replace(/\.(NS|BO)$/i, '').toUpperCase();
+    const data = nseInstrumentMap?.get(cleanSymbol);
+    return data?.instrumentType === 'BE';
+}
+
+/**
+ * Get all BE (trade-to-trade) symbols currently loaded.
+ * Useful for batch filtering in the screener pipeline.
+ */
+export async function getBESymbols(): Promise<Set<string>> {
+    await ensureInstrumentMaster();
+    const beSymbols = new Set<string>();
+    if (nseInstrumentMap) {
+        for (const [symbol, data] of nseInstrumentMap) {
+            if (data.instrumentType === 'BE') {
+                beSymbols.add(symbol);
+            }
+        }
+    }
+    return beSymbols;
 }
 
 /**

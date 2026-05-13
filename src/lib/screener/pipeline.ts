@@ -11,7 +11,7 @@
  */
 
 import { prisma, chunkArray } from '@/lib/db';
-import { ensureInstrumentMaster, getAllSymbols, getAllInstrumentData } from '@/lib/instrument-service';
+import { ensureInstrumentMaster, getAllSymbols, getAllInstrumentData, getBESymbols } from '@/lib/instrument-service';
 import { getFullQuote } from '@/lib/upstox-client';
 import { getCategoriesBatch } from '@/lib/amfi/service';
 import { fetchAndStoreBhavcopy, isBhavcopyStale } from './bhavcopy';
@@ -103,8 +103,17 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     instruments.push({ symbol, instrumentKey: data.key, name: data.name });
   }
   const tradeable = instruments.filter(i => !i.instrumentKey.startsWith('NSE_INDEX|'));
-  pipelineLogger.info(`[${elapsed()}] ${tradeable.length} tradeable instruments`);
-  await progress(10, `${tradeable.length} instruments`);
+
+  // Filter out BE (trade-to-trade) category stocks — they have settlement restrictions
+  // and are explicitly excluded from screener rankings (see RulesInfoModal)
+  const beSymbols = await getBESymbols();
+  const tradeableFiltered = tradeable.filter(i => !beSymbols.has(i.symbol));
+  if (beSymbols.size > 0) {
+    const beCount = tradeable.length - tradeableFiltered.length;
+    pipelineLogger.info(`[${elapsed()}] Excluded ${beCount} BE (trade-to-trade) stocks from universe`);
+  }
+  pipelineLogger.info(`[${elapsed()}] ${tradeableFiltered.length} tradeable instruments (after BE filter)`);
+  await progress(10, `${tradeableFiltered.length} instruments`);
 
   // ── Step 3: Patch today's prices (batch OHLC) ─────────────────────────────
   let candlesFetched = 0;
@@ -180,11 +189,11 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   for (const row of allMcap) mcapMap.set(row.symbol, row.marketCap);
 
   // Pre-filter to stocks that pass mcap + ETF whitelist — no point loading prices for the rest
-  const scoreableInsts = tradeable.filter(i => {
+  const scoreableInsts = tradeableFiltered.filter(i => {
     const mcap = mcapMap.get(i.symbol);
     return (mcap && mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(i.symbol);
   });
-  pipelineLogger.info(`[${elapsed()}] ${scoreableInsts.length} scoreable (mcap filter from ${tradeable.length})`);
+  pipelineLogger.info(`[${elapsed()}] ${scoreableInsts.length} scoreable (mcap filter from ${tradeableFiltered.length})`);
 
   // ── Step 4b: Circuit check (skip if already >90s to save time) ─────────────
   const keyToSymbol = new Map<string, string>();
@@ -267,7 +276,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     date: { gte: priceFromDate, lte: today },
   };
   // If scoreable set is smaller than total, filter by symbol
-  if (scoreableInsts.length < tradeable.length * 0.8) {
+  if (scoreableInsts.length < tradeableFiltered.length * 0.8) {
     // Chunk symbol list for the IN clause (Turso HTTP handles large lists fine)
     priceWhere.symbol = { in: scoreableSymbols };
   }

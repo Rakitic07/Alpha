@@ -164,8 +164,9 @@ async function loadInstruments(): Promise<void> {
   const map = new Map<string, InstrumentData>();
 
   for (const inst of instruments) {
-    // Only include equity instruments
-    if (inst.instrument_type === 'EQ' || inst.instrument_type === 'INDEX') {
+    // Include equity, BE (trade-to-trade), and index instruments
+    // BE stocks are valid equities with settlement restrictions (no intraday)
+    if (inst.instrument_type === 'EQ' || inst.instrument_type === 'BE' || inst.instrument_type === 'INDEX') {
       // Key by uppercase trading symbol for case-insensitive lookup
       const symbol = inst.trading_symbol.toUpperCase();
       map.set(symbol, inst);
