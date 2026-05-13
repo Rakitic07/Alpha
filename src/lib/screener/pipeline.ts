@@ -191,7 +191,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   // Pre-filter to stocks that pass mcap + ETF whitelist — no point loading prices for the rest
   const scoreableInsts = tradeableFiltered.filter(i => {
     const mcap = mcapMap.get(i.symbol);
-    return (mcap && mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(i.symbol) || portfolioSymbols.has(i.symbol);
+    return (mcap && mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(i.symbol) || portfolioSymbols?.has(i.symbol);
   });
   pipelineLogger.info(`[${elapsed()}] ${scoreableInsts.length} scoreable (mcap filter from ${tradeableFiltered.length})`);
 
