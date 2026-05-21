@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, memo, forwardRef } from 'react';
+import Link from 'next/link';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { PortfolioHolding } from '@/lib/types';
 import Table from '@mui/material/Table';
@@ -150,9 +151,20 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
         <StyledTableRow sx={{ animationDelay: `${Math.min(index, 10) * 50}ms` }}>
             <StyledTableCell component="th" scope="row" sx={{ position: 'sticky', left: 0, zIndex: 10, bgcolor: '#111827', borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col gap-1">
-                    <span className="font-semibold text-white">
-                        {h.symbol}
-                    </span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-semibold text-white">
+                            {h.symbol}
+                        </span>
+                        <Link
+                          href={`/fundamentals/${h.symbol}`}
+                          className="p-1 rounded bg-white/5 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/30 text-zinc-400 hover:text-blue-400 transition-all cursor-pointer shrink-0"
+                          title={`${h.symbol} Fundamentals`}
+                        >
+                          <svg className="w-3 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                          </svg>
+                        </Link>
+                    </div>
                     <div className="hidden md:flex gap-1 flex-wrap">
                         <MarketCapChip category={h.marketCapCategory} />
                         <SectorChip sector={h.sector} />
@@ -376,7 +388,18 @@ export default function HoldingsTable({ holdings }: { holdings: PortfolioHolding
             <>
               <StyledTableCell component="th" scope="row" sx={{ position: 'sticky', left: 0, zIndex: 10, bgcolor: '#111827', borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col gap-1">
-                  <span className="font-semibold text-white">{h.symbol}</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold text-white">{h.symbol}</span>
+                    <Link
+                      href={`/fundamentals/${h.symbol}`}
+                      className="p-1 rounded bg-white/5 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/30 text-zinc-400 hover:text-blue-400 transition-all cursor-pointer shrink-0"
+                      title={`${h.symbol} Fundamentals`}
+                    >
+                      <svg className="w-3 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                      </svg>
+                    </Link>
+                  </div>
                   <div className="hidden md:flex gap-1 flex-wrap">
                     <MarketCapChip category={h.marketCapCategory} />
                     <SectorChip sector={h.sector} />

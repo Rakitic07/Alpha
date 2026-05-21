@@ -23,7 +23,8 @@ import {
   faXmark,
   faSignal,
   faEye,
-  faEyeSlash
+  faEyeSlash,
+  faBuilding
 } from '@fortawesome/free-solid-svg-icons';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -31,7 +32,7 @@ const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMob
   { text: 'Live', path: '/', icon: faSignal },
   { text: 'Dashboard', path: '/dashboard', icon: faChartLine },
   { text: 'Screener', path: '/screener', icon: faFilter },
-
+  { text: 'Fundamentals', path: '/fundamentals', icon: faBuilding },
   { text: 'Portfolio', path: '/portfolio', icon: faBriefcase },
   { text: 'Snapshots', path: '/snapshots', icon: faCamera },
   { text: 'Trades', path: '/trades', icon: faBolt, hiddenOnMobile: true },
@@ -125,7 +126,10 @@ export default function Header() {
     // Reset refs array to ensure it matches current items
     itemsRef.current = itemsRef.current.slice(0, menuItems.length);
 
-    const activeIndex = menuItems.findIndex(item => item.path === pathname);
+    const activeIndex = menuItems.findIndex(item => {
+      if (item.path.startsWith('/fundamentals') && pathname.startsWith('/fundamentals')) return true;
+      return item.path === pathname;
+    });
     if (activeIndex !== -1) {
         const activeEl = itemsRef.current[activeIndex];
         if (activeEl) {
@@ -191,7 +195,7 @@ export default function Header() {
                  />
 
                 {menuItems.filter(item => !privacyMode || !SENSITIVE_PATHS.has(item.path)).map((item, index) => {
-                  const isActive = pathname === item.path;
+                  const isActive = pathname === item.path || (item.path.startsWith('/fundamentals') && pathname.startsWith('/fundamentals'));
                   return (
                     <NextLink
                       key={item.path}
@@ -286,7 +290,7 @@ export default function Header() {
                 )}
 
                 {menuItems.filter(item => !item.hiddenOnMobile && (!privacyMode || !SENSITIVE_PATHS.has(item.path))).map((item) => {
-                    const isActive = pathname === item.path;
+                    const isActive = pathname === item.path || (item.path.startsWith('/fundamentals') && pathname.startsWith('/fundamentals'));
                     return (
                         <NextLink
                             key={item.path}
