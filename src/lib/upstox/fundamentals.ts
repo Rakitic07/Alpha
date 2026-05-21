@@ -1,6 +1,6 @@
 import { getAccessToken } from './auth';
 import { UpstoxError } from './types';
-import { getSymbolFromKey } from './instruments';
+import { getSymbolFromKey, getInstrumentKey } from './instruments';
 
 export interface ParticularHistory {
   period: string;
@@ -764,6 +764,18 @@ const MOCK_DATA: Record<string, Omit<CompanyFundamentals, 'isMock'>> = {
 // ============================================================================
 
 /**
+ * Helper to fetch optional endpoints with a fallback default value
+ */
+async function fetchOptionalEndpoint<T>(url: string, token: string, defaultValue: T): Promise<T> {
+  try {
+    return await fetchUpstoxEndpoint<T>(url, token);
+  } catch (error) {
+    console.warn(`[Upstox Fundamentals] Optional endpoint failed: ${url}. Using empty default.`, error);
+    return defaultValue;
+  }
+}
+
+/**
  * Fetch all company fundamental datasets (parallelized)
  */
 export async function getCompanyFundamentals(isin: string, symbol: string): Promise<CompanyFundamentals> {
@@ -776,15 +788,45 @@ export async function getCompanyFundamentals(isin: string, symbol: string): Prom
   }
 
   try {
-    const [profile, balanceSheet, incomeStatement, cashFlow, shareHoldings, keyRatios, corporateActions, competitors] = await Promise.all([
+    // Resolve full instrument key for competitors endpoint (expects e.g. NSE_EQ|ISIN)
+    const instrumentKey = (await getInstrumentKey(symbol)) || `NSE_EQ|${isinClean}`;
+
+    // 1. Fetch essential core data (profile, balance sheet, income statement)
+    // If these fail, we throw and fall back to mock data
+    const [profile, balanceSheet, incomeStatement] = await Promise.all([
       fetchUpstoxEndpoint<CompanyProfile>(`${BASE_URL}/${isinClean}/profile`, token),
       fetchUpstoxEndpoint<FinancialStatement>(`${BASE_URL}/${isinClean}/balance-sheet?fs=true`, token),
       fetchUpstoxEndpoint<FinancialStatement>(`${BASE_URL}/${isinClean}/income-statement?fs=true`, token),
-      fetchUpstoxEndpoint<FinancialStatement>(`${BASE_URL}/${isinClean}/cash-flow?fs=true`, token),
-      fetchUpstoxEndpoint<ShareholdingPattern[]>(`${BASE_URL}/${isinClean}/share-holdings`, token),
-      fetchUpstoxEndpoint<KeyRatio[]>(`${BASE_URL}/${isinClean}/key-ratios`, token),
-      fetchUpstoxEndpoint<CorporateAction[]>(`${BASE_URL}/${isinClean}/corporate-actions`, token),
-      fetchUpstoxEndpoint<CompetitorProfile[]>(`${BASE_URL}/${isinClean}/competitors`, token),
+    ]);
+
+    // 2. Fetch optional auxiliary data (cash flow, holdings, ratios, actions, competitors)
+    // Wrap them in try-catch so secondary failures don't ruin the whole page load
+    const [cashFlow, shareHoldings, keyRatios, corporateActions, competitors] = await Promise.all([
+      fetchOptionalEndpoint<FinancialStatement>(
+        `${BASE_URL}/${isinClean}/cash-flow?fs=true`,
+        token,
+        { type: 'consolidated', time_period: 'yearly', units_in: 'crore', full_statement: [], history: [] }
+      ),
+      fetchOptionalEndpoint<ShareholdingPattern[]>(
+        `${BASE_URL}/${isinClean}/share-holdings`,
+        token,
+        []
+      ),
+      fetchOptionalEndpoint<KeyRatio[]>(
+        `${BASE_URL}/${isinClean}/key-ratios`,
+        token,
+        []
+      ),
+      fetchOptionalEndpoint<CorporateAction[]>(
+        `${BASE_URL}/${isinClean}/corporate-actions`,
+        token,
+        []
+      ),
+      fetchOptionalEndpoint<CompetitorProfile[]>(
+        `${BASE_URL}/${instrumentKey}/competitors`,
+        token,
+        []
+      ),
     ]);
 
     // Post-process competitors to resolve symbols

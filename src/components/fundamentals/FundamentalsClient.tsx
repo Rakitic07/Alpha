@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import StockSearch from '@/components/fundamentals/StockSearch';
+
 import {
   BarChart,
   Bar,
@@ -228,10 +230,11 @@ export default function FundamentalsClient({
       {/* ────────────────────────────────────────────────────────────────────────
           Header Actions
           ──────────────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-white/5 pb-4">
         <div className="flex items-center gap-3">
           <Link
-            href="/screener"
+            href="/fundamentals"
+            title="Back to Fundamentals Search"
             className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900/60 border border-white/5 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-all shadow-md group"
           >
             <svg className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -258,9 +261,14 @@ export default function FundamentalsClient({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+          {/* Search bar inside details page header */}
+          <div className="w-full sm:w-60">
+            <StockSearch size="sm" placeholder="Search other stock..." />
+          </div>
+
           {/* Direct tab slider links */}
-          <div className="flex p-1 rounded-xl bg-zinc-900/60 border border-white/5 backdrop-blur-md relative overflow-hidden">
+          <div className="flex p-1 rounded-xl bg-zinc-900/60 border border-white/5 backdrop-blur-md relative overflow-hidden justify-between sm:justify-start">
             {([
               { id: 'overview', label: 'Overview' },
               { id: 'financials', label: 'Financials' },
