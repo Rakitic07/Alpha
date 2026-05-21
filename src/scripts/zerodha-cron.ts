@@ -21,7 +21,8 @@ const envPath = path.resolve(__dirname, '../../.env');
 
 if (fs.existsSync(envLocalPath)) {
     dotenv.config({ path: envLocalPath });
-} else if (fs.existsSync(envPath)) {
+}
+if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
 }
 // In CI/CD (GitHub Actions), env vars are injected directly into process.env, so dotenv is optional.

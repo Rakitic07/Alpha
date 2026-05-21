@@ -15,6 +15,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/sync-orders",
+      "schedule": "10 10 * * 1-5"
+    },
+    {
       "path": "/api/cron/momentum-screener",
       "schedule": "30 10 * * 1-5"
     },
