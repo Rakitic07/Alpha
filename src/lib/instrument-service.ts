@@ -288,11 +288,24 @@ export async function getInstrumentKey(symbol: string): Promise<string | undefin
     
     // Try NSE first (O(1) lookup - map keys are uppercase)
     let data = nseInstrumentMap?.get(cleanSymbol);
+    if (!data) {
+        // Fallback for suffix variants (e.g. BE, BZ, SM, ST)
+        for (const suffix of ['-BE', '-BZ', '-SM', '-ST']) {
+            data = nseInstrumentMap?.get(cleanSymbol + suffix);
+            if (data) break;
+        }
+    }
     if (data) return data.key;
     
     // Try BSE fallback
     if (bseInstrumentMap) {
         data = bseInstrumentMap.get(cleanSymbol);
+        if (!data) {
+            for (const suffix of ['-BE', '-BZ', '-SM', '-ST']) {
+                data = bseInstrumentMap.get(cleanSymbol + suffix);
+                if (data) break;
+            }
+        }
         if (data) return data.key;
     }
     
@@ -322,6 +335,13 @@ export async function getInstrumentKeys(symbols: string[]): Promise<Map<string, 
         
         // Try NSE first (direct lookup - O(1))
         let data = nseInstrumentMap?.get(cleanSymbol);
+        if (!data) {
+            // Fallback for suffix variants (e.g. BE, BZ, SM, ST)
+            for (const suffix of ['-BE', '-BZ', '-SM', '-ST']) {
+                data = nseInstrumentMap?.get(cleanSymbol + suffix);
+                if (data) break;
+            }
+        }
         if (data) {
             result.set(symbol, data.key);
             continue;
@@ -330,6 +350,12 @@ export async function getInstrumentKeys(symbols: string[]): Promise<Map<string, 
         // Try BSE fallback
         if (bseInstrumentMap) {
             data = bseInstrumentMap.get(cleanSymbol);
+            if (!data) {
+                for (const suffix of ['-BE', '-BZ', '-SM', '-ST']) {
+                    data = bseInstrumentMap.get(cleanSymbol + suffix);
+                    if (data) break;
+                }
+            }
             if (data) {
                 result.set(symbol, data.key);
             }
@@ -415,8 +441,11 @@ export async function isValidSymbol(symbol: string): Promise<boolean> {
 export async function isBECategory(symbol: string): Promise<boolean> {
     await ensureInstrumentMaster();
     const cleanSymbol = symbol.replace(/\.(NS|BO)$/i, '').toUpperCase();
-    const data = nseInstrumentMap?.get(cleanSymbol);
-    return data?.instrumentType === 'BE';
+    let data = nseInstrumentMap?.get(cleanSymbol);
+    if (!data) {
+        data = nseInstrumentMap?.get(cleanSymbol + '-BE');
+    }
+    return data?.instrumentType === 'BE' || cleanSymbol.endsWith('-BE');
 }
 
 /**

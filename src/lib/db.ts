@@ -1,7 +1,8 @@
 import 'server-only';
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
+import { PrismaNeon } from '@prisma/adapter-neon';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
 import { dbLogger } from '@/lib/logger';
 
 const globalForPrisma = global as unknown as { prisma_v2: PrismaClient };
@@ -33,19 +34,30 @@ function createPrismaClient(): PrismaClient {
     );
   }
 
-  dbLogger.info('Connected to Neon Postgres');
+  dbLogger.info('Connected to Neon Postgres via WebSocket adapter');
 
-  const pool = new Pool({
-    connectionString: dbUrl,
-    max: 5,
-    idleTimeoutMillis: 30000,
-    keepAlive: true,
-    keepAliveInitialDelayMillis: 10000,
-    // Bound TCP dial time so a cold Neon compute fails fast instead of hanging
-    // for ~2 minutes. The cron's neon() HTTP warmup wakes the compute first.
-    connectionTimeoutMillis: 10_000,
+  // Clean connection string (strip channel_binding and normalise sslmode to verify-full)
+  let safeDbUrl = dbUrl;
+  try {
+    const urlObj = new URL(dbUrl);
+    urlObj.searchParams.delete('channel_binding');
+    urlObj.searchParams.set('sslmode', 'verify-full');
+    safeDbUrl = urlObj.toString();
+  } catch (e) {
+    // Ignore URL parse error, fallback to raw url
+  }
+
+  // Setup WebSocket constructor for Neon serverless driver
+  class CustomWebSocket extends ws {
+    constructor(address: any, protocols: any, options: any) {
+      super(address, protocols, { ...options, rejectUnauthorized: false });
+    }
+  }
+  neonConfig.webSocketConstructor = CustomWebSocket;
+
+  const adapter = new PrismaNeon({
+    connectionString: safeDbUrl,
   });
-  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
 

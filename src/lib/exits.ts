@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { differenceInCalendarDays } from 'date-fns';
 import type { MarketCapCategory } from './amfi';
-import { getCategory as getAMFICategory, mapAMFIToMarketCapCategory } from './amfi';
+import { getCategoriesBatch, mapAMFIToMarketCapCategory, getSymbolResolver } from './amfi';
 
 export interface ExitRecord {
     id: string; // Composite ID
@@ -31,9 +31,20 @@ interface TradeCycle {
 }
 
 export async function getPortfolioExits(): Promise<ExitRecord[]> {
-    const transactions = await prisma.transaction.findMany({
+    const transactionsRaw = await prisma.transaction.findMany({
         orderBy: { date: 'asc' }
     });
+
+    const symbolMappings = await prisma.symbolMapping.findMany();
+    const resolveSymbol = getSymbolResolver(symbolMappings);
+    const transactions = transactionsRaw.map(t => ({
+        ...t,
+        symbol: resolveSymbol(t.symbol)
+    }));
+
+    // Batch fetch AMFI categories for all symbols in transactions
+    const uniqueSymbols = Array.from(new Set(transactions.map(t => t.symbol)));
+    const categoriesMap = await getCategoriesBatch(uniqueSymbols);
 
     const exits: ExitRecord[] = [];
     // Active cycles: Map<Symbol, Cycle>
@@ -81,13 +92,8 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
 
                     // Get Market Cap Category from AMFI classification
                     // AMFI provides official Large/Mid/Small cap classification
-                    let marketCapCategory: MarketCapCategory = 'Micro';
-                    try {
-                        const amfiCategory = await getAMFICategory(tx.symbol);
-                        marketCapCategory = mapAMFIToMarketCapCategory(amfiCategory);
-                    } catch {
-                        // Default to Micro if AMFI lookup fails
-                    }
+                    const amfiCategory = categoriesMap.get(tx.symbol) || 'Small';
+                    const marketCapCategory = mapAMFIToMarketCapCategory(amfiCategory);
 
                     exits.push({
                         id: `${tx.symbol}-${tx.date.toISOString()}`,

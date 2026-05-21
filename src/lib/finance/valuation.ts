@@ -9,7 +9,7 @@
 import { prisma, chunkArray } from '@/lib/db';
 import { PortfolioEngine } from '@/lib/portfolio-engine';
 import { getLiveQuotes, getInstrumentKeys } from '@/lib/upstox';
-import { getCategoriesBatch } from '@/lib/amfi';
+import { getCategoriesBatch, getSymbolResolver } from '@/lib/amfi';
 
 // ============================================================================
 // Types
@@ -77,20 +77,8 @@ export async function calculatePortfolioValue(
 
   // Get symbol mappings for normalization
   const symbolMappings = await prisma.symbolMapping.findMany();
-  const mappingLookup = new Map<string, string>();
-  for (const m of symbolMappings) {
-    mappingLookup.set(m.oldSymbol.toUpperCase(), m.newSymbol.toUpperCase());
-  }
+  const resolveSymbol = getSymbolResolver(symbolMappings);
 
-  const resolveSymbol = (symbol: string): string => {
-    let current = symbol.toUpperCase().trim();
-    const visited = new Set<string>();
-    while (mappingLookup.has(current) && !visited.has(current)) {
-      visited.add(current);
-      current = mappingLookup.get(current)!;
-    }
-    return current;
-  };
 
   for (const tx of transactions) {
     engine.processTransaction({

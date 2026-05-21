@@ -47,3 +47,13 @@ export function normalizeSymbol(symbol: string): string {
 export function hasLegacySuffix(symbol: string): boolean {
   return /\.(NS|BO)$/i.test(symbol);
 }
+
+/**
+ * Strips exchange series/category suffixes like -BE, -BZ, -SM, -ST
+ * @param symbol - Raw ticker symbol
+ * @returns Cleaned base ticker symbol (e.g. "PFOCUS" instead of "PFOCUS-BE")
+ */
+export function stripSeriesSuffix(symbol: string): string {
+  return symbol.replace(/-(BE|BZ|SM|ST)$/i, '').trim();
+}
+

@@ -21,6 +21,7 @@
 import { prisma, chunkArray } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { istDateParts } from '@/lib/tz';
+import { stripSeriesSuffix } from '@/lib/symbol-utils';
 import type {
   AMFICategory,
   AMFIPeriod,
@@ -170,7 +171,7 @@ export async function getAMFIPeriodStatus(snapshotDate: Date = new Date()): Prom
  * @param snapshotDate - Date for which to get the classification (for historical snapshots)
  */
 export async function getCategory(symbol: string, snapshotDate?: Date): Promise<AMFICategory> {
-  const normalizedSymbol = symbol.replace(/\.(NS|BO)$/i, '').toUpperCase().trim();
+  const normalizedSymbol = stripSeriesSuffix(symbol.replace(/\.(NS|BO)$/i, '').toUpperCase().trim());
   const status = await getAMFIPeriodStatus(snapshotDate);
 
   if (!status.hasData) {
@@ -233,7 +234,7 @@ export async function getCategoriesBatch(
   const normalizedSymbols = new Set<string>();
 
   for (const s of symbols) {
-    const normalized = s.replace(/\.(NS|BO)$/i, '').toUpperCase().trim();
+    const normalized = stripSeriesSuffix(s.replace(/\.(NS|BO)$/i, '').toUpperCase().trim());
     originalToNormalized.set(s, normalized);
     normalizedSymbols.add(normalized);
   }
@@ -634,17 +635,19 @@ export function mapAMFIToMarketCapCategory(amfiCategory: AMFICategory): MarketCa
 export function getSymbolResolver(mappings: { oldSymbol: string; newSymbol: string }[]) {
   const mappingMap = new Map<string, string>();
   for (const m of mappings) {
-    mappingMap.set(m.oldSymbol.toUpperCase().trim(), m.newSymbol.toUpperCase().trim());
+    const oldSym = stripSeriesSuffix(m.oldSymbol.toUpperCase().trim());
+    const newSym = stripSeriesSuffix(m.newSymbol.toUpperCase().trim());
+    mappingMap.set(oldSym, newSym);
   }
 
   return (symbol: string) => {
-    let current = symbol.toUpperCase().trim();
+    let current = stripSeriesSuffix(symbol.toUpperCase().trim());
     const visited = new Set<string>();
     while (mappingMap.has(current) && !visited.has(current)) {
       visited.add(current);
       const next = mappingMap.get(current);
       if (!next) break;
-      current = next;
+      current = stripSeriesSuffix(next);
     }
     return current;
   };
