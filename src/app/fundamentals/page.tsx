@@ -5,22 +5,70 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 const POPULAR_STOCKS = [
-  { symbol: 'RELIANCE', name: 'Reliance Industries', sector: 'Energy & Retail', color: 'from-blue-500/20 to-indigo-500/10 hover:border-blue-500/30' },
-  { symbol: 'TCS', name: 'Tata Consultancy Services', sector: 'IT Services', color: 'from-purple-500/20 to-indigo-500/10 hover:border-purple-500/30' },
-  { symbol: 'INFY', name: 'Infosys', sector: 'IT Services', color: 'from-emerald-500/20 to-teal-500/10 hover:border-emerald-500/30' },
-  { symbol: 'HDFCBANK', name: 'HDFC Bank', sector: 'Banking & Financials', color: 'from-sky-500/20 to-blue-500/10 hover:border-sky-500/30' },
-  { symbol: 'ICICIBANK', name: 'ICICI Bank', sector: 'Banking & Financials', color: 'from-orange-500/20 to-amber-500/10 hover:border-orange-500/30' },
-  { symbol: 'SBIN', name: 'State Bank of India', sector: 'Banking & Financials', color: 'from-cyan-500/20 to-blue-500/10 hover:border-cyan-500/30' },
+  { 
+    symbol: 'RELIANCE', 
+    name: 'Reliance Industries', 
+    sector: 'Energy & Retail', 
+    tagline: 'Energy & Conglomerate Leader', 
+    avatar: 'R', 
+    avatarBg: 'from-blue-600 to-cyan-500', 
+    borderColor: 'hover:border-blue-500/30'
+  },
+  { 
+    symbol: 'TCS', 
+    name: 'Tata Consultancy Services', 
+    sector: 'IT Services', 
+    tagline: 'Global IT Consulting Giant', 
+    avatar: 'T', 
+    avatarBg: 'from-purple-600 to-indigo-500', 
+    borderColor: 'hover:border-purple-500/30'
+  },
+  { 
+    symbol: 'INFY', 
+    name: 'Infosys', 
+    sector: 'IT Services', 
+    tagline: 'Digital Services & Consulting', 
+    avatar: 'I', 
+    avatarBg: 'from-emerald-600 to-teal-500', 
+    borderColor: 'hover:border-emerald-500/30'
+  },
+  { 
+    symbol: 'HDFCBANK', 
+    name: 'HDFC Bank', 
+    sector: 'Banking & Financials', 
+    tagline: 'Private Sector Banking Pioneer', 
+    avatar: 'H', 
+    avatarBg: 'from-sky-600 to-blue-500', 
+    borderColor: 'hover:border-sky-500/30'
+  },
+  { 
+    symbol: 'ICICIBANK', 
+    name: 'ICICI Bank', 
+    sector: 'Banking & Financials', 
+    tagline: 'Leading Private Sector Lender', 
+    avatar: 'IC', 
+    avatarBg: 'from-orange-600 to-amber-500', 
+    borderColor: 'hover:border-orange-500/30'
+  },
+  { 
+    symbol: 'SBIN', 
+    name: 'State Bank of India', 
+    sector: 'Banking & Financials', 
+    tagline: 'Public Sector Banking Giant', 
+    avatar: 'S', 
+    avatarBg: 'from-cyan-600 to-blue-500', 
+    borderColor: 'hover:border-cyan-500/30'
+  },
 ];
 
 export default function FundamentalsLandingPage() {
   return (
-    <main className="min-h-[85vh] bg-[#090d16] text-zinc-100 flex flex-col items-center justify-center py-12 px-4 md:px-8 relative overflow-hidden">
+    <div className="min-h-[85vh] text-zinc-100 flex flex-col items-center justify-center py-12 px-4 md:px-8 relative overflow-hidden">
       {/* Decorative Radial Background Gradients */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/3 w-[350px] h-[350px] bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
       
-      <div className="max-w-3xl w-full flex flex-col items-center text-center relative z-10">
+      <div className="max-w-4xl w-full flex flex-col items-center text-center relative z-10">
         {/* Animated Icon Badge */}
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -69,30 +117,44 @@ export default function FundamentalsLandingPage() {
           transition={{ duration: 0.6, delay: 0.4 }}
           className="w-full"
         >
-          <h2 className="text-zinc-500 font-semibold text-xs uppercase tracking-wider mb-4">
+          <h2 className="text-zinc-500 font-semibold text-xs uppercase tracking-wider mb-5">
             Popular Research Symbols
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
             {POPULAR_STOCKS.map((stock) => (
               <Link
                 key={stock.symbol}
                 href={`/fundamentals/${stock.symbol}`}
-                className={`flex flex-col items-start p-3 bg-gradient-to-br ${stock.color} border border-white/5 rounded-xl transition-all duration-300 backdrop-blur-md shadow-md text-left hover:scale-[1.02] hover:shadow-[0_8px_20px_rgba(0,0,0,0.3)] group`}
+                className={`flex items-start gap-4 p-4 rounded-2xl bg-zinc-900/30 border border-white/5 backdrop-blur-xl transition-all duration-300 text-left hover:scale-[1.02] hover:bg-zinc-900/50 hover:shadow-[0_12px_30px_rgba(0,0,0,0.4)] hover:shadow-cyan-500/5 hover:border-white/10 group ${stock.borderColor}`}
               >
-                <span className="font-bold text-white font-mono tracking-wide group-hover:text-blue-400 transition-colors">
-                  {stock.symbol}
-                </span>
-                <span className="text-[10px] text-zinc-400 font-medium truncate w-full mt-0.5">
-                  {stock.name}
-                </span>
-                <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider mt-1.5">
-                  {stock.sector}
-                </span>
+                {/* Visual Avatar with Gradient */}
+                <div className={`flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${stock.avatarBg} p-[1px] shadow-lg transition-transform duration-300 group-hover:scale-105`}>
+                  <div className="w-full h-full rounded-[11px] bg-zinc-950 flex items-center justify-center font-extrabold text-white text-base">
+                    {stock.avatar}
+                  </div>
+                </div>
+
+                <div className="flex-grow min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-bold text-white tracking-wide group-hover:text-blue-400 transition-colors">
+                      {stock.symbol}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 font-semibold border border-white/5">
+                      {stock.sector}
+                    </span>
+                  </div>
+                  <h3 className="text-xs font-semibold text-zinc-300 truncate mt-1">
+                    {stock.name}
+                  </h3>
+                  <p className="text-[10px] text-zinc-500 font-medium mt-1">
+                    {stock.tagline}
+                  </p>
+                </div>
               </Link>
             ))}
           </div>
         </motion.div>
       </div>
-    </main>
+    </div>
   );
 }

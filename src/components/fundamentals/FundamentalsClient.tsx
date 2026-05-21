@@ -49,6 +49,34 @@ export default function FundamentalsClient({
     setIsMounted(true);
   }, []);
 
+  // Scroll spy to highlight active anchor link in sticky sub-navigation
+  useEffect(() => {
+    const sections = ['overview', 'financials', 'shareholding', 'actions'];
+    const observers = sections.map(id => {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setActiveTab(id as any);
+          }
+        },
+        {
+          rootMargin: '-10% 0px -50% 0px' // Trigger when section occupies the top-middle of the screen
+        }
+      );
+      observer.observe(el);
+      return { observer, el };
+    });
+    
+    return () => {
+      observers.forEach(obs => {
+        if (obs) obs.observer.unobserve(obs.el);
+      });
+    };
+  }, []);
+
   // ────────────────────────────────────────────────────────────────────────────
   // Parse Data for Recharts
   // ────────────────────────────────────────────────────────────────────────────
@@ -212,8 +240,19 @@ export default function FundamentalsClient({
   }, [initialData.shareHoldings, shareholdingPeriods]);
 
   // Ratios extraction
+  // Ratios extraction
   const getRatioValue = (name: string) => {
-    return initialData.keyRatios?.find(r => r.name.toLowerCase().includes(name.toLowerCase()))?.company_value || '—';
+    return initialData.keyRatios?.find(r => {
+      const lowerName = r.name.toLowerCase().trim();
+      const lowerQuery = name.toLowerCase().trim();
+      if (lowerQuery === 'p/e ratio' || lowerQuery === 'p/e') {
+        return lowerName === 'p/e' || lowerName === 'p/e ratio';
+      }
+      if (lowerQuery === 'p/b ratio' || lowerQuery === 'p/b') {
+        return lowerName === 'p/b' || lowerName === 'p/b ratio';
+      }
+      return lowerName.includes(lowerQuery);
+    })?.company_value || '—';
   };
 
   // Header quick statistics
@@ -266,38 +305,6 @@ export default function FundamentalsClient({
           <div className="w-full sm:w-60">
             <StockSearch size="sm" placeholder="Search other stock..." />
           </div>
-
-          {/* Direct tab slider links */}
-          <div className="flex p-1 rounded-xl bg-zinc-900/60 border border-white/5 backdrop-blur-md relative overflow-hidden justify-between sm:justify-start">
-            {([
-              { id: 'overview', label: 'Overview' },
-              { id: 'financials', label: 'Financials' },
-              { id: 'shareholding', label: 'Shareholding' },
-              { id: 'actions', label: 'Actions' },
-            ] as const).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setExpandedStatement(false);
-                }}
-                className={`relative px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 select-none ${
-                  activeTab === tab.id
-                    ? 'text-white'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="activeTabGlow"
-                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 shadow-[0_0_15px_rgba(59,130,246,0.3)] z-0"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10">{tab.label}</span>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -321,7 +328,10 @@ export default function FundamentalsClient({
           {
             title: 'P/E Ratio',
             value: headPE,
-            subtitle: `Sector Avg: ${initialData.keyRatios?.find(r => r.name.toLowerCase().includes('p/e'))?.sector_value || '—'}`,
+            subtitle: `Sector Avg: ${initialData.keyRatios?.find(r => {
+              const nameLower = r.name.toLowerCase();
+              return nameLower === 'p/e' || nameLower === 'p/e ratio' || nameLower.includes('p/e');
+            })?.sector_value || '—'}`,
             iconColor: 'text-violet-400',
             bgGlow: 'rgba(139, 92, 246, 0.05)',
             icon: (
@@ -380,571 +390,599 @@ export default function FundamentalsClient({
         ))}
       </div>
 
-      {/* ────────────────────────────────────────────────────────────────────────
-          Main Tab Render Container
-          ──────────────────────────────────────────────────────────────────────── */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-          className="w-full"
-        >
-          {/* ====================================================================
-              1. OVERVIEW & PEERS TAB
-              ==================================================================== */}
-          {activeTab === 'overview' && (
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Profile Card */}
-              <div className="flex-grow lg:w-2/3 flex flex-col gap-6">
-                <div className="glass-card p-6 flex flex-col gap-4">
-                  <div>
-                    <h3 className="text-base font-bold text-white uppercase tracking-wider">Company Description</h3>
-                    <div className="h-px w-10 bg-blue-500 mt-1" />
-                  </div>
-                  <p className="text-sm leading-relaxed text-zinc-300 font-medium">
-                    {initialData.profile?.company_profile}
-                  </p>
-                </div>
-
-                {/* Key Ratios Grid */}
-                <div className="glass-card p-6 flex flex-col gap-4">
-                  <div>
-                    <h3 className="text-base font-bold text-white uppercase tracking-wider">Key Valuation Ratios</h3>
-                    <div className="h-px w-10 bg-indigo-500 mt-1" />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {initialData.keyRatios?.map((ratio, index) => {
-                      const compNum = parsePercent(ratio.company_value);
-                      const secNum = parsePercent(ratio.sector_value);
-                      const isBetter = ratio.name.toLowerCase().includes('debt') 
-                        ? compNum < secNum 
-                        : compNum > secNum;
-                      
-                      return (
-                        <div key={index} className="flex flex-col p-3.5 rounded-xl bg-zinc-900/40 border border-white/5 hover:border-white/10 hover:bg-zinc-900/60 transition-all">
-                          <span className="text-xs font-semibold text-zinc-400">{ratio.name}</span>
-                          <div className="flex items-baseline justify-between mt-1.5">
-                            <span className="text-base font-extrabold text-white font-mono">{ratio.company_value}</span>
-                            <span className="text-xs text-zinc-500">Sector Avg: <span className="font-mono text-zinc-400 font-semibold">{ratio.sector_value}</span></span>
-                          </div>
-                          {/* Visual progress bar comparison */}
-                          <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-3 relative">
-                            <div 
-                              className={`h-full rounded-full bg-zinc-600`}
-                              style={{ width: `${Math.min(100, Math.max(10, (secNum ? (compNum / secNum) * 50 : 50)))}%` }}
-                            />
-                            {secNum > 0 && (
-                              <div 
-                                className="absolute top-0 bottom-0 w-0.5 bg-indigo-500" 
-                                style={{ left: '50%' }}
-                                title="Sector Average Line"
-                              />
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Sidebar Competitors */}
-              <div className="lg:w-1/3 flex flex-col gap-6">
-                <div className="glass-card p-6 flex flex-col gap-4">
-                  <div>
-                    <h3 className="text-base font-bold text-white uppercase tracking-wider">Peer Group Competitors</h3>
-                    <div className="h-px w-10 bg-cyan-500 mt-1" />
-                  </div>
+      {/* Sticky Anchor Navigation Bar */}
+      <div className="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-md py-3.5 border-b border-white/5 -mx-4 px-4 md:-mx-8 md:px-8 flex items-center justify-between gap-4">
+        <span className="hidden md:inline font-bold text-sm text-zinc-300">
+          {resolvedName} <span className="font-mono text-zinc-500">({symbol})</span>
+        </span>
+        <div className="flex p-1 rounded-xl bg-zinc-900/60 border border-white/5 backdrop-blur-md relative overflow-hidden justify-between sm:justify-start w-full md:w-auto">
+          {([
+            { id: 'overview', label: 'Overview' },
+            { id: 'financials', label: 'Financials' },
+            { id: 'shareholding', label: 'Shareholding' },
+            { id: 'actions', label: 'Actions' },
+          ] as const).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                const element = document.getElementById(tab.id);
+                if (element) {
+                  const offset = 80;
+                  const bodyRect = document.body.getBoundingClientRect().top;
+                  const elementRect = element.getBoundingClientRect().top;
+                  const elementPosition = elementRect - bodyRect;
+                  const offsetPosition = elementPosition - offset;
                   
-                  <div className="flex flex-col gap-3">
-                    {initialData.competitors?.map((competitor, idx) => {
-                      const hasSymbol = !!competitor.symbol;
-                      return (
-                        <div 
-                          key={idx} 
-                          className="p-4 rounded-xl bg-zinc-900/30 border border-white/5 hover:border-white/10 hover:bg-zinc-900/50 transition-all flex flex-col gap-2 relative group"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-sm font-bold text-white">
-                              {competitor.symbol || competitor.instrument_key.split('|')[1]}
-                            </span>
-                            <span className="text-[10px] text-zinc-500 font-semibold">
-                              {competitor.sector_market_cap_inr?.formatted}
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-400 leading-normal line-clamp-3">
-                            {competitor.company_profile}
-                          </p>
-                          
-                          {hasSymbol && (
-                            <Link
-                              href={`/fundamentals/${competitor.symbol}`}
-                              className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors self-end"
-                            >
-                              Explore Fundamentals
-                              <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                              </svg>
-                            </Link>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+                  window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                  });
+                }
+              }}
+              className={`relative px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 select-none ${
+                activeTab === tab.id
+                  ? 'text-white'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="activeTabGlow"
+                  className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 shadow-[0_0_15px_rgba(59,130,246,0.3)] z-0"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
-          {/* ====================================================================
-              2. FINANCIALS TAB
-              ==================================================================== */}
-          {activeTab === 'financials' && (
-            <div className="flex flex-col gap-6">
-              <div className="glass-card p-6 flex flex-col gap-6">
-                {/* Financial Sub tabs */}
-                <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                  <div className="flex gap-2">
-                    {([
-                      { id: 'income', label: 'Income Statement' },
-                      { id: 'balance', label: 'Balance Sheet' },
-                      { id: 'cash', label: 'Cash Flow' }
-                    ] as const).map(tab => (
-                      <button
-                        key={tab.id}
-                        onClick={() => {
-                          setFinancialSubTab(tab.id);
-                          setExpandedStatement(false);
-                        }}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                          financialSubTab === tab.id
-                            ? 'bg-blue-600/10 text-blue-400 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.05)]'
-                            : 'bg-zinc-900/40 text-zinc-400 border-white/5 hover:text-zinc-200'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
-                    Figures in <span className="text-zinc-300 font-bold">{initialData.incomeStatement?.units_in || 'Crore'} INR</span>
-                  </span>
-                </div>
-
-                {/* Sub Tab Charts Rendering */}
-                <div className="w-full h-80 relative">
-                  {!isMounted ? (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
-                      Rendering statement graphs...
-                    </div>
-                  ) : financialSubTab === 'income' ? (
-                    incomeChartData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={incomeChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                          <defs>
-                            <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                              <stop offset="95%" stopColor="#2563eb" stopOpacity={0.1}/>
-                            </linearGradient>
-                            <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                              <stop offset="95%" stopColor="#059669" stopOpacity={0.1}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                          <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
-                          <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
-                          <Tooltip
-                            contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem' }}
-                            labelStyle={{ color: '#9ca3af', fontWeight: '600', fontSize: '11px', marginBottom: '4px' }}
-                            itemStyle={{ fontSize: '12px' }}
-                            formatter={(value: any) => [value != null ? (typeof value === 'number' ? value.toLocaleString('en-IN') : value) + ' Cr' : '', '']}
-                          />
-                          <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                          <Bar dataKey="Revenue" fill="url(#colorRev)" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Net Profit" fill="url(#colorProf)" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
-                        No historical revenue information available for chart rendering.
-                      </div>
-                    )
-                  ) : financialSubTab === 'balance' ? (
-                    balanceChartData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={balanceChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                          <defs>
-                            <linearGradient id="colorAssets" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8}/>
-                              <stop offset="95%" stopColor="#0891b2" stopOpacity={0.1}/>
-                            </linearGradient>
-                            <linearGradient id="colorLiabs" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.7}/>
-                              <stop offset="95%" stopColor="#dc2626" stopOpacity={0.1}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                          <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
-                          <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
-                          <Tooltip
-                            contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem' }}
-                            labelStyle={{ color: '#9ca3af', fontWeight: '600', fontSize: '11px', marginBottom: '4px' }}
-                            itemStyle={{ fontSize: '12px' }}
-                            formatter={(value: any) => [value != null ? (typeof value === 'number' ? value.toLocaleString('en-IN') : value) + ' Cr' : '', '']}
-                          />
-                          <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                          <Bar name="Total Assets" dataKey="total_asset" fill="url(#colorAssets)" radius={[4, 4, 0, 0]} />
-                          <Bar name="Total Liabilities" dataKey="total_liability" fill="url(#colorLiabs)" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
-                        No asset summaries available for chart rendering.
-                      </div>
-                    )
-                  ) : (
-                    cashFlowChartData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={cashFlowChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                          <defs>
-                            <linearGradient id="colorOp" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                            </linearGradient>
-                            <linearGradient id="colorInv" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
-                              <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                            </linearGradient>
-                            <linearGradient id="colorFin" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                          <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
-                          <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
-                          <Tooltip
-                            contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem' }}
-                            labelStyle={{ color: '#9ca3af', fontWeight: '600', fontSize: '11px', marginBottom: '4px' }}
-                            itemStyle={{ fontSize: '12px' }}
-                            formatter={(value: any) => [value != null ? (typeof value === 'number' ? value.toLocaleString('en-IN') : value) + ' Cr' : '', '']}
-                          />
-                          <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                          <Area type="monotone" name="Operating Cash" dataKey="Operating" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorOp)" />
-                          <Area type="monotone" name="Investing Cash" dataKey="Investing" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorInv)" />
-                          <Area type="monotone" name="Financing Cash" dataKey="Financing" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorFin)" />
-                          <Line type="monotone" name="Net Cash Flow" dataKey="Net Flow" stroke="#e4e4e7" strokeWidth={2} dot={{ r: 3 }} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
-                        No cash flow matrices available for chart rendering.
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-
-              {/* Expansion Drawer for Statements */}
-              <div className="glass-card">
-                <button
-                  onClick={() => setExpandedStatement(!expandedStatement)}
-                  className="w-full p-4 flex items-center justify-between font-bold text-sm text-zinc-300 hover:text-white transition-colors bg-zinc-950/20"
-                >
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                    </svg>
-                    View Detailed Line-Item Statement Table
-                  </span>
-                  <svg 
-                    className={`w-4 h-4 transform transition-transform duration-300 ${expandedStatement ? 'rotate-180' : ''}`} 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor" 
-                    strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                <AnimatePresence>
-                  {expandedStatement && (
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: 'auto' }}
-                      exit={{ height: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="overflow-hidden border-t border-white/5"
-                    >
-                      <div className="overflow-x-auto p-4">
-                        <table className="w-full text-left border-collapse min-w-[600px] text-xs">
-                          <thead>
-                            <tr className="border-b border-white/10 text-zinc-400 font-semibold uppercase">
-                              <th className="py-2.5 px-3">Particular Line Item</th>
-                              {/* Grab periods from statement rows */}
-                              {(() => {
-                                const statement = financialSubTab === 'income' 
-                                  ? initialData.incomeStatement 
-                                  : financialSubTab === 'balance' 
-                                    ? initialData.balanceSheet 
-                                    : initialData.cashFlow;
-                                
-                                const firstRow = statement?.full_statement?.[0];
-                                return firstRow?.history.map((h, i) => (
-                                  <th key={i} className="py-2.5 px-3 text-right font-mono">{h.period}</th>
-                                )) || null;
-                              })()}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5 font-medium">
-                            {(() => {
-                              const statement = financialSubTab === 'income' 
-                                ? initialData.incomeStatement 
-                                : financialSubTab === 'balance' 
-                                  ? initialData.balanceSheet 
-                                  : initialData.cashFlow;
-                              
-                              if (!statement?.full_statement) {
-                                return (
-                                  <tr>
-                                    <td className="py-4 text-center text-zinc-500" colSpan={4}>No details available.</td>
-                                  </tr>
-                                );
-                              }
-
-                              return statement.full_statement.map((row, index) => (
-                                <tr key={index} className="hover:bg-white/2 transition-colors">
-                                  <td className="py-2.5 px-3 text-zinc-300 font-semibold">{row.particular}</td>
-                                  {row.history.map((h, i) => (
-                                    <td key={i} className="py-2.5 px-3 text-right font-mono text-zinc-400">
-                                      {h.value.toLocaleString('en-IN')}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ));
-                            })()}
-                          </tbody>
-                        </table>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          )}
-
-          {/* ====================================================================
-              3. SHAREHOLDING PATTERN TAB
-              ==================================================================== */}
-          {activeTab === 'shareholding' && (
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Latest Donut Chart */}
-              <div className="lg:w-1/2 glass-card p-6 flex flex-col gap-4">
+      {/* ────────────────────────────────────────────────────────────────────────
+          Stacked Sections Layout
+          ──────────────────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-12 w-full mt-4">
+        {/* ====================================================================
+            1. OVERVIEW & PEERS SECTION
+            ==================================================================== */}
+        <section id="overview" className="scroll-mt-24 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-white tracking-tight">Company Overview & Peers</h2>
+            <div className="h-px flex-grow bg-white/5" />
+          </div>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Profile Card */}
+            <div className="flex-grow lg:w-2/3 flex flex-col gap-6">
+              <div className="glass-card p-6 flex flex-col gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-white uppercase tracking-wider">
-                    Ownership Structure ({latestShareholdingPeriod || 'Latest Quarter'})
-                  </h3>
-                  <div className="h-px w-10 bg-violet-500 mt-1" />
+                  <h3 className="text-base font-bold text-white uppercase tracking-wider">Company Description</h3>
+                  <div className="h-px w-10 bg-blue-500 mt-1" />
                 </div>
-
-                <div className="w-full h-64 relative flex items-center justify-center">
-                  {!isMounted ? (
-                    <span className="text-zinc-500 text-xs">Loading donut chart...</span>
-                  ) : latestShareholdingPieData.length > 0 ? (
-                    <>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={latestShareholdingPieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={4}
-                            dataKey="value"
-                          >
-                            {latestShareholdingPieData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.5rem' }}
-                            itemStyle={{ fontSize: '11px' }}
-                            formatter={(value: any) => [value != null ? (typeof value === 'number' ? `${value.toFixed(2)}%` : value) : '', '']}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      {/* Center Content */}
-                      <div className="absolute text-center flex flex-col items-center">
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Institutions</span>
-                        <span className="text-lg font-black text-white font-mono">
-                          {(() => {
-                            const fii = latestShareholdingPieData.find(d => d.name === 'FII')?.value || 0;
-                            const dii = latestShareholdingPieData.find(d => d.name === 'DII')?.value || 0;
-                            return (fii + dii).toFixed(1);
-                          })()}%
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-zinc-500 text-sm">No ownership structure points.</span>
-                  )}
-                </div>
-
-                {/* Donut Legend Table */}
-                <div className="flex flex-col gap-2 mt-2">
-                  {latestShareholdingPieData.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 border border-white/2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
-                        <span className="text-xs font-semibold text-zinc-300">{item.name}</span>
-                      </div>
-                      <span className="font-mono text-xs font-bold text-white">{item.value.toFixed(2)}%</span>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-sm leading-relaxed text-zinc-300 font-medium">
+                  {initialData.profile?.company_profile}
+                </p>
               </div>
 
-              {/* Historical Trend Stacked Bar */}
-              <div className="lg:w-1/2 glass-card p-6 flex flex-col gap-4">
+              {/* Key Ratios Grid */}
+              <div className="glass-card p-6 flex flex-col gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-white uppercase tracking-wider">
-                    Quarterly Ownership Trends
-                  </h3>
+                  <h3 className="text-base font-bold text-white uppercase tracking-wider">Key Valuation Ratios</h3>
                   <div className="h-px w-10 bg-indigo-500 mt-1" />
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {initialData.keyRatios?.map((ratio, index) => {
+                    const compNum = parsePercent(ratio.company_value);
+                    const secNum = parsePercent(ratio.sector_value);
+                    
+                    return (
+                      <div key={index} className="flex flex-col p-3.5 rounded-xl bg-zinc-900/40 border border-white/5 hover:border-white/10 hover:bg-zinc-900/60 transition-all">
+                        <span className="text-xs font-semibold text-zinc-400">{ratio.name}</span>
+                        <div className="flex items-baseline justify-between mt-1.5">
+                          <span className="text-base font-extrabold text-white font-mono">{ratio.company_value}</span>
+                          <span className="text-xs text-zinc-500">Sector Avg: <span className="font-mono text-zinc-400 font-semibold">{ratio.sector_value}</span></span>
+                        </div>
+                        {/* Visual progress bar comparison */}
+                        <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-3 relative">
+                          <div 
+                            className={`h-full rounded-full bg-zinc-600`}
+                            style={{ width: `${Math.min(100, Math.max(10, (secNum ? (compNum / secNum) * 50 : 50)))}%` }}
+                          />
+                          {secNum > 0 && (
+                            <div 
+                              className="absolute top-0 bottom-0 w-0.5 bg-indigo-500" 
+                              style={{ left: '50%' }}
+                              title="Sector Average Line"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
 
-                <div className="w-full h-80">
-                  {!isMounted ? (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs">
-                      Loading trends...
-                    </div>
-                  ) : shareholdingHistoricalData.length > 0 ? (
+            {/* Sidebar Competitors */}
+            <div className="lg:w-1/3 flex flex-col gap-6">
+              <div className="glass-card p-6 flex flex-col gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-white uppercase tracking-wider">Peer Group Competitors</h3>
+                  <div className="h-px w-10 bg-cyan-500 mt-1" />
+                </div>
+                
+                <div className="flex flex-col gap-3">
+                  {initialData.competitors?.map((competitor, idx) => {
+                    const hasSymbol = !!competitor.symbol;
+                    return (
+                      <div 
+                        key={idx} 
+                        className="p-4 rounded-xl bg-zinc-900/30 border border-white/5 hover:border-white/10 hover:bg-zinc-900/50 transition-all flex flex-col gap-2 relative group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-sm font-bold text-white">
+                            {competitor.symbol || competitor.instrument_key.split('|')[1]}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 font-semibold">
+                            {competitor.sector_market_cap_inr?.formatted}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-normal line-clamp-3">
+                          {competitor.company_profile}
+                        </p>
+                        
+                        {hasSymbol && (
+                          <Link
+                            href={`/fundamentals/${competitor.symbol}`}
+                            className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors self-end"
+                          >
+                            Explore Fundamentals
+                            <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ====================================================================
+            2. FINANCIAL STATEMENTS SECTION
+            ==================================================================== */}
+        <section id="financials" className="scroll-mt-24 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-white tracking-tight">Financial Statements</h2>
+            <div className="h-px flex-grow bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-6">
+            <div className="glass-card p-6 flex flex-col gap-6">
+              {/* Financial Sub tabs */}
+              <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                <div className="flex gap-2">
+                  {([
+                    { id: 'income', label: 'Income Statement' },
+                    { id: 'balance', label: 'Balance Sheet' },
+                    { id: 'cash', label: 'Cash Flow' }
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setFinancialSubTab(tab.id)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                        financialSubTab === tab.id
+                          ? 'bg-blue-600/10 text-blue-400 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.05)]'
+                          : 'bg-zinc-900/40 text-zinc-400 border-white/5 hover:text-zinc-200'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+                  Figures in <span className="text-zinc-300 font-bold">{initialData.incomeStatement?.units_in || 'Crore'} INR</span>
+                </span>
+              </div>
+
+              {/* Sub Tab Charts Rendering */}
+              <div className="w-full h-80 relative">
+                {!isMounted ? (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
+                    Rendering statement graphs...
+                  </div>
+                ) : financialSubTab === 'income' ? (
+                  incomeChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={shareholdingHistoricalData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                      <BarChart data={incomeChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0.1}/>
+                          </linearGradient>
+                          <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#059669" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                         <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} unit="%" />
+                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
                         <Tooltip
                           contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem' }}
                           labelStyle={{ color: '#9ca3af', fontWeight: '600', fontSize: '11px', marginBottom: '4px' }}
                           itemStyle={{ fontSize: '12px' }}
-                          formatter={(value: any) => [value != null ? (typeof value === 'number' ? `${value.toFixed(2)}%` : value) : '', '']}
+                          formatter={(value: any) => [value != null ? (typeof value === 'number' ? value.toLocaleString('en-IN') : value) + ' Cr' : '', '']}
                         />
                         <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                        {initialData.shareHoldings.map((cat, idx) => (
-                          <Bar 
-                            key={idx}
-                            dataKey={cat.category} 
-                            stackId="a" 
-                            fill={PIE_COLORS[idx % PIE_COLORS.length]} 
-                            radius={idx === initialData.shareHoldings.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                          />
-                        ))}
+                        <Bar dataKey="Revenue" fill="url(#colorRev)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Net Profit" fill="url(#colorProf)" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
-                      No quarterly history trend points.
+                      No historical revenue information available for chart rendering.
                     </div>
-                  )}
-                </div>
+                  )
+                ) : financialSubTab === 'balance' ? (
+                  balanceChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={balanceChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="colorAssets" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#0891b2" stopOpacity={0.1}/>
+                          </linearGradient>
+                          <linearGradient id="colorLiabs" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.7}/>
+                            <stop offset="95%" stopColor="#dc2626" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                        <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
+                        <Tooltip
+                          contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem' }}
+                          labelStyle={{ color: '#9ca3af', fontWeight: '600', fontSize: '11px', marginBottom: '4px' }}
+                          itemStyle={{ fontSize: '12px' }}
+                          formatter={(value: any) => [value != null ? (typeof value === 'number' ? value.toLocaleString('en-IN') : value) + ' Cr' : '', '']}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
+                        <Bar name="Total Assets" dataKey="total_asset" fill="url(#colorAssets)" radius={[4, 4, 0, 0]} />
+                        <Bar name="Total Liabilities" dataKey="total_liability" fill="url(#colorLiabs)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
+                      No asset summaries available for chart rendering.
+                    </div>
+                  )
+                ) : (
+                  cashFlowChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={cashFlowChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="colorOp" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorInv" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorFin" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                        <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
+                        <Tooltip
+                          contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem' }}
+                          labelStyle={{ color: '#9ca3af', fontWeight: '600', fontSize: '11px', marginBottom: '4px' }}
+                          itemStyle={{ fontSize: '12px' }}
+                          formatter={(value: any) => [value != null ? (typeof value === 'number' ? value.toLocaleString('en-IN') : value) + ' Cr' : '', '']}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
+                        <Area type="monotone" name="Operating Cash" dataKey="Operating" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorOp)" />
+                        <Area type="monotone" name="Investing Cash" dataKey="Investing" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorInv)" />
+                        <Area type="monotone" name="Financing Cash" dataKey="Financing" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorFin)" />
+                        <Line type="monotone" name="Net Cash Flow" dataKey="Net Flow" stroke="#e4e4e7" strokeWidth={2} dot={{ r: 3 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
+                      No cash flow matrices available for chart rendering.
+                    </div>
+                  )
+                )}
               </div>
             </div>
-          )}
 
-          {/* ====================================================================
-              4. CORPORATE ACTIONS TAB
-              ==================================================================== */}
-          {activeTab === 'actions' && (
-            <div className="glass-card p-6 flex flex-col gap-6">
+            {/* Detailed Statement Table - ALWAYS OPEN */}
+            <div className="glass-card p-6 flex flex-col gap-4">
               <div>
-                <h3 className="text-base font-bold text-white uppercase tracking-wider">Corporate Actions Timeline</h3>
-                <div className="h-px w-10 bg-amber-500 mt-1" />
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  Detailed Financial Statement Table
+                </h4>
+                <div className="h-px w-8 bg-blue-500 mt-1" />
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[600px] text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-zinc-400 font-semibold uppercase">
+                      <th className="py-2.5 px-3">Particular Line Item</th>
+                      {/* Grab periods from statement rows */}
+                      {(() => {
+                        const statement = financialSubTab === 'income' 
+                          ? initialData.incomeStatement 
+                          : financialSubTab === 'balance' 
+                            ? initialData.balanceSheet 
+                            : initialData.cashFlow;
+                        
+                        const firstRow = statement?.full_statement?.[0];
+                        return firstRow?.history.map((h, i) => (
+                          <th key={i} className="py-2.5 px-3 text-right font-mono">{h.period}</th>
+                        )) || null;
+                      })()}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 font-medium">
+                    {(() => {
+                      const statement = financialSubTab === 'income' 
+                        ? initialData.incomeStatement 
+                        : financialSubTab === 'balance' 
+                          ? initialData.balanceSheet 
+                          : initialData.cashFlow;
+                      
+                      if (!statement?.full_statement || statement.full_statement.length === 0) {
+                        return (
+                          <tr>
+                            <td className="py-4 text-center text-zinc-500" colSpan={4}>No details available.</td>
+                          </tr>
+                        );
+                      }
+
+                      return statement.full_statement.map((row, index) => (
+                        <tr key={index} className="hover:bg-white/2 transition-colors">
+                          <td className="py-2.5 px-3 text-zinc-300 font-semibold">{row.particular}</td>
+                          {row.history.map((h, i) => (
+                            <td key={i} className="py-2.5 px-3 text-right font-mono text-zinc-400">
+                              {h.value.toLocaleString('en-IN')}
+                            </td>
+                          ))}
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ====================================================================
+            3. SHAREHOLDING PATTERN SECTION
+            ==================================================================== */}
+        <section id="shareholding" className="scroll-mt-24 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-white tracking-tight">Shareholding Pattern</h2>
+            <div className="h-px flex-grow bg-white/5" />
+          </div>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Latest Donut Chart */}
+            <div className="lg:w-1/2 glass-card p-6 flex flex-col gap-4">
+              <div>
+                <h3 className="text-base font-bold text-white uppercase tracking-wider">
+                  Ownership Structure ({latestShareholdingPeriod || 'Latest Quarter'})
+                </h3>
+                <div className="h-px w-10 bg-violet-500 mt-1" />
               </div>
 
-              {initialData.corporateActions?.length > 0 ? (
-                <div className="relative pl-6 border-l border-zinc-800 flex flex-col gap-8 ml-3 py-2">
-                  {initialData.corporateActions.map((action, idx) => {
-                    const isDiv = action.name.toLowerCase().includes('dividend');
-                    const isSplit = action.name.toLowerCase().includes('split');
-                    const isBonus = action.name.toLowerCase().includes('bonus');
-                    
-                    const markerColor = isDiv 
-                      ? 'bg-emerald-500 ring-emerald-500/20' 
-                      : isSplit 
-                        ? 'bg-blue-500 ring-blue-500/20' 
-                        : isBonus 
-                          ? 'bg-violet-500 ring-violet-500/20' 
-                          : 'bg-zinc-500 ring-zinc-500/20';
+              <div className="w-full h-64 relative flex items-center justify-center">
+                {!isMounted ? (
+                  <span className="text-zinc-500 text-xs">Loading donut chart...</span>
+                ) : latestShareholdingPieData.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={latestShareholdingPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {latestShareholdingPieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.5rem' }}
+                          itemStyle={{ fontSize: '11px' }}
+                          formatter={(value: any) => [value != null ? (typeof value === 'number' ? `${value.toFixed(2)}%` : value) : '', '']}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Center Content */}
+                    <div className="absolute text-center flex flex-col items-center">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Institutions</span>
+                      <span className="text-lg font-black text-white font-mono">
+                        {(() => {
+                          const fii = latestShareholdingPieData.find(d => d.name === 'FII')?.value || 0;
+                          const dii = latestShareholdingPieData.find(d => d.name === 'DII')?.value || 0;
+                          return (fii + dii).toFixed(1);
+                        })()}%
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-zinc-500 text-sm">No ownership structure points.</span>
+                )}
+              </div>
 
-                    const borderHoverColor = isDiv 
-                      ? 'hover:border-emerald-500/30' 
-                      : isSplit 
-                        ? 'hover:border-blue-500/30' 
-                        : isBonus 
-                          ? 'hover:border-violet-500/30' 
-                          : 'hover:border-zinc-500/30';
-
-                    return (
-                      <motion.div
-                        key={idx}
-                        className={`relative p-5 rounded-2xl bg-zinc-900/30 border border-white/5 ${borderHoverColor} hover:bg-zinc-900/50 transition-all flex flex-col md:flex-row md:items-start justify-between gap-4 group`}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                      >
-                        {/* Dot marker */}
-                        <div className={`absolute -left-[31px] top-7 w-3.5 h-3.5 rounded-full ${markerColor} ring-4 transition-transform group-hover:scale-110`} />
-
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base font-extrabold text-white">{action.name}</span>
-                            <span className="font-mono text-[10px] text-zinc-500 font-semibold px-2 py-0.5 rounded bg-white/5 border border-white/5">
-                              Ex-Date: {action.expiry_date}
-                            </span>
-                          </div>
-                          
-                          {/* Event Details Grid */}
-                          <div className="flex flex-wrap gap-x-6 gap-y-1.5 mt-2">
-                            {action.event_details?.map((detail, dIdx) => (
-                              <div key={dIdx} className="text-xs">
-                                <span className="text-zinc-500 font-semibold">{detail.key}:</span>{' '}
-                                <span className="text-zinc-300 font-bold">{detail.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Visual details summary badge */}
-                        {(action.amount != null || action.ratio != null) && (
-                          <div className="flex items-center self-start md:self-center">
-                            <span className={`text-sm font-extrabold font-mono px-4 py-2 rounded-xl bg-white/5 border border-white/5 ${
-                              isDiv ? 'text-emerald-400' : isSplit ? 'text-blue-400' : 'text-violet-400'
-                            }`}>
-                              {action.amount != null ? `₹${action.amount.toFixed(2)}` : action.ratio}
-                            </span>
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-12 text-center text-zinc-500 text-sm">
-                  No corporate actions listed in the database.
-                </div>
-              )}
+              {/* Donut Legend Table */}
+              <div className="flex flex-col gap-2 mt-2">
+                {latestShareholdingPieData.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/30 border border-white/2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
+                      <span className="text-xs font-semibold text-zinc-300">{item.name}</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-white">{item.value.toFixed(2)}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+
+            {/* Historical Trend Stacked Bar */}
+            <div className="lg:w-1/2 glass-card p-6 flex flex-col gap-4">
+              <div>
+                <h3 className="text-base font-bold text-white uppercase tracking-wider">
+                  Quarterly Ownership Trends
+                </h3>
+                <div className="h-px w-10 bg-indigo-500 mt-1" />
+              </div>
+
+              <div className="w-full h-80">
+                {!isMounted ? (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs">
+                    Loading trends...
+                  </div>
+                ) : shareholdingHistoricalData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={shareholdingHistoricalData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                      <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} unit="%" />
+                      <Tooltip
+                        contentStyle={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem' }}
+                        labelStyle={{ color: '#9ca3af', fontWeight: '600', fontSize: '11px', marginBottom: '4px' }}
+                        itemStyle={{ fontSize: '12px' }}
+                        formatter={(value: any) => [value != null ? (typeof value === 'number' ? `${value.toFixed(2)}%` : value) : '', '']}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
+                      {initialData.shareHoldings.map((cat, idx) => (
+                        <Bar 
+                          key={idx}
+                          dataKey={cat.category} 
+                          stackId="a" 
+                          fill={PIE_COLORS[idx % PIE_COLORS.length]} 
+                          radius={idx === initialData.shareHoldings.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-500 text-sm">
+                    No quarterly history trend points.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ====================================================================
+            4. CORPORATE ACTIONS SECTION
+            ==================================================================== */}
+        <section id="actions" className="scroll-mt-24 flex flex-col gap-4 pb-12">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-white tracking-tight">Corporate Actions Timeline</h2>
+            <div className="h-px flex-grow bg-white/5" />
+          </div>
+          <div className="glass-card p-6 flex flex-col gap-6">
+            <div>
+              <h3 className="text-base font-bold text-white uppercase tracking-wider">Corporate Actions Timeline</h3>
+              <div className="h-px w-10 bg-amber-500 mt-1" />
+            </div>
+
+            {initialData.corporateActions?.length > 0 ? (
+              <div className="relative pl-6 border-l border-zinc-800 flex flex-col gap-8 ml-3 py-2">
+                {initialData.corporateActions.map((action, idx) => {
+                  const isDiv = action.name.toLowerCase().includes('dividend');
+                  const isSplit = action.name.toLowerCase().includes('split');
+                  const isBonus = action.name.toLowerCase().includes('bonus');
+                  
+                  const markerColor = isDiv 
+                    ? 'bg-emerald-500 ring-emerald-500/20' 
+                    : isSplit 
+                      ? 'bg-blue-500 ring-blue-500/20' 
+                      : isBonus 
+                        ? 'bg-violet-500 ring-violet-500/20' 
+                        : 'bg-zinc-500 ring-zinc-500/20';
+
+                  const borderHoverColor = isDiv 
+                    ? 'hover:border-emerald-500/30' 
+                    : isSplit 
+                      ? 'hover:border-blue-500/30' 
+                      : isBonus 
+                        ? 'hover:border-violet-500/30' 
+                        : 'hover:border-zinc-500/30';
+
+                  return (
+                    <motion.div
+                      key={idx}
+                      className={`relative p-5 rounded-2xl bg-zinc-900/30 border border-white/5 ${borderHoverColor} hover:bg-zinc-900/50 transition-all flex flex-col md:flex-row md:items-start justify-between gap-4 group`}
+                      initial={{ opacity: 0, x: -10 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.05 }}
+                    >
+                      {/* Dot marker */}
+                      <div className={`absolute -left-[31px] top-7 w-3.5 h-3.5 rounded-full ${markerColor} ring-4 transition-transform group-hover:scale-110`} />
+
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-extrabold text-white">{action.name}</span>
+                          <span className="font-mono text-[10px] text-zinc-500 font-semibold px-2 py-0.5 rounded bg-white/5 border border-white/5">
+                            Ex-Date: {action.expiry_date}
+                          </span>
+                        </div>
+                        
+                        {/* Event Details Grid */}
+                        <div className="flex flex-wrap gap-x-6 gap-y-1.5 mt-2">
+                          {action.event_details?.map((detail, dIdx) => (
+                            <div key={dIdx} className="text-xs">
+                              <span className="text-zinc-500 font-semibold">{detail.key}:</span>{' '}
+                              <span className="text-zinc-300 font-bold">{detail.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Visual details summary badge */}
+                      {(action.amount != null || action.ratio != null) && (
+                        <div className="flex items-center self-start md:self-center">
+                          <span className={`text-sm font-extrabold font-mono px-4 py-2 rounded-xl bg-white/5 border border-white/5 ${
+                            isDiv ? 'text-emerald-400' : isSplit ? 'text-blue-400' : 'text-violet-400'
+                          }`}>
+                            {action.amount != null ? `₹${action.amount.toFixed(2)}` : action.ratio}
+                          </span>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-zinc-500 text-sm">
+                No corporate actions listed in the database.
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

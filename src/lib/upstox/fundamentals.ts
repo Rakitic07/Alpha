@@ -840,13 +840,74 @@ export async function getCompanyFundamentals(isin: string, symbol: string): Prom
       })
     );
 
+    // Fetch latest price from DB
+    let latestPrice: number | null = null;
+    try {
+      const { prisma: db } = await import('../db');
+      const priceRecord = await db.screenerPrice.findFirst({
+        where: { symbol: symbol.toUpperCase() },
+        orderBy: { date: 'desc' }
+      });
+      if (priceRecord) {
+        latestPrice = priceRecord.close;
+      } else {
+        const momentumRecord = await db.momentumScore.findFirst({
+          where: { symbol: symbol.toUpperCase() },
+          orderBy: { computedDate: 'desc' }
+        });
+        if (momentumRecord) {
+          latestPrice = momentumRecord.currentPrice;
+        }
+      }
+    } catch (e) {
+      console.warn(`[Upstox Fundamentals] Failed to fetch price from DB for ${symbol}:`, e);
+    }
+
+    // Calculate Dividend Yield if price is available
+    let calculatedYield = '—';
+    if (latestPrice && latestPrice > 0 && Array.isArray(corporateActions) && corporateActions.length > 0) {
+      try {
+        const referenceDate = new Date();
+        const twelveMonthsAgo = new Date(referenceDate);
+        twelveMonthsAgo.setFullYear(referenceDate.getFullYear() - 1);
+
+        let totalDividend = 0;
+        for (const action of corporateActions) {
+          if (action.name.toLowerCase().includes('dividend')) {
+            const divDate = new Date(action.expiry_date);
+            if (!isNaN(divDate.getTime())) {
+              if (divDate >= twelveMonthsAgo && divDate <= referenceDate) {
+                totalDividend += action.amount || 0;
+              }
+            }
+          }
+        }
+        if (totalDividend > 0) {
+          calculatedYield = `${((totalDividend / latestPrice) * 100).toFixed(2)}%`;
+        }
+      } catch (e) {
+        console.warn(`[Upstox Fundamentals] Failed to calculate dividend yield for ${symbol}:`, e);
+      }
+    }
+
+    // Safely append or update Dividend Yield in keyRatios
+    const updatedKeyRatios = Array.isArray(keyRatios) ? [...keyRatios] : [];
+    const hasDivYield = updatedKeyRatios.some(r => r.name.toLowerCase().includes('dividend yield'));
+    if (!hasDivYield) {
+      updatedKeyRatios.push({
+        name: 'Dividend Yield',
+        company_value: calculatedYield,
+        sector_value: '—'
+      });
+    }
+
     return {
       profile,
       balanceSheet,
       incomeStatement,
       cashFlow,
       shareHoldings,
-      keyRatios,
+      keyRatios: updatedKeyRatios,
       corporateActions,
       competitors: competitorsWithSymbols,
       isMock: false,

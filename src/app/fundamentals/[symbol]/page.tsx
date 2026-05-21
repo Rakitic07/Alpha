@@ -3,6 +3,9 @@ import { getCompanyFundamentals } from '@/lib/upstox/fundamentals';
 import FundamentalsClient from '@/components/fundamentals/FundamentalsClient';
 import { notFound } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type Params = Promise<{ symbol: string }> | { symbol: string };
 
 interface PageProps {
@@ -62,7 +65,7 @@ export default async function FundamentalsPage({ params }: PageProps) {
     const data = await getCompanyFundamentals(isin, symbol);
     
     return (
-      <main className="min-h-screen bg-[#090d16] text-zinc-100 py-6 px-4 md:px-8">
+      <div className="min-h-screen text-zinc-100 py-6 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
           <FundamentalsClient 
             symbol={symbol} 
@@ -71,14 +74,14 @@ export default async function FundamentalsPage({ params }: PageProps) {
             initialData={data} 
           />
         </div>
-      </main>
+      </div>
     );
   } catch (error) {
     console.error(`[Fundamentals Page] Failed to fetch fundamentals for ${symbol}:`, error);
     
     // Direct server-side recovery fallback to generic mock data rather than crashing
     return (
-      <main className="min-h-screen bg-[#090d16] text-zinc-100 py-6 px-4 md:px-8 flex items-center justify-center">
+      <div className="min-h-screen text-zinc-100 py-6 px-4 md:px-8 flex items-center justify-center">
         <div className="max-w-md w-full bg-zinc-900/50 border border-zinc-800 backdrop-blur-md rounded-xl p-6 text-center shadow-xl">
           <h2 className="text-xl font-bold text-red-400 mb-2">Error Loading Data</h2>
           <p className="text-sm text-zinc-400 mb-6">
@@ -91,7 +94,7 @@ export default async function FundamentalsPage({ params }: PageProps) {
             Return to Screener
           </a>
         </div>
-      </main>
+      </div>
     );
   }
 }
