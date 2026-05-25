@@ -71,6 +71,9 @@ export interface CompanyFundamentals {
   balanceSheet: FinancialStatement;
   incomeStatement: FinancialStatement;
   cashFlow: FinancialStatement;
+  balanceSheetQuarterly?: FinancialStatement;
+  incomeStatementQuarterly?: FinancialStatement;
+  cashFlowQuarterly?: FinancialStatement;
   shareHoldings: ShareholdingPattern[];
   keyRatios: KeyRatio[];
   corporateActions: CorporateAction[];
@@ -792,20 +795,48 @@ export async function getCompanyFundamentals(isin: string, symbol: string): Prom
     const instrumentKey = (await getInstrumentKey(symbol)) || `NSE_EQ|${isinClean}`;
 
     // 1. Fetch essential core data (profile, balance sheet, income statement)
-    // If these fail, we throw and fall back to mock data
-    const [profile, balanceSheet, incomeStatement] = await Promise.all([
+    // If these fail, we throw and fall back to mock data. Fetch yearly by default, grab quarterly optionally.
+    const [
+      profile,
+      balanceSheet,
+      incomeStatement,
+      balanceSheetQuarterly,
+      incomeStatementQuarterly
+    ] = await Promise.all([
       fetchUpstoxEndpoint<CompanyProfile>(`${BASE_URL}/${isinClean}/profile`, token),
-      fetchUpstoxEndpoint<FinancialStatement>(`${BASE_URL}/${isinClean}/balance-sheet?fs=true`, token),
-      fetchUpstoxEndpoint<FinancialStatement>(`${BASE_URL}/${isinClean}/income-statement?fs=true`, token),
+      fetchUpstoxEndpoint<FinancialStatement>(`${BASE_URL}/${isinClean}/balance-sheet?fs=true&time_period=yearly`, token),
+      fetchUpstoxEndpoint<FinancialStatement>(`${BASE_URL}/${isinClean}/income-statement?fs=true&time_period=yearly`, token),
+      fetchOptionalEndpoint<FinancialStatement>(
+        `${BASE_URL}/${isinClean}/balance-sheet?fs=true&time_period=quarterly`,
+        token,
+        { type: 'consolidated', time_period: 'quarterly', units_in: 'crore', full_statement: [], history: [] }
+      ),
+      fetchOptionalEndpoint<FinancialStatement>(
+        `${BASE_URL}/${isinClean}/income-statement?fs=true&time_period=quarterly`,
+        token,
+        { type: 'consolidated', time_period: 'quarterly', units_in: 'crore', full_statement: [], history: [] }
+      ),
     ]);
 
     // 2. Fetch optional auxiliary data (cash flow, holdings, ratios, actions, competitors)
     // Wrap them in try-catch so secondary failures don't ruin the whole page load
-    const [cashFlow, shareHoldings, keyRatios, corporateActions, competitors] = await Promise.all([
+    const [
+      cashFlow,
+      cashFlowQuarterly,
+      shareHoldings,
+      keyRatios,
+      corporateActions,
+      competitors
+    ] = await Promise.all([
       fetchOptionalEndpoint<FinancialStatement>(
-        `${BASE_URL}/${isinClean}/cash-flow?fs=true`,
+        `${BASE_URL}/${isinClean}/cash-flow?fs=true&time_period=yearly`,
         token,
         { type: 'consolidated', time_period: 'yearly', units_in: 'crore', full_statement: [], history: [] }
+      ),
+      fetchOptionalEndpoint<FinancialStatement>(
+        `${BASE_URL}/${isinClean}/cash-flow?fs=true&time_period=quarterly`,
+        token,
+        { type: 'consolidated', time_period: 'quarterly', units_in: 'crore', full_statement: [], history: [] }
       ),
       fetchOptionalEndpoint<ShareholdingPattern[]>(
         `${BASE_URL}/${isinClean}/share-holdings`,
@@ -906,6 +937,9 @@ export async function getCompanyFundamentals(isin: string, symbol: string): Prom
       balanceSheet,
       incomeStatement,
       cashFlow,
+      balanceSheetQuarterly,
+      incomeStatementQuarterly,
+      cashFlowQuarterly,
       shareHoldings,
       keyRatios: updatedKeyRatios,
       corporateActions,
@@ -959,13 +993,64 @@ async function fetchUpstoxEndpoint<T>(url: string, accessToken: string): Promise
 }
 
 /**
+ * Helper to dynamically convert yearly financial statements to quarterly statements for mock data.
+ * Scales flow variables (e.g. income statement, cash flow items) by 1/4 (with slight noise),
+ * while keeping stock variables (e.g. balance sheet items) at their absolute values.
+ */
+function convertYearlyToQuarterlyMock(statement: FinancialStatement, isFlowVariable: boolean): FinancialStatement {
+  const quarters = ['Jun 2024', 'Sep 2024', 'Dec 2024', 'Mar 2025'];
+  
+  const full_statement = statement.full_statement.map(row => {
+    const history = quarters.map((quarter, idx) => {
+      const yearlyVal = row.history[idx]?.value ?? (row.history[row.history.length - 1]?.value || 0);
+      let value = yearlyVal;
+      if (isFlowVariable) {
+        const base = yearlyVal / 4;
+        const variation = (Math.sin(idx + 1) * 0.05) * base; // deterministic variation to avoid ssr hydration mismatch
+        value = Math.round(base + variation);
+      }
+      return {
+        period: quarter,
+        value
+      };
+    });
+    return {
+      particular: row.particular,
+      history
+    };
+  });
+
+  const history = statement.history?.map((h, idx) => {
+    const quarter = quarters[idx] || 'Mar 2025';
+    return {
+      period: quarter,
+      total_asset: h.total_asset,
+      total_liability: h.total_liability,
+      value: h.value != null ? (isFlowVariable ? Math.round(h.value / 4) : h.value) : undefined,
+      change: h.change
+    };
+  });
+
+  return {
+    ...statement,
+    time_period: 'quarterly',
+    full_statement,
+    history
+  };
+}
+
+/**
  * Returns mock fundamentals data, adjusting values/names dynamically for non-seeded symbols
  */
 function getMockFundamentals(isin: string, symbol: string): CompanyFundamentals {
   // If we have a direct match in seed database, return it
   if (MOCK_DATA[isin]) {
+    const base = MOCK_DATA[isin];
     return {
-      ...MOCK_DATA[isin],
+      ...base,
+      balanceSheetQuarterly: convertYearlyToQuarterlyMock(base.balanceSheet, false),
+      incomeStatementQuarterly: convertYearlyToQuarterlyMock(base.incomeStatement, true),
+      cashFlowQuarterly: convertYearlyToQuarterlyMock(base.cashFlow, true),
       isMock: true,
     };
   }
@@ -974,7 +1059,7 @@ function getMockFundamentals(isin: string, symbol: string): CompanyFundamentals 
   const defaultBaseMcap = Math.random() * 200000 + 10000;
   const sector = symbol.includes('BANK') ? 'Banking & Financials' : symbol.includes('TECH') || symbol.includes('INFY') || symbol.includes('TCS') ? 'IT Services & Consulting' : 'Infrastructure & Energy';
   
-  return {
+  const baseData = {
     profile: {
       company_profile: `${symbol} is a leading enterprise in the ${sector} sector. It operates broad and diversified lines of business nationally and internationally, contributing to industry growth and development.`,
       sector,
@@ -1127,7 +1212,14 @@ function getMockFundamentals(isin: string, symbol: string): CompanyFundamentals 
         sector_market_cap_inr: { value: 1452154, unit: 'crore', formatted: '14,52,154.00 Cr' },
         sector_market_cap_usd: { value: 174.2, unit: 'billion', formatted: '$174.20B' }
       }
-    ],
-    isMock: true
+    ]
+  };
+
+  return {
+    ...baseData,
+    balanceSheetQuarterly: convertYearlyToQuarterlyMock(baseData.balanceSheet, false),
+    incomeStatementQuarterly: convertYearlyToQuarterlyMock(baseData.incomeStatement, true),
+    cashFlowQuarterly: convertYearlyToQuarterlyMock(baseData.cashFlow, true),
+    isMock: true,
   };
 }

@@ -16,13 +16,8 @@ import {
   PieChart,
   Pie,
   Cell,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
 } from 'recharts';
-import { CompanyFundamentals, FinancialStatement } from '@/lib/upstox/fundamentals';
+import { CompanyFundamentals, FinancialStatement, KeyRatio } from '@/lib/upstox/fundamentals';
 
 // Heavy chart types — lazy loaded to avoid blocking initial page render
 const BarChart = dynamic(() => import('recharts').then(m => m.BarChart), { ssr: false });
@@ -58,6 +53,7 @@ function SectionHeader({ icon, label, color = 'violet' }: { icon: React.ReactNod
     amber: 'from-amber-500/20 to-amber-500/5 text-amber-400',
     indigo: 'from-indigo-500/20 to-indigo-500/5 text-indigo-400',
     cyan: 'from-cyan-500/20 to-cyan-500/5 text-cyan-400',
+    slate: 'from-zinc-500/10 to-zinc-500/5 text-zinc-400',
   };
   const classes = colorMap[color] || colorMap.violet;
   const [gradientClasses, textClass] = classes.split(' text-');
@@ -94,10 +90,19 @@ export default function FundamentalsClient({
   const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'shareholding' | 'actions'>('overview');
   const [financialSubTab, setFinancialSubTab] = useState<'income' | 'balance' | 'cash'>('income');
   const [isMounted, setIsMounted] = useState(false);
+  const [periodType, setPeriodType] = useState<'quarterly' | 'yearly'>('yearly');
+  const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
+  const [hoveredSeries, setHoveredSeries] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Reset hidden/hovered series when sub tab changes
+  useEffect(() => {
+    setHiddenSeries({});
+    setHoveredSeries(null);
+  }, [financialSubTab]);
 
   // Scroll spy for sticky nav
   useEffect(() => {
@@ -125,7 +130,47 @@ export default function FundamentalsClient({
     };
   }, []);
 
+  // Helper to parse period strings (like "Jun 2024", "Mar 2025") chronologically for sorting
+  const parsePeriodToDateValue = (period: string) => {
+    const clean = period.trim();
+    const monthMap: Record<string, number> = {
+      jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+      jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+    };
+    const parts = clean.split(/\s+/);
+    if (parts.length === 2) {
+      const monthStr = parts[0].toLowerCase().substring(0, 3);
+      const yearStr = parts[1];
+      const month = monthMap[monthStr] || 1;
+      let year = parseInt(yearStr);
+      if (!isNaN(year)) {
+        if (year < 100) year += 2000;
+        return year * 100 + month;
+      }
+    }
+    const yearDigits = parseInt(clean.replace(/\D/g, '')) || 0;
+    return yearDigits * 100;
+  };
+
   // ── Data Parsing ──────────────────────────────────────────────────────────
+
+  const activeIncomeStatement = useMemo(() => {
+    return periodType === 'quarterly' && initialData.incomeStatementQuarterly
+      ? initialData.incomeStatementQuarterly
+      : initialData.incomeStatement;
+  }, [periodType, initialData.incomeStatement, initialData.incomeStatementQuarterly]);
+
+  const activeBalanceSheet = useMemo(() => {
+    return periodType === 'quarterly' && initialData.balanceSheetQuarterly
+      ? initialData.balanceSheetQuarterly
+      : initialData.balanceSheet;
+  }, [periodType, initialData.balanceSheet, initialData.balanceSheetQuarterly]);
+
+  const activeCashFlow = useMemo(() => {
+    return periodType === 'quarterly' && initialData.cashFlowQuarterly
+      ? initialData.cashFlowQuarterly
+      : initialData.cashFlow;
+  }, [periodType, initialData.cashFlow, initialData.cashFlowQuarterly]);
 
   const getStatementRow = (statement: FinancialStatement, keywords: string[]) => {
     return statement?.full_statement?.find(row =>
@@ -135,58 +180,58 @@ export default function FundamentalsClient({
 
   // Income Statement Chart Data
   const incomeChartData = useMemo(() => {
-    if (!initialData.incomeStatement?.full_statement) return [];
-    const revRow = getStatementRow(initialData.incomeStatement, ['sales', 'revenue', 'earned', 'turnover']);
-    const profRow = getStatementRow(initialData.incomeStatement, ['net profit', 'profit after tax', 'pat', 'income']);
+    if (!activeIncomeStatement?.full_statement) return [];
+    const revRow = getStatementRow(activeIncomeStatement, ['sales', 'revenue', 'earned', 'turnover']);
+    const profRow = getStatementRow(activeIncomeStatement, ['net profit', 'profit after tax', 'pat', 'income']);
     if (!revRow && !profRow) return [];
     const periods = new Set<string>();
     revRow?.history.forEach(h => periods.add(h.period));
     profRow?.history.forEach(h => periods.add(h.period));
     return Array.from(periods)
-      .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+      .sort((a, b) => parsePeriodToDateValue(a) - parsePeriodToDateValue(b))
       .map(period => ({
         period,
         Revenue: revRow?.history.find(h => h.period === period)?.value || 0,
         'Net Profit': profRow?.history.find(h => h.period === period)?.value || 0,
       }));
-  }, [initialData.incomeStatement]);
+  }, [activeIncomeStatement]);
 
   // Balance Sheet Chart Data
   const balanceChartData = useMemo(() => {
-    if (initialData.balanceSheet?.history && initialData.balanceSheet.history.length > 0) {
-      return [...initialData.balanceSheet.history].sort((a, b) =>
-        (parseInt(a.period.replace(/\D/g, '')) || 0) - (parseInt(b.period.replace(/\D/g, '')) || 0)
+    if (activeBalanceSheet?.history && activeBalanceSheet.history.length > 0) {
+      return [...activeBalanceSheet.history].sort((a, b) =>
+        parsePeriodToDateValue(a.period) - parsePeriodToDateValue(b.period)
       );
     }
-    if (!initialData.balanceSheet?.full_statement) return [];
-    const assetRow = getStatementRow(initialData.balanceSheet, ['total asset', 'assets', 'net block', 'capital']);
-    const liabRow = getStatementRow(initialData.balanceSheet, ['total liability', 'liabilities', 'borrowings', 'reserves']);
+    if (!activeBalanceSheet?.full_statement) return [];
+    const assetRow = getStatementRow(activeBalanceSheet, ['total asset', 'assets', 'net block', 'capital']);
+    const liabRow = getStatementRow(activeBalanceSheet, ['total liability', 'liabilities', 'borrowings', 'reserves']);
     const periods = new Set<string>();
     assetRow?.history.forEach(h => periods.add(h.period));
     liabRow?.history.forEach(h => periods.add(h.period));
     return Array.from(periods)
-      .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+      .sort((a, b) => parsePeriodToDateValue(a) - parsePeriodToDateValue(b))
       .map(period => ({
         period,
         total_asset: assetRow?.history.find(h => h.period === period)?.value || 0,
         total_liability: liabRow?.history.find(h => h.period === period)?.value || 0,
       }));
-  }, [initialData.balanceSheet]);
+  }, [activeBalanceSheet]);
 
   // Cash Flow Chart Data
   const cashFlowChartData = useMemo(() => {
-    if (!initialData.cashFlow?.full_statement) return [];
-    const opRow = getStatementRow(initialData.cashFlow, ['operating']);
-    const invRow = getStatementRow(initialData.cashFlow, ['investing']);
-    const finRow = getStatementRow(initialData.cashFlow, ['financing']);
-    const netRow = getStatementRow(initialData.cashFlow, ['net cash']);
+    if (!activeCashFlow?.full_statement) return [];
+    const opRow = getStatementRow(activeCashFlow, ['operating']);
+    const invRow = getStatementRow(activeCashFlow, ['investing']);
+    const finRow = getStatementRow(activeCashFlow, ['financing']);
+    const netRow = getStatementRow(activeCashFlow, ['net cash']);
     const periods = new Set<string>();
     opRow?.history.forEach(h => periods.add(h.period));
     invRow?.history.forEach(h => periods.add(h.period));
     finRow?.history.forEach(h => periods.add(h.period));
     netRow?.history.forEach(h => periods.add(h.period));
     return Array.from(periods)
-      .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+      .sort((a, b) => parsePeriodToDateValue(a) - parsePeriodToDateValue(b))
       .map(period => ({
         period,
         Operating: opRow?.history.find(h => h.period === period)?.value || 0,
@@ -194,7 +239,36 @@ export default function FundamentalsClient({
         Financing: finRow?.history.find(h => h.period === period)?.value || 0,
         'Net Flow': netRow?.history.find(h => h.period === period)?.value || 0,
       }));
-  }, [initialData.cashFlow]);
+  }, [activeCashFlow]);
+
+  // Active series config for legend pills based on selected financial tab
+  const activeSeriesConfig = useMemo(() => {
+    if (financialSubTab === 'income') {
+      return [
+        { dataKey: 'Revenue', label: 'Revenue', barColor: 'bg-blue-500' },
+        { dataKey: 'Net Profit', label: 'Net Profit', barColor: 'bg-emerald-500' }
+      ];
+    } else if (financialSubTab === 'balance') {
+      return [
+        { dataKey: 'total_asset', label: 'Total Assets', barColor: 'bg-cyan-500' },
+        { dataKey: 'total_liability', label: 'Total Liabilities', barColor: 'bg-red-500' }
+      ];
+    } else {
+      return [
+        { dataKey: 'Operating', label: 'Operating Cash Flow', barColor: 'bg-emerald-500' },
+        { dataKey: 'Investing', label: 'Investing Cash Flow', barColor: 'bg-amber-500' },
+        { dataKey: 'Financing', label: 'Financing Cash Flow', barColor: 'bg-blue-500' },
+        { dataKey: 'Net Flow', label: 'Net Cash Flow', barColor: 'bg-zinc-300' }
+      ];
+    }
+  }, [financialSubTab]);
+
+  const toggleSeries = (key: string) => {
+    setHiddenSeries(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   // Shareholding Data
   const shareholdingPeriods = useMemo(() => {
@@ -223,6 +297,11 @@ export default function FundamentalsClient({
       }))
       .filter(item => item.value > 0);
   }, [initialData.shareHoldings, latestShareholdingPeriod]);
+
+  const largestShareholder = useMemo(() => {
+    if (!latestShareholdingPieData || latestShareholdingPieData.length === 0) return { name: '—', value: 0 };
+    return [...latestShareholdingPieData].sort((a, b) => b.value - a.value)[0];
+  }, [latestShareholdingPieData]);
 
   const shareholdingHistoricalData = useMemo(() => {
     if (!initialData.shareHoldings) return [];
@@ -267,23 +346,141 @@ export default function FundamentalsClient({
 
   const parsePercent = (valStr: string) => parseFloat(valStr.replace('%', '')) || 0;
 
-  // Radar chart data for key ratios
-  const radarData = useMemo(() => {
-    if (!initialData.keyRatios) return [];
-    return initialData.keyRatios.map(r => ({
-      ratio: r.name,
-      Company: parsePercent(r.company_value),
-      Sector: parsePercent(r.sector_value),
-    }));
-  }, [initialData.keyRatios]);
+  // Filter out ratios that are already in the main top row stats
+  const restRatios = (initialData.keyRatios || []).filter(ratio => {
+    const name = ratio.name.toLowerCase();
+    return !['p/e', 'dividend yield'].some(k => name.includes(k));
+  });
 
-  // ── Quick Stats Cards Configuration ─────────────────────────────────────
+  // Helper to map key ratio objects to their visual card configuration
+  const getRatioCardConfig = (ratio: KeyRatio) => {
+    const name = ratio.name.toLowerCase();
+    
+    if (name.includes('p/b')) {
+      return {
+        title: ratio.name,
+        value: ratio.company_value,
+        subtitle: `Sector: ${ratio.sector_value}`,
+        iconColor: 'text-indigo-400',
+        gradientFrom: 'from-indigo-500/20',
+        gradientTo: 'to-indigo-500/5',
+        glowBg: 'rgba(99, 102, 241, 0.06)',
+        icon: (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+        ),
+      };
+    }
 
-  const quickStats = [
+    if (name.includes('roe')) {
+      return {
+        title: ratio.name,
+        value: ratio.company_value,
+        subtitle: `Sector: ${ratio.sector_value}`,
+        iconColor: 'text-emerald-400',
+        gradientFrom: 'from-emerald-500/20',
+        gradientTo: 'to-emerald-500/5',
+        glowBg: 'rgba(16, 185, 129, 0.06)',
+        icon: (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+        ),
+      };
+    }
+    
+    if (name.includes('roa')) {
+      return {
+        title: ratio.name,
+        value: ratio.company_value,
+        subtitle: `Sector: ${ratio.sector_value}`,
+        iconColor: 'text-cyan-400',
+        gradientFrom: 'from-cyan-500/20',
+        gradientTo: 'to-cyan-500/5',
+        glowBg: 'rgba(6, 182, 212, 0.06)',
+        icon: (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        ),
+      };
+    }
+    
+    if (name.includes('roce')) {
+      return {
+        title: ratio.name,
+        value: ratio.company_value,
+        subtitle: `Sector: ${ratio.sector_value}`,
+        iconColor: 'text-sky-400',
+        gradientFrom: 'from-sky-500/20',
+        gradientTo: 'to-sky-500/5',
+        glowBg: 'rgba(14, 165, 233, 0.06)',
+        icon: (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        ),
+      };
+    }
+    
+    if (name.includes('debt') || name.includes('liability')) {
+      return {
+        title: ratio.name,
+        value: ratio.company_value,
+        subtitle: `Sector: ${ratio.sector_value}`,
+        iconColor: 'text-rose-400',
+        gradientFrom: 'from-rose-500/20',
+        gradientTo: 'to-rose-500/5',
+        glowBg: 'rgba(244, 63, 94, 0.06)',
+        icon: (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        ),
+      };
+    }
+    
+    if (name.includes('npa')) {
+      return {
+        title: ratio.name,
+        value: ratio.company_value,
+        subtitle: `Sector: ${ratio.sector_value}`,
+        iconColor: 'text-orange-400',
+        gradientFrom: 'from-orange-500/20',
+        gradientTo: 'to-orange-500/5',
+        glowBg: 'rgba(249, 115, 22, 0.06)',
+        icon: (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        ),
+      };
+    }
+    
+    return {
+      title: ratio.name,
+      value: ratio.company_value,
+      subtitle: `Sector: ${ratio.sector_value}`,
+      iconColor: 'text-zinc-400',
+      gradientFrom: 'from-zinc-500/20',
+      gradientTo: 'to-zinc-500/5',
+      glowBg: 'rgba(161, 161, 170, 0.06)',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    };
+  };
+
+  // ── Main Top-Row Cards Configuration ────────────────────────────────────
+
+  const mainStats = [
     {
       title: 'Market Cap',
       value: initialData.profile?.sector_market_cap_inr?.formatted || '—',
-      subtitle: initialData.profile?.sector_market_cap_usd?.formatted || '',
+      subtitle: '',
       iconColor: 'text-blue-400',
       gradientFrom: 'from-blue-500/20',
       gradientTo: 'to-blue-500/5',
@@ -309,23 +506,9 @@ export default function FundamentalsClient({
       ),
     },
     {
-      title: 'ROE',
-      value: headROE,
-      subtitle: `P/B: ${headPB}`,
-      iconColor: 'text-emerald-400',
-      gradientFrom: 'from-emerald-500/20',
-      gradientTo: 'to-emerald-500/5',
-      glowBg: 'rgba(16, 185, 129, 0.06)',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-        </svg>
-      ),
-    },
-    {
       title: 'Dividend Yield',
       value: headDivYield,
-      subtitle: `Sector: ${getRatioSectorValue('dividend yield')}`,
+      subtitle: '',
       iconColor: 'text-amber-400',
       gradientFrom: 'from-amber-500/20',
       gradientTo: 'to-amber-500/5',
@@ -337,6 +520,10 @@ export default function FundamentalsClient({
       ),
     },
   ];
+
+  // ── Secondary Bottom-Row Cards Configuration ────────────────────────────
+
+  const restStats = restRatios.map(getRatioCardConfig);
 
   // ── Scroll Helper ─────────────────────────────────────────────────────────
 
@@ -385,7 +572,7 @@ export default function FundamentalsClient({
               )}
             </div>
             <p className="text-xs text-zinc-500 mt-1">
-              Sector: <span className="text-zinc-300 font-semibold">{initialData.profile?.sector}</span> | ISIN: <span className="font-mono text-zinc-400">{resolvedIsin}</span>
+              Sector: <span className="text-zinc-300 font-semibold">{initialData.profile?.sector}</span>
             </p>
           </div>
         </div>
@@ -400,41 +587,66 @@ export default function FundamentalsClient({
       {/* ═══════════════════════════════════════════════════════════════════════
           QUICK STAT CARDS — Dashboard-style with gradient icon containers
           ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        {quickStats.map((card, i) => (
-          <div
-            key={i}
-            className={`bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-5 flex flex-col justify-between group hover:border-white/10 transition-all duration-300 animate-fade-in-up stagger-${i + 1}`}
-            style={{ backgroundImage: `radial-gradient(circle at 10% 10%, ${card.glowBg}, transparent)` }}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{card.title}</p>
-                <h3 className="text-xl md:text-2xl font-bold text-white mt-2 tracking-tight font-mono truncate">{card.value}</h3>
-                <p className="text-xs text-zinc-500 mt-1 font-medium">{card.subtitle}</p>
+      <div className="flex flex-col gap-4">
+        {/* Row 1: Core/Main Stats (Market Cap, P/E, Dividend Yield) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {mainStats.map((card, i) => (
+            <div
+              key={i}
+              className={`bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-5 flex flex-col justify-between group hover:border-white/10 transition-all duration-300 animate-fade-in-up stagger-${i + 1}`}
+              style={{ backgroundImage: `radial-gradient(circle at 10% 10%, ${card.glowBg}, transparent)` }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{card.title}</p>
+                  <h3 className="text-2xl md:text-3xl font-extrabold text-white mt-2 tracking-tight font-mono truncate" title={card.value}>{card.value}</h3>
+                  <p className="text-xs text-zinc-500 mt-1 font-medium">{card.subtitle}</p>
+                </div>
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${card.gradientFrom} ${card.gradientTo} flex items-center justify-center flex-shrink-0 ${card.iconColor}`}>
+                  {card.icon}
+                </div>
               </div>
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${card.gradientFrom} ${card.gradientTo} flex items-center justify-center flex-shrink-0 ${card.iconColor}`}>
-                {card.icon}
-              </div>
+              <div className="h-0.5 mt-4 bg-gradient-to-r from-transparent via-white/5 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
             </div>
-            <div className="h-0.5 mt-4 bg-gradient-to-r from-transparent via-white/5 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
+          ))}
+        </div>
+
+        {/* Row 2: Secondary Stats (ROA, ROCE, EV/EBITDA, Debt to Equity, Net NPA) */}
+        {restStats.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {restStats.map((card, i) => (
+              <div
+                key={i}
+                className={`bg-slate-900/40 rounded-xl border border-white/5 overflow-hidden glass-card p-3.5 flex flex-col justify-between group hover:border-white/10 transition-all duration-300 animate-fade-in-up stagger-${i + 6}`}
+                style={{ backgroundImage: `radial-gradient(circle at 10% 10%, ${card.glowBg}, transparent)` }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{card.title}</p>
+                    <h3 className="text-lg md:text-xl font-bold text-white mt-1 tracking-tight font-mono truncate" title={card.value}>{card.value}</h3>
+                    <p className="text-[11px] text-zinc-500 mt-0.5 font-medium">{card.subtitle}</p>
+                  </div>
+                  <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${card.gradientFrom} ${card.gradientTo} flex items-center justify-center flex-shrink-0 ${card.iconColor}`}>
+                    {card.icon}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           STICKY ANCHOR NAVIGATION
           ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-xl py-3.5 border-b border-white/5 -mx-4 px-4 md:-mx-6 md:px-6 flex items-center justify-between gap-4 animate-fade-in-up stagger-5">
-        <span className="hidden md:inline font-bold text-sm text-zinc-300">
-          {resolvedName} <span className="font-mono text-zinc-500">({symbol})</span>
-        </span>
+      <div className="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-xl py-3.5 border-b border-white/5 -mx-4 px-4 md:-mx-6 md:px-6 flex items-center justify-start gap-4 animate-fade-in-up stagger-5">
         <div className="flex p-1 rounded-xl bg-slate-900/60 border border-white/5 backdrop-blur-md relative overflow-hidden justify-between sm:justify-start w-full md:w-auto">
           {([
-            { id: 'overview', label: 'Overview & Peers' },
+            { id: 'overview', label: 'Overview' },
             { id: 'financials', label: 'Financials' },
             { id: 'shareholding', label: 'Shareholding' },
             { id: 'actions', label: 'Corp. Actions' },
+            { id: 'peers', label: 'Peers' },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -462,139 +674,21 @@ export default function FundamentalsClient({
       <div className="flex flex-col gap-8 md:gap-12 w-full mt-2">
 
         {/* ╔══════════════════════════════════════════════════════════════════╗
-            ║  1. OVERVIEW & PEERS                                           ║
+            ║  1. OVERVIEW                                                   ║
             ╚══════════════════════════════════════════════════════════════════╝ */}
         <section id="overview" className="scroll-mt-24 flex flex-col gap-6">
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Left Column: Profile + Ratios */}
-            <div className="flex-grow lg:w-2/3 flex flex-col gap-6">
-              {/* Company Description */}
-              <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-6 animate-fade-in-up stagger-1">
-                <SectionHeader
-                  icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
-                  label="Company Profile"
-                  color="blue"
-                />
-                <p className="text-sm leading-relaxed text-zinc-300 font-medium mt-4">
-                  {initialData.profile?.company_profile}
-                </p>
-              </div>
-
-              {/* Key Ratios with Radar Chart */}
-              <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-6 animate-fade-in-up stagger-2">
-                <SectionHeader
-                  icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
-                  label="Key Valuation Ratios"
-                  color="indigo"
-                />
-
-                {/* Radar Chart - Company vs Sector */}
-                {isMounted && radarData.length > 0 && (
-                  <div className="w-full h-72 mt-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                        <PolarGrid stroke="rgba(255,255,255,0.06)" />
-                        <PolarAngleAxis dataKey="ratio" tick={{ fill: '#9ca3af', fontSize: 11, fontWeight: 600 }} />
-                        <PolarRadiusAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} />
-                        <Radar name="Company" dataKey="Company" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.2} strokeWidth={2} />
-                        <Radar name="Sector" dataKey="Sector" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} strokeDasharray="4 4" />
-                        <Legend wrapperStyle={{ fontSize: '11px', marginTop: '8px' }} />
-                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={CHART_LABEL_STYLE} itemStyle={CHART_ITEM_STYLE} />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* Ratio Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-                  {initialData.keyRatios?.map((ratio, index) => {
-                    const compNum = parsePercent(ratio.company_value);
-                    const secNum = parsePercent(ratio.sector_value);
-                    // For ROA/ROE/ROCE, higher is better. For P/E, P/B, EV/EBITDA, lower is better
-                    const higherIsBetter = ['roa', 'roe', 'roce', 'dividend yield'].some(k => ratio.name.toLowerCase().includes(k));
-                    const isFavorable = higherIsBetter ? compNum >= secNum : compNum <= secNum;
-                    const barWidth = Math.min(100, Math.max(10, secNum ? (compNum / secNum) * 50 : 50));
-
-                    return (
-                      <div key={index} className="flex flex-col p-4 rounded-xl bg-gradient-to-br from-white/[0.03] to-white/0 border border-white/5 hover:border-white/10 transition-all group">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-zinc-400">{ratio.name}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isFavorable ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                            {isFavorable ? '✓ Favorable' : '△ Watch'}
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between mt-2">
-                          <span className="text-lg font-extrabold text-white font-mono">{ratio.company_value}</span>
-                          <span className="text-[11px] text-zinc-500">Sector: <span className="font-mono text-zinc-400 font-semibold">{ratio.sector_value}</span></span>
-                        </div>
-                        {/* Animated comparison bar */}
-                        <div className="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden mt-3 relative">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ease-out ${isFavorable ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'}`}
-                            style={{ width: `${barWidth}%` }}
-                          />
-                          {secNum > 0 && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-indigo-500/60" style={{ left: '50%' }} title="Sector Average" />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Competitors */}
-            <div className="lg:w-1/3 flex flex-col gap-6">
-              <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-6 animate-fade-in-up stagger-3">
-                <SectionHeader
-                  icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                  label="Peer Competitors"
-                  color="cyan"
-                />
-
-                <div className="flex flex-col gap-3 mt-4">
-                  {initialData.competitors?.map((competitor, idx) => {
-                    const hasSymbol = !!competitor.symbol;
-                    return (
-                      <div
-                        key={idx}
-                        className="p-4 rounded-xl bg-gradient-to-br from-white/[0.03] to-white/0 border border-white/5 hover:border-white/10 hover:bg-white/[0.03] transition-all flex flex-col gap-2 relative group"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-sm font-bold text-white">
-                            {competitor.symbol || competitor.instrument_key.split('|')[1]}
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-semibold">
-                            {competitor.sector_market_cap_inr?.formatted}
-                          </span>
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-normal line-clamp-3">
-                          {competitor.company_profile}
-                        </p>
-
-                        {hasSymbol && (
-                          <Link
-                            href={`/fundamentals/${competitor.symbol}`}
-                            className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors self-end group/link"
-                          >
-                            Explore Fundamentals
-                            <svg className="w-3.5 h-3.5 transition-transform group-hover/link:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                            </svg>
-                          </Link>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {(!initialData.competitors || initialData.competitors.length === 0) && (
-                    <div className="py-8 text-center text-zinc-500 text-sm">No peer data available.</div>
-                  )}
-                </div>
-              </div>
-            </div>
+          {/* Company Description */}
+          <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-6 animate-fade-in-up stagger-1">
+            <SectionHeader
+              icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
+              label="Company Profile"
+              color="blue"
+            />
+            <p className="text-sm leading-relaxed text-zinc-300 font-medium mt-4">
+              {initialData.profile?.company_profile}
+            </p>
           </div>
+
         </section>
 
         {/* ╔══════════════════════════════════════════════════════════════════╗
@@ -610,29 +704,69 @@ export default function FundamentalsClient({
                 color="blue"
               />
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
-                Figures in <span className="text-zinc-300 font-bold">{initialData.incomeStatement?.units_in || 'Crore'} INR</span>
+                FIGURES IN <span className="text-zinc-300 font-bold">{(activeIncomeStatement?.units_in || 'Crore').toUpperCase()} INR</span>
               </span>
             </div>
 
-            {/* Sub Tabs */}
-            <div className="flex gap-2 mb-6">
-              {([
-                { id: 'income', label: 'Income Statement', color: 'blue' },
-                { id: 'balance', label: 'Balance Sheet', color: 'cyan' },
-                { id: 'cash', label: 'Cash Flow', color: 'emerald' }
-              ] as const).map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setFinancialSubTab(tab.id)}
-                  className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all duration-200 ${
-                    financialSubTab === tab.id
-                      ? 'bg-blue-600/10 text-blue-400 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.08)]'
-                      : 'bg-white/[0.02] text-zinc-400 border-white/5 hover:text-zinc-200 hover:bg-white/[0.04]'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            {/* Sub Tabs & Period Toggle */}
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6">
+              <div className="flex gap-2">
+                {([
+                  { id: 'income', label: 'Income Statement' },
+                  { id: 'balance', label: 'Balance Sheet' },
+                  { id: 'cash', label: 'Cash Flow' }
+                ] as const).map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setFinancialSubTab(tab.id)}
+                    className={`px-5 py-2.5 text-xs font-semibold rounded-full border transition-all duration-200 outline-none ${
+                      financialSubTab === tab.id
+                        ? 'bg-blue-600/10 text-blue-400 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.08)]'
+                        : 'bg-white/[0.02] text-zinc-400 border-white/5 hover:text-zinc-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Period Toggle */}
+              <div className="bg-slate-950/40 p-[3px] rounded-lg border border-white/10 flex items-center shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]">
+                {(['yearly', 'quarterly'] as const).map(period => (
+                  <button
+                    key={period}
+                    onClick={() => setPeriodType(period)}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-[5px] capitalize transition-all duration-150 outline-none ${
+                      periodType === period
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {period}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Interactive Legends */}
+            <div className="flex flex-wrap gap-6 mb-6 justify-center animate-fade-in">
+              {activeSeriesConfig.map(s => {
+                const isHidden = !!hiddenSeries[s.dataKey];
+                return (
+                  <button
+                    key={s.dataKey}
+                    onClick={() => toggleSeries(s.dataKey)}
+                    onMouseEnter={() => setHoveredSeries(s.dataKey)}
+                    onMouseLeave={() => setHoveredSeries(null)}
+                    className={`flex items-center gap-2.5 transition-all duration-200 outline-none ${
+                      isHidden ? 'opacity-35' : 'opacity-100 hover:opacity-80'
+                    }`}
+                  >
+                    <span className={`w-5 h-1.5 rounded-full transition-all duration-300 ${isHidden ? 'bg-zinc-700' : s.barColor}`} />
+                    <span className="text-xs font-semibold text-zinc-400">{s.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Chart Area */}
@@ -657,9 +791,8 @@ export default function FundamentalsClient({
                       <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
                       <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
                       <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={CHART_LABEL_STYLE} itemStyle={CHART_ITEM_STYLE} formatter={(value: any) => [formatCrValue(value), '']} />
-                      <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                      <Bar dataKey="Revenue" fill="url(#colorRev)" radius={[4, 4, 0, 0]} animationDuration={800} />
-                      <Bar dataKey="Net Profit" fill="url(#colorProf)" radius={[4, 4, 0, 0]} animationDuration={800} animationBegin={200} />
+                      <Bar dataKey="Revenue" fill="url(#colorRev)" radius={[4, 4, 0, 0]} hide={!!hiddenSeries['Revenue']} fillOpacity={hoveredSeries && hoveredSeries !== 'Revenue' ? 0.15 : 0.85} animationDuration={800} />
+                      <Bar dataKey="Net Profit" fill="url(#colorProf)" radius={[4, 4, 0, 0]} hide={!!hiddenSeries['Net Profit']} fillOpacity={hoveredSeries && hoveredSeries !== 'Net Profit' ? 0.15 : 0.85} animationDuration={800} animationBegin={200} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <EmptyState message="No revenue data available" />
@@ -681,9 +814,8 @@ export default function FundamentalsClient({
                       <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
                       <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
                       <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={CHART_LABEL_STYLE} itemStyle={CHART_ITEM_STYLE} formatter={(value: any) => [formatCrValue(value), '']} />
-                      <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                      <Bar name="Total Assets" dataKey="total_asset" fill="url(#colorAssets)" radius={[4, 4, 0, 0]} animationDuration={800} />
-                      <Bar name="Total Liabilities" dataKey="total_liability" fill="url(#colorLiabs)" radius={[4, 4, 0, 0]} animationDuration={800} animationBegin={200} />
+                      <Bar name="Total Assets" dataKey="total_asset" fill="url(#colorAssets)" radius={[4, 4, 0, 0]} hide={!!hiddenSeries['total_asset']} fillOpacity={hoveredSeries && hoveredSeries !== 'total_asset' ? 0.15 : 0.85} animationDuration={800} />
+                      <Bar name="Total Liabilities" dataKey="total_liability" fill="url(#colorLiabs)" radius={[4, 4, 0, 0]} hide={!!hiddenSeries['total_liability']} fillOpacity={hoveredSeries && hoveredSeries !== 'total_liability' ? 0.15 : 0.85} animationDuration={800} animationBegin={200} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <EmptyState message="No balance sheet data available" />
@@ -709,11 +841,10 @@ export default function FundamentalsClient({
                       <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
                       <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString('en-IN')} />
                       <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={CHART_LABEL_STYLE} itemStyle={CHART_ITEM_STYLE} formatter={(value: any) => [formatCrValue(value), '']} />
-                      <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                      <Area type="monotone" name="Operating" dataKey="Operating" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorOp)" animationDuration={800} />
-                      <Area type="monotone" name="Investing" dataKey="Investing" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorInv)" animationDuration={800} animationBegin={200} />
-                      <Area type="monotone" name="Financing" dataKey="Financing" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorFin)" animationDuration={800} animationBegin={400} />
-                      <Line type="monotone" name="Net Cash" dataKey="Net Flow" stroke="#e4e4e7" strokeWidth={2} dot={{ r: 3, fill: '#e4e4e7' }} animationDuration={1000} />
+                      <Area type="monotone" name="Operating" dataKey="Operating" stroke="#10b981" strokeWidth={2} hide={!!hiddenSeries['Operating']} fillOpacity={hoveredSeries && hoveredSeries !== 'Operating' ? 0.05 : 0.3} strokeOpacity={hoveredSeries && hoveredSeries !== 'Operating' ? 0.15 : 1.0} fill="url(#colorOp)" animationDuration={800} />
+                      <Area type="monotone" name="Investing" dataKey="Investing" stroke="#f59e0b" strokeWidth={2} hide={!!hiddenSeries['Investing']} fillOpacity={hoveredSeries && hoveredSeries !== 'Investing' ? 0.05 : 0.3} strokeOpacity={hoveredSeries && hoveredSeries !== 'Investing' ? 0.15 : 1.0} fill="url(#colorInv)" animationDuration={800} animationBegin={200} />
+                      <Area type="monotone" name="Financing" dataKey="Financing" stroke="#3b82f6" strokeWidth={2} hide={!!hiddenSeries['Financing']} fillOpacity={hoveredSeries && hoveredSeries !== 'Financing' ? 0.05 : 0.3} strokeOpacity={hoveredSeries && hoveredSeries !== 'Financing' ? 0.15 : 1.0} fill="url(#colorFin)" animationDuration={800} animationBegin={400} />
+                      <Line type="monotone" name="Net Cash" dataKey="Net Flow" stroke="#e4e4e7" strokeWidth={2} hide={!!hiddenSeries['Net Flow']} strokeOpacity={hoveredSeries && hoveredSeries !== 'Net Flow' ? 0.15 : 1.0} dot={{ r: 3, fill: '#e4e4e7', fillOpacity: hoveredSeries && hoveredSeries !== 'Net Flow' ? 0.15 : 1.0, strokeOpacity: hoveredSeries && hoveredSeries !== 'Net Flow' ? 0.15 : 1.0 }} animationDuration={1000} />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : <EmptyState message="No cash flow data available" />
@@ -739,10 +870,10 @@ export default function FundamentalsClient({
                     <th className="py-3 px-4 sticky left-0 bg-slate-900/80 backdrop-blur-md z-10">Line Item</th>
                     {(() => {
                       const statement = financialSubTab === 'income'
-                        ? initialData.incomeStatement
+                        ? activeIncomeStatement
                         : financialSubTab === 'balance'
-                          ? initialData.balanceSheet
-                          : initialData.cashFlow;
+                          ? activeBalanceSheet
+                          : activeCashFlow;
                       return statement?.full_statement?.[0]?.history.map((h, i) => (
                         <th key={i} className="py-3 px-4 text-right font-mono">{h.period}</th>
                       )) || null;
@@ -752,10 +883,10 @@ export default function FundamentalsClient({
                 <tbody className="divide-y divide-white/5">
                   {(() => {
                     const statement = financialSubTab === 'income'
-                      ? initialData.incomeStatement
+                      ? activeIncomeStatement
                       : financialSubTab === 'balance'
-                        ? initialData.balanceSheet
-                        : initialData.cashFlow;
+                        ? activeBalanceSheet
+                        : activeCashFlow;
 
                     if (!statement?.full_statement || statement.full_statement.length === 0) {
                       return (
@@ -972,6 +1103,73 @@ export default function FundamentalsClient({
               <div className="py-12 text-center text-zinc-500 text-sm mt-4">
                 No corporate actions listed.
               </div>
+            )}
+          </div>
+        </section>
+
+        {/* ╔══════════════════════════════════════════════════════════════════╗
+            ║  5. PEER COMPETITORS                                           ║
+            ╚══════════════════════════════════════════════════════════════════╝ */}
+        <section id="peers" className="scroll-mt-24 flex flex-col gap-6">
+          <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-6 animate-fade-in-up stagger-4">
+            <SectionHeader
+              icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+              label="Peer Competitors"
+              color="cyan"
+            />
+
+            {initialData.competitors && initialData.competitors.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-6">
+                {initialData.competitors.map((competitor, idx) => {
+                  const hasSymbol = !!competitor.symbol;
+                  const cardContent = (
+                    <div className="flex flex-col justify-between h-full min-h-[90px]">
+                      <div>
+                        <h4 className="font-mono text-base font-bold text-white group-hover:text-blue-400 transition-colors">
+                          {competitor.symbol || competitor.instrument_key.split('|')[1]}
+                        </h4>
+                        <p className="text-xs text-zinc-500 font-semibold mt-1">
+                          {competitor.sector_market_cap_inr?.formatted}
+                        </p>
+                      </div>
+                      
+                      {hasSymbol && (
+                        <div className="mt-3 flex items-center gap-1 text-[11px] font-bold text-blue-400 group-hover:text-blue-300 transition-colors">
+                          View Ratios
+                          <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  const cardClassName = "p-5 rounded-2xl bg-gradient-to-br from-white/[0.03] to-white/0 border border-white/5 hover:border-blue-500/30 hover:bg-white/[0.04] transition-all duration-300 relative group hover:scale-[1.03] hover:shadow-[0_8px_20px_rgba(0,0,0,0.3)] cursor-pointer flex flex-col justify-between h-full";
+
+                  if (hasSymbol) {
+                    return (
+                      <Link
+                        key={idx}
+                        href={`/fundamentals/${competitor.symbol}`}
+                        className={cardClassName}
+                      >
+                        {cardContent}
+                      </Link>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      className={cardClassName}
+                    >
+                      {cardContent}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-zinc-500 text-sm">No peer data available.</div>
             )}
           </div>
         </section>
