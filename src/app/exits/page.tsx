@@ -3,9 +3,12 @@
 import React from 'react';
 import { usePortfolioExits } from '@/hooks/useQueries';
 import ExitsTable from '@/components/exits/ExitsTable';
+import { useLiveData } from '@/context/LiveDataContext';
 
 export default function ExitsPage() {
+  const { privacyMode } = useLiveData();
   const { data: exits, isLoading, isFetching } = usePortfolioExits();
+
 
   if (isLoading && !exits) {
     return (
@@ -39,7 +42,8 @@ export default function ExitsPage() {
           Refreshing...
         </div>
       )}
-      <ExitsTable exits={exits} />
+      <ExitsTable exits={exits} privacyMode={privacyMode} />
+
     </main>
   );
 }

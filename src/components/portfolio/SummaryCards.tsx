@@ -107,7 +107,7 @@ export const MainChartCards = memo(function MainChartCards({
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Current NAV</span>
             </div>
             <div className="text-4xl font-bold text-lime-400 z-10 relative mb-1">
-                {privacyMode ? '****' : <AnimatedNumber value={currentNAV} decimals={2} />}
+                <AnimatedNumber value={currentNAV} decimals={2} />
             </div>
             <div className="text-sm text-gray-500 z-10 relative font-medium">Portfolio value per unit</div>
            </div>
@@ -124,7 +124,7 @@ export const MainChartCards = memo(function MainChartCards({
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Current DD</span>
             </div>
             <div className={`text-4xl font-bold ${currentDD < 0 ? 'text-red-400' : 'text-emerald-400'} z-10 relative mb-1`}>
-                {privacyMode ? '****' : <AnimatedNumber value={Math.abs(currentDD)} prefix={currentDD >= 0 ? '+' : '-'} suffix="%" decimals={2} />}
+                <AnimatedNumber value={Math.abs(currentDD)} prefix={currentDD >= 0 ? '+' : '-'} suffix="%" decimals={2} />
             </div>
             <div className="text-sm text-gray-500 z-10 relative font-medium">From all-time high</div>
           </div>
@@ -195,7 +195,7 @@ export const XirrCard = memo(function XirrCard({ xirrValue, privacyMode = false 
 
             <div className="flex-1 flex flex-col justify-center">
                 <h2 className={`text-4xl font-bold ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`}>
-                    {privacyMode ? '****' : <AnimatedNumber value={xirrValue} suffix="%" decimals={2} />}
+                    <AnimatedNumber value={xirrValue} suffix="%" decimals={2} />
                 </h2>
             </div>
         </div>

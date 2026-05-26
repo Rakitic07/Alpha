@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/format';
 import { createPortal } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCalendarDays } from '@fortawesome/free-solid-svg-icons';
+import { useLiveData } from '@/context/LiveDataContext';
 
 type SnapshotDataPoint = {
   date: Date | string;
@@ -62,6 +63,7 @@ const CELL_GAP = 2;
 const MONTH_GAP = 6; // Gap between months
 
 export default function PortfolioHeatmap({ data }: PortfolioHeatmapProps) {
+  const { privacyMode } = useLiveData();
   const [selectedYear, setSelectedYear] = React.useState<string>('last_1_year');
   const [endDate, setEndDate] = React.useState<Date | null>(null);
   const [tooltip, setTooltip] = React.useState<{ 
@@ -406,7 +408,7 @@ export default function PortfolioHeatmap({ data }: PortfolioHeatmapProps) {
           ) : (
              <>
                 <div className={`font-bold text-sm ${tooltip.data.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {tooltip.data.pnl >= 0 ? '+' : ''}{formatCurrency(tooltip.data.pnl)}
+                    {privacyMode ? '••••' : (tooltip.data.pnl >= 0 ? '+' : '') + formatCurrency(tooltip.data.pnl)}
                 </div>
                 <div className={`text-xs ${tooltip.data.pnl >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}`}>
                     {formatPercentage(tooltip.data.ret)}

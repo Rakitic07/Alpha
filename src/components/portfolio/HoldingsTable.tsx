@@ -140,9 +140,12 @@ interface HoldingRowProps {
     holding: PortfolioHolding;
     totalPortfolioValue: number;
     index: number;
+    privacyMode?: boolean;
 }
 
-const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, index }: HoldingRowProps) {
+const MASK = '••••';
+
+const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, index, privacyMode = false }: HoldingRowProps) {
     const avgPrice = h.invested / h.quantity;
     const isProfit = h.pnl >= 0;
     const weight = totalPortfolioValue > 0 ? (h.currentValue / totalPortfolioValue) * 100 : 0;
@@ -180,8 +183,8 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
             </StyledTableCell>
             <StyledTableCell align="right" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col">
-                    <span className="text-gray-300">{formatNumber(h.quantity, 0, 0)}</span>
-                    <span className="text-gray-500 text-xs">{formatCurrency(avgPrice, 2, 2)}</span>
+                    <span className="text-gray-300">{privacyMode ? MASK : formatNumber(h.quantity, 0, 0)}</span>
+                    <span className="text-gray-500 text-xs">{privacyMode ? MASK : formatCurrency(avgPrice, 2, 2)}</span>
                 </div>
             </StyledTableCell>
             <StyledTableCell align="center" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
@@ -194,8 +197,8 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
             </StyledTableCell>
             <StyledTableCell align="right" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col">
-                    <span className="text-white">{formatCurrency(h.currentValue)}</span>
-                    <span className="text-gray-500 text-xs">{formatCurrency(h.invested)}</span>
+                    <span className="text-white">{privacyMode ? MASK : formatCurrency(h.currentValue)}</span>
+                    <span className="text-gray-500 text-xs">{privacyMode ? MASK : formatCurrency(h.invested)}</span>
                 </div>
             </StyledTableCell>
             <StyledTableCell align="center" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
@@ -228,7 +231,7 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
                         }}
                     />
                     <span className={`text-xs mt-1 ${isProfit ? 'text-emerald-400/70' : 'text-red-400/70'}`}>
-                        {(isProfit ? '+' : '') + formatCurrency(h.pnl)}
+                        {privacyMode ? MASK : (isProfit ? '+' : '') + formatCurrency(h.pnl)}
                     </span>
                 </Box>
             </StyledTableCell>
@@ -236,7 +239,7 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
     );
 });
 
-export default function HoldingsTable({ holdings }: { holdings: PortfolioHolding[] }) {
+export default function HoldingsTable({ holdings, privacyMode = false }: { holdings: PortfolioHolding[]; privacyMode?: boolean }) {
   const [sortKey, setSortKey] = useState<SortKey>('weight');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -411,8 +414,8 @@ export default function HoldingsTable({ holdings }: { holdings: PortfolioHolding
               </StyledTableCell>
               <StyledTableCell align="right" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col">
-                  <span className="text-gray-300">{formatNumber(h.quantity, 0, 0)}</span>
-                  <span className="text-gray-500 text-xs">{formatCurrency(h.invested / h.quantity, 2, 2)}</span>
+                  <span className="text-gray-300">{privacyMode ? MASK : formatNumber(h.quantity, 0, 0)}</span>
+                  <span className="text-gray-500 text-xs">{privacyMode ? MASK : formatCurrency(h.invested / h.quantity, 2, 2)}</span>
                 </div>
               </StyledTableCell>
               <StyledTableCell align="center" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
@@ -425,8 +428,8 @@ export default function HoldingsTable({ holdings }: { holdings: PortfolioHolding
               </StyledTableCell>
               <StyledTableCell align="right" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col">
-                  <span className="text-white">{formatCurrency(h.currentValue)}</span>
-                  <span className="text-gray-500 text-xs">{formatCurrency(h.invested)}</span>
+                  <span className="text-white">{privacyMode ? MASK : formatCurrency(h.currentValue)}</span>
+                  <span className="text-gray-500 text-xs">{privacyMode ? MASK : formatCurrency(h.invested)}</span>
                 </div>
               </StyledTableCell>
               <StyledTableCell align="center" sx={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
@@ -435,7 +438,7 @@ export default function HoldingsTable({ holdings }: { holdings: PortfolioHolding
               <StyledTableCell align="center">
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <Chip label={`${h.pnl >= 0 ? '▲' : '▼'} ${Math.abs(h.pnlPercent).toFixed(2)}%`} size="small" sx={{ fontWeight: 'bold', fontSize: '0.75rem', height: '24px', backgroundColor: h.pnl >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', color: h.pnl >= 0 ? '#34d399' : '#f87171', border: 'none', boxShadow: h.pnl >= 0 ? '0 1px 2px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(239, 68, 68, 0.2)' }} />
-                  <span className={`text-xs mt-1 ${h.pnl >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'}`}>{(h.pnl >= 0 ? '+' : '') + formatCurrency(h.pnl)}</span>
+                  <span className={`text-xs mt-1 ${h.pnl >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'}`}>{privacyMode ? MASK : (h.pnl >= 0 ? '+' : '') + formatCurrency(h.pnl)}</span>
                 </Box>
               </StyledTableCell>
             </>
@@ -479,7 +482,7 @@ export default function HoldingsTable({ holdings }: { holdings: PortfolioHolding
             </TableHead>
             <TableBody>
                 {sortedHoldings.map((h, i) => (
-                    <HoldingRow key={h.symbol} holding={h} totalPortfolioValue={totalPortfolioValue} index={i} />
+                    <HoldingRow key={h.symbol} holding={h} totalPortfolioValue={totalPortfolioValue} index={i} privacyMode={privacyMode} />
                 ))}
             </TableBody>
         </Table>

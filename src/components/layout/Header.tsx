@@ -40,7 +40,7 @@ const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMob
   { text: 'Settings', path: '/settings', icon: faGear },
 ];
 
-const SENSITIVE_PATHS = new Set(['/portfolio', '/snapshots', '/trades', '/exits']);
+
 
 export default function Header() {
   const pathname = usePathname();
@@ -194,7 +194,7 @@ export default function Header() {
                     }}
                  />
 
-                {menuItems.filter(item => !privacyMode || !SENSITIVE_PATHS.has(item.path)).map((item, index) => {
+                {menuItems.map((item, index) => {
                   const isActive = pathname === item.path || (item.path.startsWith('/fundamentals') && pathname.startsWith('/fundamentals'));
                   return (
                     <NextLink
@@ -289,7 +289,7 @@ export default function Header() {
                     </div>
                 )}
 
-                {menuItems.filter(item => !item.hiddenOnMobile && (!privacyMode || !SENSITIVE_PATHS.has(item.path))).map((item) => {
+                {menuItems.filter(item => !item.hiddenOnMobile).map((item) => {
                     const isActive = pathname === item.path || (item.path.startsWith('/fundamentals') && pathname.startsWith('/fundamentals'));
                     return (
                         <NextLink

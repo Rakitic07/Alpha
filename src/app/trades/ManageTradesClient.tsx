@@ -10,6 +10,7 @@ import { TableVirtuoso } from 'react-virtuoso';
 import { styled } from '@mui/material/styles';
 import { addTransaction, updateTransaction, deleteTransaction, validateSymbols, type SymbolValidationResult, processZerodhaUpload, getCurrentStockQuantities } from '../actions';
 import { useImport } from '@/context/ImportContext';
+import { useLiveData } from '@/context/LiveDataContext';
 import { validateTradebook, type ParsedTrade, type Discrepancy, type TradeSummary, detectDiscrepancies, generateSummary } from '@/lib/tradeValidation';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import UploadPreviewModal from '@/components/trades/UploadPreviewModal';
@@ -170,6 +171,8 @@ export default function ManageTradesClient({
     // Initialize preview state with known mappings
     
     const hasSearchFilter = Boolean(filterValue);
+    const { privacyMode } = useLiveData();
+    const MASK = '••••';
     
     // Grouping Logic
     const groupedTransactions = useMemo(() => {
@@ -1031,10 +1034,10 @@ export default function ManageTradesClient({
                                                 {group.type}
                                             </div>
                                         </TableCell>
-                                        <TableCell align="right" sx={{ color: '#d1d5db', borderBottom: 'none' }}>{formatNumber(group.quantity, 0, 0)}</TableCell>
+                                        <TableCell align="right" sx={{ color: '#d1d5db', borderBottom: 'none' }}>{privacyMode ? MASK : formatNumber(group.quantity, 0, 0)}</TableCell>
                                         <TableCell align="right" sx={{ color: '#d1d5db', borderBottom: 'none' }}>{formatCurrency(group.avgPrice, 2, 2)}</TableCell>
                                         <TableCell align="right" sx={{ color: '#9ca3af', borderBottom: 'none' }}>
-                                            {formatCurrency(group.totalAmount, 0, 0)}
+                                            {privacyMode ? MASK : formatCurrency(group.totalAmount, 0, 0)}
                                         </TableCell>
                                         <TableCell align="center" sx={{ color: 'gray', borderBottom: 'none' }}>
                                             {hasMultiple ? group.transactions.length : (
@@ -1082,7 +1085,7 @@ export default function ManageTradesClient({
                                                             <TableCell component="th" scope="row" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>
                                                                 #{tx.id}
                                                             </TableCell>
-                                                            <TableCell align="right" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>{formatNumber(tx.quantity, 0, 0)}</TableCell>
+                                                            <TableCell align="right" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>{privacyMode ? MASK : formatNumber(tx.quantity, 0, 0)}</TableCell>
                                                             <TableCell align="right" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>{formatCurrency(tx.price, 2, 2)}</TableCell>
                                                             <TableCell align="center">
                                                                     <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
@@ -1120,7 +1123,7 @@ export default function ManageTradesClient({
                                         </TableCell>
                                         <TableCell align="right" sx={{ borderBottom: 'none' }}>
                                             <span className={group.netCashflow >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                                                    {group.netCashflow >= 0 ? '+' : ''}{formatCurrency(Math.abs(group.netCashflow), 2, 2)}
+                                                    {privacyMode ? MASK : (group.netCashflow >= 0 ? '+' : '') + formatCurrency(Math.abs(group.netCashflow), 2, 2)}
                                             </span>
                                         </TableCell>
                                     </>
@@ -1153,10 +1156,10 @@ export default function ManageTradesClient({
                                                                     {tx.type}
                                                                 </span>
                                                             </TableCell>
-                                                            <TableCell align="right" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>{formatNumber(tx.quantity, 0, 0)}</TableCell>
+                                                            <TableCell align="right" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>{privacyMode ? MASK : formatNumber(tx.quantity, 0, 0)}</TableCell>
                                                             <TableCell align="right" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>{formatCurrency(tx.price, 2, 2)}</TableCell>
                                                             <TableCell align="right" sx={{ color: '#9ca3af', fontSize: '0.8rem' }}>
-                                                                {formatCurrency(tx.quantity * tx.price, 2, 2)}
+                                                                {privacyMode ? MASK : formatCurrency(tx.quantity * tx.price, 2, 2)}
                                                             </TableCell>
                                                             <TableCell align="center">
                                                                     <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>

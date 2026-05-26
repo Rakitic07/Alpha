@@ -18,6 +18,7 @@ import { ExitRecord } from '@/lib/exits';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleNodes } from '@fortawesome/free-solid-svg-icons';
 import { formatNumber, formatCurrency } from '@/lib/format';
+import { useLiveData } from '@/context/LiveDataContext';
 
 interface ExitsScatterChartProps {
   exits: ExitRecord[];
@@ -35,6 +36,7 @@ interface ChartDataPoint {
 // Custom tooltip component
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CustomTooltip = ({ active, payload }: any) => {
+  const { privacyMode } = useLiveData();
   if (active && payload && payload.length) {
     const data = payload[0].payload as ChartDataPoint;
     const isGain = data.x >= 0;
@@ -56,7 +58,7 @@ const CustomTooltip = ({ active, payload }: any) => {
           <div className="flex justify-between gap-6">
             <span className="text-gray-400">P&L</span>
             <span className={`font-mono font-medium ${data.gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {formatCurrency(data.gainLoss, 0, 0)}
+              {privacyMode ? '••••' : formatCurrency(data.gainLoss, 0, 0)}
             </span>
           </div>
         </div>

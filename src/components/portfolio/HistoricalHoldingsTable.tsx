@@ -65,7 +65,7 @@ const SortIndicator = memo(function SortIndicator({
     : <ArrowDownwardIcon sx={{ fontSize: 14, ml: 0.5, verticalAlign: 'middle' }} />;
 });
 
-export default function HistoricalHoldingsTable({ holdings }: { holdings: HistoricalHoldingData[] }) {
+export default function HistoricalHoldingsTable({ holdings, privacyMode = false }: { holdings: HistoricalHoldingData[]; privacyMode?: boolean }) {
   const [sortKey, setSortKey] = useState<SortKey>('totalPnl');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -144,7 +144,7 @@ export default function HistoricalHoldingsTable({ holdings }: { holdings: Histor
       );
   }
 
-  // const formatCurrency = (val: number) => `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`; // Removed local definition
+  const MASK = '••••';
   const formatPnl = (val: number) => {
       if (val === 0) {
           return <span className="text-gray-400">{formatCurrency(val, 0, 0)}</span>;
@@ -208,21 +208,21 @@ export default function HistoricalHoldingsTable({ holdings }: { holdings: Histor
                                 </div>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <span className="text-gray-300">{h.quantity > 0 ? formatNumber(h.quantity, 0, 0) : '-'}</span>
+                                <span className="text-gray-300">{h.quantity > 0 ? (privacyMode ? MASK : formatNumber(h.quantity, 0, 0)) : '-'}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                <span className="text-gray-300">{h.quantity > 0 ? formatCurrency(h.currentValue, 0, 0) : '-'}</span>
+                                <span className="text-gray-300">{h.quantity > 0 ? (privacyMode ? MASK : formatCurrency(h.currentValue, 0, 0)) : '-'}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                {formatPnl(h.realizedPnl)}
+                                {privacyMode ? <span className="text-gray-400">{MASK}</span> : formatPnl(h.realizedPnl)}
                             </StyledTableCell>
                             <StyledTableCell align="right">
-                                {h.quantity > 0 ? formatPnl(h.unrealizedPnl) : <span className="text-gray-600">-</span>}
+                                {h.quantity > 0 ? (privacyMode ? <span className="text-gray-400">{MASK}</span> : formatPnl(h.unrealizedPnl)) : <span className="text-gray-600">-</span>}
                             </StyledTableCell>
 
                             <StyledTableCell align="right">
                                 <Chip 
-                                    label={`${isProfit && h.totalPnl !== 0 ? '+' : ''}${formatNumber(h.totalPnl, 0, 0)}`}
+                                    label={privacyMode ? MASK : `${isProfit && h.totalPnl !== 0 ? '+' : ''}${formatNumber(h.totalPnl, 0, 0)}`}
                                     size="small"
                                     sx={{ 
                                         fontWeight: 'bold', 

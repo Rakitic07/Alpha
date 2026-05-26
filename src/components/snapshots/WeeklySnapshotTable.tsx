@@ -89,7 +89,7 @@ const formatWinLossAvg = (avgWin: number | null, avgLoss: number | null) => {
     );
 };
 
-export default function WeeklySnapshotTable({ snapshots }: { snapshots: WeeklyPortfolioSnapshot[] }) {
+export default function WeeklySnapshotTable({ snapshots, privacyMode = false }: { snapshots: WeeklyPortfolioSnapshot[]; privacyMode?: boolean }) {
     if (!snapshots || snapshots.length === 0) {
         return (
             <Paper className="glass-card" sx={{ p: 4, textAlign: 'center', backgroundColor: 'transparent' }}>
@@ -105,7 +105,9 @@ export default function WeeklySnapshotTable({ snapshots }: { snapshots: WeeklyPo
                 <TableHead>
                     <TableRow>
                         <StyledTableCell>Date</StyledTableCell>
-                        <StyledTableCell align="right">Closing Value</StyledTableCell>
+                        {!privacyMode && (
+                            <StyledTableCell align="right">Closing Value</StyledTableCell>
+                        )}
                         <StyledTableCell align="right">NAV</StyledTableCell>
                         <StyledTableCell align="right">Return</StyledTableCell>
                         <StyledTableCell align="right">Win %</StyledTableCell>
@@ -137,9 +139,11 @@ export default function WeeklySnapshotTable({ snapshots }: { snapshots: WeeklyPo
                                         {format(new Date(row.date), 'dd MMM yyyy')}
                                     </span>
                                 </StyledTableCell>
-                                <StyledTableCell align="right">
-                                    <span className="text-white font-medium">{formatCurrency(row.totalEquity)}</span>
-                                </StyledTableCell>
+                                {!privacyMode && (
+                                    <StyledTableCell align="right">
+                                        <span className="text-white font-medium">{formatCurrency(row.totalEquity)}</span>
+                                    </StyledTableCell>
+                                )}
                                 <StyledTableCell align="right">
                                     <span className="text-blue-300 font-mono">{row.nav != null ? row.nav.toFixed(2) : '-'}</span>
                                 </StyledTableCell>

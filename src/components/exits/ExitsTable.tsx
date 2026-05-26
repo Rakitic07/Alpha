@@ -10,6 +10,7 @@ import SwapVertIcon from '@mui/icons-material/SwapVert';
 
 interface ExitsTableProps {
   exits: ExitRecord[];
+  privacyMode?: boolean;
 }
 
 type SortKey = 'sellDate' | 'symbol' | 'quantity' | 'buyDate' | 'changePercent' | 'gainLoss' | 'timeHeld' | 'marketCapCategory';
@@ -17,12 +18,13 @@ type SortDirection = 'asc' | 'desc';
 type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro';
 
 // Stats Component
-const StatsSummary = ({ exits }: { exits: ExitRecord[] }) => {
+const StatsSummary = ({ exits, privacyMode = false }: { exits: ExitRecord[]; privacyMode?: boolean }) => {
     const totalExits = exits.length;
     const wins = exits.filter(e => e.gainLoss > 0).length;
     const winRate = totalExits > 0 ? (wins / totalExits) * 100 : 0;
     const totalPnL = exits.reduce((sum, e) => sum + e.gainLoss, 0);
     const avgReturn = totalExits > 0 ? exits.reduce((sum, e) => sum + e.changePercent, 0) / totalExits : 0;
+    const MASK = '••••';
 
     return (
         <>
@@ -39,7 +41,7 @@ const StatsSummary = ({ exits }: { exits: ExitRecord[] }) => {
             <div className="bg-white/5 rounded-lg px-4 py-2 border border-white/10 backdrop-blur-md flex flex-col justify-center min-w-[100px]">
                 <div className="text-gray-400 text-[10px] uppercase font-semibold">Total P&L</div>
                 <div className={`text-lg font-bold leading-tight ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {formatCurrency(totalPnL, 0, 0)}
+                    {privacyMode ? MASK : formatCurrency(totalPnL, 0, 0)}
                 </div>
             </div>
             <div className="bg-white/5 rounded-lg px-4 py-2 border border-white/10 backdrop-blur-md flex flex-col justify-center min-w-[100px]">
@@ -88,7 +90,7 @@ const Th = ({
   </th>
 );
 
-export default function ExitsTable({ exits }: ExitsTableProps) {
+export default function ExitsTable({ exits, privacyMode = false }: ExitsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('sellDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterCategory, setFilterCategory] = useState<MarketCapCategory | 'All'>('All');
@@ -163,7 +165,7 @@ export default function ExitsTable({ exits }: ExitsTableProps) {
              </div>
              
              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full xl:w-auto">
-                <StatsSummary exits={filteredExits} />
+                <StatsSummary exits={filteredExits} privacyMode={privacyMode} />
              </div>
         </div>
 
@@ -203,7 +205,7 @@ export default function ExitsTable({ exits }: ExitsTableProps) {
                    {exit.marketCapCategory || '-'}
                 </td>
                 <td className="md:px-6 px-4 py-4 text-right text-gray-300 font-mono">
-                  {formatNumber(exit.quantity, 0, 0)}
+                  {privacyMode ? '••••' : formatNumber(exit.quantity, 0, 0)}
                 </td>
                 <td className="md:px-6 px-4 py-4 text-gray-400 whitespace-nowrap">
                   {format(exit.buyDate, 'dd MMM yyyy')}
@@ -218,7 +220,7 @@ export default function ExitsTable({ exits }: ExitsTableProps) {
                   {exit.changePercent > 0 ? '+' : ''}{exit.changePercent.toFixed(2)}%
                 </td>
                 <td className={`md:px-6 px-4 py-4 text-right font-mono font-medium ${exit.gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {formatNumber(exit.gainLoss, 2, 2)}
+                  {privacyMode ? '••••' : formatNumber(exit.gainLoss, 2, 2)}
                 </td>
                 <td className="md:px-6 px-4 py-4 text-right text-gray-400 font-mono">
                   {exit.timeHeld}d

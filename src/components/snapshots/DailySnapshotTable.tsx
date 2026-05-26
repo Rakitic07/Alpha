@@ -96,7 +96,7 @@ VirtuosoTableBody.displayName = 'VirtuosoTableBody';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VirtuosoTableRow = ({ item, ...props }: { item: DailyPortfolioSnapshot } & React.ComponentProps<typeof TableRow>) => <StyledTableRow {...props} />;
 
-export default function DailySnapshotTable({ snapshots, lockDate }: { snapshots: DailyPortfolioSnapshot[], lockDate: string | null }) {
+export default function DailySnapshotTable({ snapshots, lockDate, privacyMode = false }: { snapshots: DailyPortfolioSnapshot[], lockDate: string | null, privacyMode?: boolean }) {
     const [sortKey, setSortKey] = useState<SortKey>('date');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     
@@ -218,20 +218,28 @@ export default function DailySnapshotTable({ snapshots, lockDate }: { snapshots:
                         <StyledTableCell onClick={() => handleSort('date')} sx={{ width: '150px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', borderRight: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}>
                             Date <SortIndicator columnKey="date" sortKey={sortKey} sortDirection={sortDirection} />
                         </StyledTableCell>
-                        <StyledTableCell align="right" sx={{ width: '120px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827' }}>Closing Value</StyledTableCell>
-                        <StyledTableCell align="right" sx={{ width: '120px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827' }}>Invested</StyledTableCell>
-                        <StyledTableCell align="right" onClick={() => handleSort('cashflow')} sx={{ width: '110px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
-                            Cashflow <SortIndicator columnKey="cashflow" sortKey={sortKey} sortDirection={sortDirection} />
-                        </StyledTableCell>
+                        {!privacyMode && (
+                            <StyledTableCell align="right" sx={{ width: '120px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827' }}>Closing Value</StyledTableCell>
+                        )}
+                        {!privacyMode && (
+                            <StyledTableCell align="right" sx={{ width: '120px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827' }}>Invested</StyledTableCell>
+                        )}
+                        {!privacyMode && (
+                            <StyledTableCell align="right" onClick={() => handleSort('cashflow')} sx={{ width: '110px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
+                                Cashflow <SortIndicator columnKey="cashflow" sortKey={sortKey} sortDirection={sortDirection} />
+                            </StyledTableCell>
+                        )}
                         <StyledTableCell align="right" onClick={() => handleSort('portfolioNAV')} sx={{ width: '100px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
                             NAV <SortIndicator columnKey="portfolioNAV" sortKey={sortKey} sortDirection={sortDirection} />
                         </StyledTableCell>
                         <StyledTableCell align="right" onClick={() => handleSort('dailyReturn')} sx={{ width: '120px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
                             Return <SortIndicator columnKey="dailyReturn" sortKey={sortKey} sortDirection={sortDirection} />
                         </StyledTableCell>
-                        <StyledTableCell align="right" onClick={() => handleSort('dailyPnL')} sx={{ width: '120px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
-                            P/L <SortIndicator columnKey="dailyPnL" sortKey={sortKey} sortDirection={sortDirection} />
-                        </StyledTableCell>
+                        {!privacyMode && (
+                            <StyledTableCell align="right" onClick={() => handleSort('dailyPnL')} sx={{ width: '120px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
+                                P/L <SortIndicator columnKey="dailyPnL" sortKey={sortKey} sortDirection={sortDirection} />
+                            </StyledTableCell>
+                        )}
                         <StyledTableCell align="right" onClick={() => handleSort('drawdown')} sx={{ width: '100px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
                             Drawdown <SortIndicator columnKey="drawdown" sortKey={sortKey} sortDirection={sortDirection} />
                         </StyledTableCell>
@@ -247,47 +255,55 @@ export default function DailySnapshotTable({ snapshots, lockDate }: { snapshots:
                                     {format(new Date(row.date), 'dd MMM yyyy')}
                                 </span>
                             </StyledTableCell>
-                            <StyledTableCell align="right">
-                                <span
-                                    className="text-white font-medium cursor-pointer hover:text-blue-400 hover:underline transition-colors"
-                                    onClick={() => handleViewHoldings(new Date(row.date))}
-                                    title="View Holdings"
-                                >
-                                    {formatCurrency(row.totalEquity)}
-                                </span>
-                            </StyledTableCell>
-                            <StyledTableCell align="right">
-                                <span className="text-gray-400">{formatCurrency(row.investedCapital)}</span>
-                            </StyledTableCell>
-                            <StyledTableCell align="right">
-                                {(() => {
-                                    const isFirstDay = row.date === sortedSnapshots[sortedSnapshots.length - 1].date ||
-                                                       (sortDirection === 'asc' && index === 0) ||
-                                                       (sortDirection === 'desc' && index === sortedSnapshots.length - 1);
+                            {!privacyMode && (
+                                <StyledTableCell align="right">
+                                    <span
+                                        className="text-white font-medium cursor-pointer hover:text-blue-400 hover:underline transition-colors"
+                                        onClick={() => handleViewHoldings(new Date(row.date))}
+                                        title="View Holdings"
+                                    >
+                                        {formatCurrency(row.totalEquity)}
+                                    </span>
+                                </StyledTableCell>
+                            )}
+                            {!privacyMode && (
+                                <StyledTableCell align="right">
+                                    <span className="text-gray-400">{formatCurrency(row.investedCapital)}</span>
+                                </StyledTableCell>
+                            )}
+                            {!privacyMode && (
+                                <StyledTableCell align="right">
+                                    {(() => {
+                                        const isFirstDay = row.date === sortedSnapshots[sortedSnapshots.length - 1].date ||
+                                                           (sortDirection === 'asc' && index === 0) ||
+                                                           (sortDirection === 'desc' && index === sortedSnapshots.length - 1);
 
-                                    if (isFirstDay) return <span className="text-gray-500 text-xs">-</span>;
+                                        if (isFirstDay) return <span className="text-gray-500 text-xs">-</span>;
 
-                                    const cf = row.cashflow || 0;
-                                    if (Math.abs(cf) < 0.01) return <span className="text-gray-500 text-xs">-</span>;
-                                    const isPositive = cf > 0;
-                                    return (
-                                        <span className={`text-xs font-medium ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                                            {isPositive ? '+' : ''}{formatCurrency(cf)}
-                                        </span>
-                                    );
-                                })()}
-                            </StyledTableCell>
+                                        const cf = row.cashflow || 0;
+                                        if (Math.abs(cf) < 0.01) return <span className="text-gray-500 text-xs">-</span>;
+                                        const isPositive = cf > 0;
+                                        return (
+                                            <span className={`text-xs font-medium ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {isPositive ? '+' : ''}{formatCurrency(cf)}
+                                            </span>
+                                        );
+                                    })()}
+                                </StyledTableCell>
+                            )}
                             <StyledTableCell align="right">
                                 <span className="text-blue-300 font-mono">{row.portfolioNAV != null ? row.portfolioNAV.toFixed(2) : '-'}</span>
                             </StyledTableCell>
                             <StyledTableCell align="right">
                                 <ReturnChip value={row.dailyReturn} period="daily" />
                             </StyledTableCell>
-                            <StyledTableCell align="right">
-                                <span className={`text-sm ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {row.dailyPnL != null ? (isProfit ? '+' : '') + formatCurrency(row.dailyPnL, 0, 0) : '-'}
-                                </span>
-                            </StyledTableCell>
+                            {!privacyMode && (
+                                <StyledTableCell align="right">
+                                    <span className={`text-sm ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {row.dailyPnL != null ? ((isProfit ? '+' : '') + formatCurrency(row.dailyPnL, 0, 0)) : '-'}
+                                    </span>
+                                </StyledTableCell>
+                            )}
                             <StyledTableCell align="right">
                                 {(() => {
                                     const dd = row.drawdown || 0;

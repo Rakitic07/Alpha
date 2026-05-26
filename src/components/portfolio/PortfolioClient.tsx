@@ -17,12 +17,14 @@ interface PortfolioClientProps {
     currentHoldings: PortfolioHolding[];
     historicalHoldings: HistoricalHoldingData[];
     totalEquity?: number;
+    privacyMode?: boolean;
 }
 
 export default function PortfolioClient({ 
     currentHoldings, 
     historicalHoldings,
-    totalEquity 
+    totalEquity,
+    privacyMode = false
 }: PortfolioClientProps) {
     const [view, setView] = useState<'current' | 'historical'>('current');
     const [rebalanceOpen, setRebalanceOpen] = useState(false);
@@ -153,9 +155,9 @@ export default function PortfolioClient({
 
             <section className="animate-fade-in-up">
                 {view === 'current' ? (
-                     <HoldingsTable holdings={currentHoldings} />
+                     <HoldingsTable holdings={currentHoldings} privacyMode={privacyMode} />
                 ) : (
-                    <HistoricalHoldingsTable holdings={historicalHoldings} />
+                    <HistoricalHoldingsTable holdings={historicalHoldings} privacyMode={privacyMode} />
                 )}
             </section>
 

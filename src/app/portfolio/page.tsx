@@ -2,8 +2,10 @@
 
 import { usePortfolioHoldings, useHistoricalHoldings } from '@/hooks/useQueries';
 import PortfolioClient from '@/components/portfolio/PortfolioClient';
+import { useLiveData } from '@/context/LiveDataContext';
 
 export default function PortfolioPage() {
+  const { privacyMode } = useLiveData();
   const { data: currentHoldings, isLoading: holdingsLoading } = usePortfolioHoldings();
   const { data: historicalHoldings, isLoading: historyLoading, isFetching } = useHistoricalHoldings();
 
@@ -29,6 +31,7 @@ export default function PortfolioPage() {
       <PortfolioClient
         currentHoldings={currentHoldings}
         historicalHoldings={historicalHoldings}
+        privacyMode={privacyMode}
       />
     </div>
   );
