@@ -155,20 +155,20 @@ export default function FundamentalsClient({
   // ── Data Parsing ──────────────────────────────────────────────────────────
 
   const activeIncomeStatement = useMemo(() => {
-    return periodType === 'quarterly' && initialData.incomeStatementQuarterly
-      ? initialData.incomeStatementQuarterly
+    return periodType === 'quarterly' && (initialData.incomeStatementQuarterly?.full_statement?.length ?? 0) > 0
+      ? initialData.incomeStatementQuarterly!
       : initialData.incomeStatement;
   }, [periodType, initialData.incomeStatement, initialData.incomeStatementQuarterly]);
 
   const activeBalanceSheet = useMemo(() => {
-    return periodType === 'quarterly' && initialData.balanceSheetQuarterly
-      ? initialData.balanceSheetQuarterly
+    return periodType === 'quarterly' && (initialData.balanceSheetQuarterly?.full_statement?.length ?? 0) > 0
+      ? initialData.balanceSheetQuarterly!
       : initialData.balanceSheet;
   }, [periodType, initialData.balanceSheet, initialData.balanceSheetQuarterly]);
 
   const activeCashFlow = useMemo(() => {
-    return periodType === 'quarterly' && initialData.cashFlowQuarterly
-      ? initialData.cashFlowQuarterly
+    return periodType === 'quarterly' && (initialData.cashFlowQuarterly?.full_statement?.length ?? 0) > 0
+      ? initialData.cashFlowQuarterly!
       : initialData.cashFlow;
   }, [periodType, initialData.cashFlow, initialData.cashFlowQuarterly]);
 
@@ -854,13 +854,21 @@ export default function FundamentalsClient({
 
           {/* Statement Table */}
           <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden glass-card p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-500/5 flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
+            <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-500/5 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                </div>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Detailed Statement</span>
               </div>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Detailed Statement</span>
+
+              {periodType === 'quarterly' && financialSubTab !== 'income' && (
+                <div className="px-3 py-1.5 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-400/90 font-semibold flex items-center gap-1.5">
+                  <span>⚠️ Quarterly data not available for {financialSubTab === 'balance' ? 'Balance Sheet' : 'Cash Flow'}. Showing yearly statements instead.</span>
+                </div>
+              )}
             </div>
 
             <div className="overflow-x-auto rounded-xl">
@@ -993,18 +1001,19 @@ export default function FundamentalsClient({
               <div className="w-full h-80 mt-4">
                 {!isMounted ? (
                   <ChartSkeleton />
-                ) : shareholdingHistoricalData.length > 0 ? (
+                ) : shareholdingHistoricalData.length > 0 && initialData.shareHoldings?.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={shareholdingHistoricalData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                       <XAxis dataKey="period" stroke="#71717a" fontSize={11} tickLine={false} />
-                      <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} unit="%" />
+                      <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} unit="%" domain={[0, 100]} />
                       <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={CHART_LABEL_STYLE} itemStyle={CHART_ITEM_STYLE} formatter={(value: any) => [typeof value === 'number' ? `${value.toFixed(2)}%` : value, '']} />
                       <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
                       {initialData.shareHoldings.map((cat, idx) => (
                         <Bar
-                          key={idx}
+                          key={`${cat.category}-${idx}`}
                           dataKey={cat.category}
+                          name={cat.category}
                           stackId="a"
                           fill={PIE_COLORS[idx % PIE_COLORS.length]}
                           radius={idx === initialData.shareHoldings.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}

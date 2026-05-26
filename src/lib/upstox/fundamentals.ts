@@ -932,6 +932,61 @@ export async function getCompanyFundamentals(isin: string, symbol: string): Prom
       });
     }
 
+    // ── Normalization of API Data ──────────────────────────────────────────
+
+    // 1. Shareholding Pattern
+    const normalizedShareHoldings = (shareHoldings || []).map(cat => {
+      let categoryName = cat.category || '';
+      if (categoryName === 'promoters') categoryName = 'Promoters';
+      else if (categoryName === 'fii') categoryName = 'FII';
+      else if (categoryName === 'mutual_funds') categoryName = 'Mutual Funds';
+      else if (categoryName === 'other_dii') categoryName = 'Other DII';
+      else if (categoryName === 'public') categoryName = 'Public';
+      else if (categoryName === 'others') categoryName = 'Others';
+      else {
+        categoryName = categoryName.charAt(0).toUpperCase() + categoryName.slice(1).replace(/_/g, ' ');
+      }
+
+      return {
+        category: categoryName,
+        history: (cat.history || []).map((h: any) => ({
+          period: h.period,
+          percentage: typeof h.percentage === 'number' ? h.percentage : (typeof h.value === 'number' ? h.value : 0)
+        }))
+      };
+    });
+
+    // 2. Corporate Actions Event Details key/name normalization
+    const normalizedCorporateActions = (corporateActions || []).map(action => ({
+      ...action,
+      event_details: (action.event_details || []).map((detail: any) => ({
+        key: detail.key || detail.name || '',
+        value: detail.value || ''
+      }))
+    }));
+
+    // 3. Quarterly Income Statement normalization
+    if (incomeStatementQuarterly) {
+      const rawRows = (incomeStatementQuarterly as any).income_statement;
+      if (Array.isArray(rawRows) && rawRows.length > 0) {
+        incomeStatementQuarterly.full_statement = rawRows.map((row: any) => {
+          let particular = row.category || '';
+          if (particular === 'revenue') particular = 'Sales / Revenue';
+          else if (particular === 'operating_profit') particular = 'Operating Profit (EBITDA)';
+          else if (particular === 'net_profit') particular = 'Net Profit';
+          else particular = particular.charAt(0).toUpperCase() + particular.slice(1).replace(/_/g, ' ');
+
+          return {
+            particular,
+            history: (row.history || []).map((h: any) => ({
+              period: h.period,
+              value: h.value
+            }))
+          };
+        });
+      }
+    }
+
     return {
       profile,
       balanceSheet,
@@ -940,9 +995,9 @@ export async function getCompanyFundamentals(isin: string, symbol: string): Prom
       balanceSheetQuarterly,
       incomeStatementQuarterly,
       cashFlowQuarterly,
-      shareHoldings,
+      shareHoldings: normalizedShareHoldings,
       keyRatios: updatedKeyRatios,
-      corporateActions,
+      corporateActions: normalizedCorporateActions,
       competitors: competitorsWithSymbols,
       isMock: false,
     };
