@@ -47,6 +47,10 @@ const ExitsScatterChart = dynamic(() => import('@/components/exits/ExitsScatterC
   loading: () => <div className="h-[500px] bg-slate-800/30 rounded-xl animate-pulse" />,
   ssr: false,
 });
+const InvestedVsCurrentChart = dynamic(() => import('@/components/portfolio/InvestedVsCurrentChart'), {
+  loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
 
 export default function DashboardPage() {
   const { data, isLoading, isFetching } = useDashboardData();
@@ -215,7 +219,18 @@ export default function DashboardPage() {
           </div>
       </div>
 
-      {/* Row 5.5: Daily Gain/Loss Bar Chart */}
+      {/* Row 5.5: Invested vs Current Value Chart */}
+      <div className="w-full h-auto flex-none">
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Invested vs Current Chart">
+                       <InvestedVsCurrentChart data={chartData} />
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </div>
+
+      {/* Row 5.6: Daily Gain/Loss Bar Chart */}
       <div className="w-full h-auto flex-none">
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
