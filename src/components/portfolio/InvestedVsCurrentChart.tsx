@@ -109,6 +109,17 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
     return ticks;
   })();
 
+  // Dynamic Y-axis domain — rescales whenever the filtered window changes
+  const yDomain = useMemo(() => {
+    if (chartData.length === 0) return ['auto', 'auto'] as const;
+    const allValues = chartData.flatMap(d => [d.investedCapital, d.totalEquity]).filter(v => isFinite(v));
+    const dataMin = Math.min(...allValues);
+    const dataMax = Math.max(...allValues);
+    const range = dataMax - dataMin || dataMax * 0.1;
+    const pad = range * 0.05;
+    return [Math.max(0, dataMin - pad), dataMax + pad] as [number, number];
+  }, [chartData]);
+
   const handleDateRangeChange = (_event: React.MouseEvent<HTMLElement>, newRange: DateRange | null) => {
     if (newRange !== null) setDateRange(newRange);
   };
@@ -172,7 +183,7 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
 
       <div className="h-[300px] md:h-[400px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 10 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: 5, bottom: 10 }}>
             <defs>
               <linearGradient id="investedGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
@@ -202,7 +213,9 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
               tickLine={{ stroke: '#4b5563' }}
               axisLine={{ stroke: '#374151' }}
               tickFormatter={(value) => formatIndianNumber(value)}
-              width={55}
+              domain={yDomain}
+              allowDataOverflow={false}
+              width={72}
             />
 
             <Tooltip content={<CustomTooltip />} />
