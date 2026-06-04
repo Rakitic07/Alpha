@@ -60,6 +60,7 @@ nse_cache.json
 
 # Database backups (may contain sensitive data)
 backups/*.json
+backups/*.sql
 !backups/.gitkeep
 *.backup_*
 
