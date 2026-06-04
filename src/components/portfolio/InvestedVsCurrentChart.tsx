@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Line,
-  Customized,
+  ReferenceArea,
 } from 'recharts';
 import { format, subMonths, subYears, startOfYear, parseISO } from 'date-fns';
 import { useState, useMemo } from 'react';
@@ -39,106 +39,6 @@ const formatCurrency = (num: number) =>
     currency: 'INR',
     maximumFractionDigits: 0,
   }).format(num);
-
-// ─── Gap fill drawn as custom SVG between the two lines ───────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CustomGapFill = ({ xAxisMap, yAxisMap, data }: any) => {
-  if (!xAxisMap || !yAxisMap || !data?.length) return null;
-
-  const xAxis = xAxisMap[Object.keys(xAxisMap)[0]];
-  const yAxis = yAxisMap[Object.keys(yAxisMap)[0]];
-  if (!xAxis?.scale || !yAxis?.scale) return null;
-
-  const xScale = xAxis.scale;
-  const yScale = yAxis.scale;
-  // Point scale has no bandwidth; band scale has one
-  const bw = typeof xScale.bandwidth === 'function' ? xScale.bandwidth() / 2 : 0;
-
-  type Pt = { x: number; yi: number; yc: number };
-
-  // Map raw data to pixel coordinates
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pts: Pt[] = (data as any[])
-    .filter(d => d.dateStr && Number.isFinite(d.investedCapital) && Number.isFinite(d.totalEquity))
-    .map(d => ({
-      x:  (xScale(d.dateStr) ?? 0) + bw,
-      yi: yScale(d.investedCapital) as number,   // pixel y for invested
-      yc: yScale(d.totalEquity)    as number,    // pixel y for current value
-    }));
-
-  if (pts.length < 2) return null;
-
-  // In SVG lower y = higher on screen → profit when yc ≤ yi
-  const inProfit = (p: Pt) => p.yc <= p.yi;
-
-  // Linear-interpolate the pixel crossing between two adjacent points
-  const cross = (a: Pt, b: Pt): Pt => {
-    const da = a.yc - a.yi;
-    const db = b.yc - b.yi;
-    const t  = da / (da - db);
-    const x  = a.x  + t * (b.x  - a.x);
-    const yi = a.yi + t * (b.yi - a.yi);
-    return { x, yi, yc: yi }; // the two lines meet exactly at the crossing
-  };
-
-  // Split data into contiguous profit / loss segments
-  type Seg = { isProfit: boolean; pts: Pt[] };
-  const segments: Seg[] = [];
-  let cur: Seg = { isProfit: inProfit(pts[0]), pts: [pts[0]] };
-
-  for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1];
-    const curr = pts[i];
-    if (inProfit(prev) !== inProfit(curr)) {
-      const c = cross(prev, curr);
-      cur.pts.push(c);
-      segments.push(cur);
-      cur = { isProfit: inProfit(curr), pts: [c, curr] };
-    } else {
-      cur.pts.push(curr);
-    }
-  }
-  segments.push(cur);
-
-  // Build a closed SVG polygon for each segment
-  const buildPath = (seg: Seg): string => {
-    const sp = seg.pts;
-    if (sp.length < 2) return '';
-    // Forward along the current-value line (top when in profit)
-    const fwd = sp
-      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)},${p.yc.toFixed(1)}`)
-      .join(' ');
-    // Backward along the invested-capital line (bottom when in profit)
-    const bwd = [...sp]
-      .reverse()
-      .map(p => `L ${p.x.toFixed(1)},${p.yi.toFixed(1)}`)
-      .join(' ');
-    return `${fwd} ${bwd} Z`;
-  };
-
-  return (
-    <g>
-      <defs>
-        <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="#10b981" stopOpacity={0.35} />
-          <stop offset="100%" stopColor="#10b981" stopOpacity={0.06} />
-        </linearGradient>
-        <linearGradient id="lossFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="#ef4444" stopOpacity={0.08} />
-          <stop offset="100%" stopColor="#ef4444" stopOpacity={0.35} />
-        </linearGradient>
-      </defs>
-      {segments.map((seg, i) => (
-        <path
-          key={i}
-          d={buildPath(seg)}
-          fill={seg.isProfit ? 'url(#profitFill)' : 'url(#lossFill)'}
-          stroke="none"
-        />
-      ))}
-    </g>
-  );
-};
 
 // ─── Main chart component ─────────────────────────────────────────────────────
 export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) {
@@ -205,6 +105,24 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
     const range   = dataMax - dataMin || dataMax * 0.1;
     const pad     = range * 0.05;
     return [Math.max(0, dataMin - pad), dataMax + pad] as [number, number];
+  }, [chartData]);
+
+  // Compute contiguous profit / loss segments for ReferenceArea coloring
+  const segments = useMemo(() => {
+    if (chartData.length < 2) return [];
+    const segs: Array<{ x1: string; x2: string; isProfit: boolean }> = [];
+    let segStart     = chartData[0].dateStr;
+    let segIsProfit  = chartData[0].totalEquity >= chartData[0].investedCapital;
+    for (let i = 1; i < chartData.length; i++) {
+      const isProfit = chartData[i].totalEquity >= chartData[i].investedCapital;
+      if (isProfit !== segIsProfit) {
+        segs.push({ x1: segStart, x2: chartData[i].dateStr, isProfit: segIsProfit });
+        segStart    = chartData[i].dateStr;
+        segIsProfit = isProfit;
+      }
+    }
+    segs.push({ x1: segStart, x2: chartData[chartData.length - 1].dateStr, isProfit: segIsProfit });
+    return segs;
   }, [chartData]);
 
   const handleDateRangeChange = (_event: React.MouseEvent<HTMLElement>, newRange: DateRange | null) => {
@@ -288,8 +206,17 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
 
             <Tooltip content={<CustomTooltip />} />
 
-            {/* Dynamic gap fill — rendered before the lines so lines sit on top */}
-            <Customized component={CustomGapFill} />
+            {/* Profit / loss background bands — rendered before lines */}
+            {segments.map((seg, i) => (
+              <ReferenceArea
+                key={`seg-${i}`}
+                x1={seg.x1}
+                x2={seg.x2}
+                fill={seg.isProfit ? 'rgba(16, 185, 129, 0.13)' : 'rgba(239, 68, 68, 0.15)'}
+                strokeOpacity={0}
+                ifOverflow="hidden"
+              />
+            ))}
 
             {/* Invested Capital line */}
             <Line
@@ -321,18 +248,9 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
         {[
           { label: 'Invested',      color: '#f59e0b' },
           { label: 'Current Value', color: '#10b981' },
-          { label: 'Profit zone',   color: '#10b981', opacity: 0.4, isDash: true },
-          { label: 'Loss zone',     color: '#ef4444', opacity: 0.4, isDash: true },
         ].map((item) => (
           <div key={item.label} className="flex items-center gap-2 opacity-70">
-            {item.isDash ? (
-              <span
-                className="w-6 h-3 rounded-sm"
-                style={{ backgroundColor: item.color, opacity: item.opacity ?? 1 }}
-              />
-            ) : (
-              <span className="w-6 h-1.5 rounded-full" style={{ backgroundColor: item.color }} />
-            )}
+            <span className="w-6 h-1.5 rounded-full" style={{ backgroundColor: item.color }} />
             <span className="text-[11px] font-medium tracking-wide text-gray-300">{item.label}</span>
           </div>
         ))}
