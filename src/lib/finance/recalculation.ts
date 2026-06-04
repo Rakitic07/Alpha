@@ -151,20 +151,23 @@ export async function recalculatePortfolioHistoryInternal(
     }
 
     // Helper to check if a date is a trading day
-    const isTradingDay = (date: Date, hasPrices: boolean = false): boolean => {
-        // If we have actual price data for this day, it IS a trading day (even if weekend/holiday)
-        // This covers special trading sessions like Budget Day 2026 (Sunday) or Muhurat Trading
-        if (hasPrices) return true;
-
+    const isTradingDay = (date: Date): boolean => {
         const dateStr = format(date, 'yyyy-MM-dd');
 
-        // Check explicit Special Trading Sessions from API (e.g. Budget Day)
+        // Check explicit Special Trading Sessions from API (e.g. Budget Day on Sunday, Muhurat Trading)
+        // These are confirmed by the Upstox API and take precedence over weekend/holiday rules
         if (specialTradingDays.has(dateStr)) return true;
 
-        // Skip weekends
+        // Skip weekends — even if we have price data (price data on a weekend is a data quality
+        // issue, e.g. a Saturday UTC price shifting into Sunday IST via the +5:30 offset).
+        // We do NOT use `hasPrices` alone to override this check, because stale/bad upstream
+        // data can create Sunday entries and would otherwise produce phantom P/L snapshots.
         if (isWeekend(date)) return false;
-        // Skip market holidays
+
+        // Skip market holidays (trading holidays where NSE is closed)
         if (marketHolidays.has(dateStr)) return false;
+
+        // For regular weekdays: allow if we have actual price data, or assume it's a trading day
         return true;
     };
 
@@ -687,10 +690,9 @@ export async function recalculatePortfolioHistoryInternal(
         const pnl = totalEquity - accumulatedInvestedCapital;
 
         // F. Save Daily Snapshot IF within recalculation window AND it's a trading day
-        // Skip weekends and market holidays - no snapshot should be created for non-trading days
-        // UNLESS we have explicit price data for that day (e.g. Budget Day special session)
-        const hasPricesForDay = prices.size > 0;
-        if (currentDate >= effectiveFromDate && isTradingDay(currentDate, hasPricesForDay)) {
+        // Skip weekends and market holidays - no snapshot for non-trading days
+        // Special sessions (Budget Day, Muhurat) are detected via the specialTradingDays API set
+        if (currentDate >= effectiveFromDate && isTradingDay(currentDate)) {
             const d = new Date(currentDate);
             const utcSnapshotDate = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 
