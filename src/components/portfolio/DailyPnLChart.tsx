@@ -20,12 +20,15 @@ import { faChartBar } from '@fortawesome/free-solid-svg-icons';
 type DataPoint = {
   date: Date | string;
   dailyPnL: number | null;
+  dailyReturn?: number | null;
 };
 
 type DateRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL';
+type DisplayMode = 'absolute' | 'percentage';
 
 export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
   const [dateRange, setDateRange] = useState<DateRange>('ALL');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('absolute');
 
   // Filter data based on selected date range
   const filteredData = useMemo(() => {
@@ -78,7 +81,8 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
       ...d,
       dateStr: format(new Date(d.date), 'yyyy-MM-dd'),
       date: new Date(d.date),
-      dailyPnL: d.dailyPnL ?? 0
+      dailyPnL: d.dailyPnL ?? 0,
+      dailyReturnPct: (d.dailyReturn ?? 0) * 100
     }));
 
   // One tick per unique year-month (first occurrence in chartData)
@@ -98,6 +102,12 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
     }
   };
 
+  const handleDisplayModeChange = (_event: React.MouseEvent<HTMLElement>, newMode: DisplayMode | null) => {
+    if (newMode !== null) {
+      setDisplayMode(newMode);
+    }
+  };
+
   // Format number in Indian style (lakhs/crores)
   const formatIndianNumber = (value: number) => {
     const absValue = Math.abs(value);
@@ -113,7 +123,7 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
 
   return (
     <div className="animate-fade-in-up w-full h-full flex flex-col">
-      <div className="flex flex-col md:flex-row items-center justify-between mb-4 gap-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
         <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 flex items-center justify-center">
                 <FontAwesomeIcon icon={faChartBar} className="text-amber-400 text-lg" />
@@ -121,50 +131,95 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Daily Gain/Loss</span>
         </div>
       
-        <ToggleButtonGroup
-          value={dateRange}
-          exclusive
-          onChange={handleDateRangeChange}
-          size="small"
-          sx={{
-            height: '32px',
-            backgroundColor: 'rgba(15, 23, 42, 0.4)',
-            '& .MuiToggleButton-root': {
-              color: '#9ca3af',
-              border: '1px solid rgba(255,255,255,0.1)',
-              fontSize: '0.7rem',
-              fontWeight: 600,
-              padding: '0 12px',
-              textTransform: 'none',
-              '&.Mui-selected': {
-                backgroundColor: 'rgba(245, 158, 11, 0.2)',
-                color: '#f59e0b',
-                borderColor: 'rgba(245, 158, 11, 0.4)',
-                '&:hover': {
-                  backgroundColor: 'rgba(245, 158, 11, 0.3)',
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:justify-end">
+          {/* Display Mode Toggle */}
+          <ToggleButtonGroup
+            value={displayMode}
+            exclusive
+            onChange={handleDisplayModeChange}
+            size="small"
+            sx={{
+              height: '32px',
+              backgroundColor: 'rgba(15, 23, 42, 0.4)',
+              '& .MuiToggleButton-root': {
+                color: '#9ca3af',
+                border: '1px solid rgba(255,255,255,0.1)',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                padding: '0 12px',
+                textTransform: 'none',
+                '&.Mui-selected': {
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                  color: '#f59e0b',
+                  borderColor: 'rgba(245, 158, 11, 0.4)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(245, 158, 11, 0.3)',
+                  },
                 },
+                '&:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                },
+                '&.Mui-focusVisible': {
+                  outline: 'none !important',
+                  boxShadow: 'none !important',
+                },
+                '&:focus': {
+                  outline: 'none !important',
+                  boxShadow: 'none !important',
+                }
               },
-              '&:hover': {
-                backgroundColor: 'rgba(255,255,255,0.05)',
+            }}
+          >
+            <ToggleButton value="absolute">₹ Absolute</ToggleButton>
+            <ToggleButton value="percentage">% Percentage</ToggleButton>
+          </ToggleButtonGroup>
+
+          {/* Date Range Toggle */}
+          <ToggleButtonGroup
+            value={dateRange}
+            exclusive
+            onChange={handleDateRangeChange}
+            size="small"
+            sx={{
+              height: '32px',
+              backgroundColor: 'rgba(15, 23, 42, 0.4)',
+              '& .MuiToggleButton-root': {
+                color: '#9ca3af',
+                border: '1px solid rgba(255,255,255,0.1)',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                padding: '0 12px',
+                textTransform: 'none',
+                '&.Mui-selected': {
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                  color: '#f59e0b',
+                  borderColor: 'rgba(245, 158, 11, 0.4)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(245, 158, 11, 0.3)',
+                  },
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                },
+                '&.Mui-focusVisible': {
+                  outline: 'none !important',
+                  boxShadow: 'none !important',
+                },
+                '&:focus': {
+                  outline: 'none !important',
+                  boxShadow: 'none !important',
+                }
               },
-              '&.Mui-focusVisible': {
-                outline: 'none !important',
-                boxShadow: 'none !important',
-              },
-              '&:focus': {
-                outline: 'none !important',
-                boxShadow: 'none !important',
-              }
-            },
-          }}
-        >
-          <ToggleButton value="1M">1M</ToggleButton>
-          <ToggleButton value="3M">3M</ToggleButton>
-          <ToggleButton value="6M">6M</ToggleButton>
-          <ToggleButton value="YTD">YTD</ToggleButton>
-          <ToggleButton value="1Y">1Y</ToggleButton>
-          <ToggleButton value="ALL">ALL</ToggleButton>
-        </ToggleButtonGroup>
+            }}
+          >
+            <ToggleButton value="1M">1M</ToggleButton>
+            <ToggleButton value="3M">3M</ToggleButton>
+            <ToggleButton value="6M">6M</ToggleButton>
+            <ToggleButton value="YTD">YTD</ToggleButton>
+            <ToggleButton value="1Y">1Y</ToggleButton>
+            <ToggleButton value="ALL">ALL</ToggleButton>
+          </ToggleButtonGroup>
+        </div>
     </div>
       <div className="h-[300px] md:h-[400px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -184,22 +239,29 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
             tick={{ fill: '#9ca3af', fontSize: 11 }}
             tickLine={{ stroke: '#4b5563' }}
             axisLine={{ stroke: '#374151' }}
-            tickFormatter={(value) => formatIndianNumber(value)}
+            tickFormatter={(value) => 
+              displayMode === 'absolute' 
+                ? formatIndianNumber(value) 
+                : `${value.toFixed(2)}%`
+            }
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip displayMode={displayMode} />} />
           <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
           <Bar
-            dataKey="dailyPnL"
-            name="Daily P/L"
+            dataKey={displayMode === 'absolute' ? 'dailyPnL' : 'dailyReturnPct'}
+            name={displayMode === 'absolute' ? 'Daily P/L' : 'Daily Return'}
             radius={[2, 2, 0, 0]}
           >
-            {chartData.map((entry, index) => (
-              <Cell 
-                key={`cell-${index}`} 
-                fill={entry.dailyPnL >= 0 ? '#10b981' : '#ef4444'}
-                fillOpacity={0.8}
-              />
-            ))}
+            {chartData.map((entry, index) => {
+              const val = displayMode === 'absolute' ? entry.dailyPnL : entry.dailyReturnPct;
+              return (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={val >= 0 ? '#10b981' : '#ef4444'}
+                  fillOpacity={0.8}
+                />
+              );
+            })}
           </Bar>
         </ComposedChart>
       </ResponsiveContainer>
@@ -209,7 +271,7 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, displayMode }: any) => {
   if (active && payload && payload.length) {
     const value = payload[0]?.value ?? 0;
     const isPositive = value >= 0;
@@ -223,13 +285,19 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       }).format(num);
     };
 
+    const formatPercent = (num: number) => {
+      return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
+    };
+
     return (
       <div className="glass-card p-2 border border-white/10 shadow-xl bg-black/80 backdrop-blur-md">
         <p className="text-[10px] text-gray-400 mb-1">{format(parseISO(label), 'MMM dd, yyyy')}</p>
         <div className="flex justify-between items-center gap-4 text-xs">
-          <span className="font-medium text-gray-300">Daily P/L</span>
+          <span className="font-medium text-gray-300">
+            {displayMode === 'absolute' ? 'Daily P/L' : 'Daily Return'}
+          </span>
           <span className={`font-mono font-semibold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-            {isPositive ? '+' : ''}{formatCurrency(value)}
+            {displayMode === 'absolute' ? formatCurrency(value) : formatPercent(value)}
           </span>
         </div>
       </div>
