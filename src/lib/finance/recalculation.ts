@@ -18,6 +18,7 @@ import { financeLogger } from '@/lib/logger';
 import { RequestCache, SectorMapping, ProgressCallback } from './types';
 import { updateStockHistory } from './stock-history';
 import { updateIndexHistory } from './index-history';
+import xirr from 'xirr';
 
 // Named constants for business logic thresholds
 const NAV_MA_WINDOW = 200; // 200-day moving average window
@@ -440,6 +441,8 @@ export async function recalculatePortfolioHistoryInternal(
         dailyPnL: number;
         dailyReturn: number;
         navMA200: number | null;
+        xirr: number | null;
+        cagr: number | null;
     };
 
     type WeeklySnapshotInput = {
@@ -488,6 +491,12 @@ export async function recalculatePortfolioHistoryInternal(
     const dailyData: DailySnapshotInput[] = [];
     const weeklyData: WeeklySnapshotInput[] = [];
     const monthlyData: MonthlySnapshotInput[] = [];
+
+    // Incremental XIRR: build cash flow array as we go
+    // BUY = negative (money out), SELL = positive (money in)
+    // Each day we append that day's transaction flows, then add totalEquity as terminal flow
+    const xirrFlows: { amount: number; when: Date }[] = [];
+    const portfolioStartDate = startDate; // first transaction date = NAV base date
 
     // Prepare Loop Vars for Progress
     const totalSimDays = differenceInDays(today, currentDate);
@@ -689,6 +698,38 @@ export async function recalculatePortfolioHistoryInternal(
         const units = nav > 0 ? totalEquity / nav : 0;
         const pnl = totalEquity - accumulatedInvestedCapital;
 
+        // F1. Append today's transaction cash flows for incremental XIRR
+        // This mirrors the flow-building in calculatePortfolioXIRR (holdings.ts)
+        // We track the loop's tIndex position; transactions already consumed above in section B.
+        // So we re-derive flows from displayCashflow for simplicity:
+        // BUY reduces cash (negative), SELL adds cash (positive)
+        if (Math.abs(displayCashflow) > 0) {
+            xirrFlows.push({ amount: displayCashflow, when: new Date(currentDate) });
+        }
+
+        // F2. Compute XIRR and CAGR for this day
+        let dailyXirr: number | null = null;
+        let dailyCagr: number | null = null;
+
+        if (totalEquity > 0 && xirrFlows.length > 0) {
+            try {
+                const flowsWithTerminal = [
+                    ...xirrFlows,
+                    { amount: totalEquity, when: new Date(currentDate) }
+                ];
+                const rate = xirr(flowsWithTerminal);
+                dailyXirr = roundPercent(rate); // stored as decimal e.g. 0.2354
+            } catch {
+                // xirr() throws when it cannot converge — leave null
+                dailyXirr = null;
+            }
+        }
+
+        const daysElapsed = differenceInDays(currentDate, portfolioStartDate);
+        if (daysElapsed >= 365 && nav > 0) {
+            dailyCagr = roundPercent(Math.pow(nav / 100, 365 / daysElapsed) - 1);
+        }
+
         // F. Save Daily Snapshot IF within recalculation window AND it's a trading day
         // Skip weekends and market holidays - no snapshot for non-trading days
         // Special sessions (Budget Day, Muhurat) are detected via the specialTradingDays API set
@@ -712,6 +753,8 @@ export async function recalculatePortfolioHistoryInternal(
                 dailyPnL: roundEquity(dailyPnL),
                 dailyReturn: roundPercent(dailyRet),
                 navMA200: navMA200 ? roundPrice(navMA200) : null,
+                xirr: dailyXirr,
+                cagr: dailyCagr,
             });
         }
 
@@ -899,11 +942,15 @@ export async function recalculatePortfolioHistoryInternal(
     }
 
     financeLogger.info("Recalculation Complete.");
-    // Invalidate caches - using 'as any' to bypass potential signature mismatch in tooling
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (revalidateTag as any)('portfolio-data');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (revalidateTag as any)('dashboard-stats');
+    try {
+        // Invalidate caches - using 'as any' to bypass potential signature mismatch in tooling
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (revalidateTag as any)('portfolio-data');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (revalidateTag as any)('dashboard-stats');
+    } catch (e) {
+        financeLogger.warn("revalidateTag failed (expected when run outside Next.js server context):", e);
+    }
 }
 
 // updateJob, failJob, completeJob are imported at the top of the file

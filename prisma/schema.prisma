@@ -51,6 +51,8 @@ model DailyPortfolioSnapshot {
   dailyReturn           Float?
   drawdown              Float?
   navMA200              Float?
+  xirr                  Float?
+  cagr                  Float?
   nifty500Momentum50NAV Float?
   niftyMicrocap250NAV   Float?
   niftyMidcap100NAV     Float?

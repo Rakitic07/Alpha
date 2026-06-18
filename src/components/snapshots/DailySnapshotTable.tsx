@@ -53,7 +53,7 @@ const StyledTableRow = styled(TableRow)(() => ({
 //     }).format(val);
 // };
 
-type SortKey = 'date' | 'portfolioNAV' | 'dailyReturn' | 'dailyPnL' | 'drawdown' | 'cashflow';
+type SortKey = 'date' | 'portfolioNAV' | 'dailyReturn' | 'dailyPnL' | 'drawdown' | 'cashflow' | 'xirr' | 'cagr';
 type SortDirection = 'asc' | 'desc';
 
 function SortIndicator({ 
@@ -184,6 +184,14 @@ export default function DailySnapshotTable({ snapshots, lockDate, privacyMode = 
                     valA = a.cashflow;
                     valB = b.cashflow;
                     break;
+                case 'xirr':
+                    valA = a.xirr;
+                    valB = b.xirr;
+                    break;
+                case 'cagr':
+                    valA = a.cagr;
+                    valB = b.cagr;
+                    break;
                 default:
                     return 0;
             }
@@ -242,6 +250,12 @@ export default function DailySnapshotTable({ snapshots, lockDate, privacyMode = 
                         )}
                         <StyledTableCell align="right" onClick={() => handleSort('drawdown')} sx={{ width: '100px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
                             Drawdown <SortIndicator columnKey="drawdown" sortKey={sortKey} sortDirection={sortDirection} />
+                        </StyledTableCell>
+                        <StyledTableCell align="right" onClick={() => handleSort('xirr')} sx={{ width: '90px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
+                            XIRR <SortIndicator columnKey="xirr" sortKey={sortKey} sortDirection={sortDirection} />
+                        </StyledTableCell>
+                        <StyledTableCell align="right" onClick={() => handleSort('cagr')} sx={{ width: '90px', position: 'sticky', top: 0, zIndex: 100, backgroundColor: '#111827', cursor: 'pointer' }}>
+                            CAGR <SortIndicator columnKey="cagr" sortKey={sortKey} sortDirection={sortDirection} />
                         </StyledTableCell>
                     </TableRow>
                 )}
@@ -329,6 +343,30 @@ export default function DailySnapshotTable({ snapshots, lockDate, privacyMode = 
                                         </span>
                                     );
                                 })()}
+                            </StyledTableCell>
+                            {/* XIRR */}
+                            <StyledTableCell align="right">
+                                {row.xirr != null ? (
+                                    <span className={`text-xs font-medium font-mono ${
+                                        row.xirr >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                    }`}>
+                                        {row.xirr >= 0 ? '+' : ''}{(row.xirr * 100).toFixed(2)}%
+                                    </span>
+                                ) : (
+                                    <span className="text-gray-600 text-xs">—</span>
+                                )}
+                            </StyledTableCell>
+                            {/* CAGR (NAV-derived) */}
+                            <StyledTableCell align="right">
+                                {row.cagr != null ? (
+                                    <span className={`text-xs font-medium font-mono ${
+                                        row.cagr >= 0 ? 'text-violet-400' : 'text-red-400'
+                                    }`}>
+                                        {row.cagr >= 0 ? '+' : ''}{(row.cagr * 100).toFixed(2)}%
+                                    </span>
+                                ) : (
+                                    <span className="text-gray-600 text-xs">—</span>
+                                )}
                             </StyledTableCell>
                         </>
                     );

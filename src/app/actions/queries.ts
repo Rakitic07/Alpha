@@ -64,7 +64,9 @@ export async function fetchDashboardData() {
     totalEquity: s.totalEquity,
     dailyPnL: s.dailyPnL,
     dailyReturn: s.dailyReturn,
-    drawdown: s.drawdown
+    drawdown: s.drawdown,
+    xirr: s.xirr,
+    cagr: s.cagr,
   }));
 
   const dashboardHistory = chartData.map(d => ({
