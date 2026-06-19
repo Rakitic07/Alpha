@@ -57,6 +57,10 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
   const filteredData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
+    // Filter out data points where both XIRR and CAGR are null/undefined to avoid Recharts domain auto-calc collapse
+    const validData = data.filter(d => d.xirr != null || d.cagr != null);
+    if (validData.length === 0) return [];
+
     const now = new Date();
     let startDate: Date;
 
@@ -68,10 +72,10 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
       case '1Y': startDate = subYears(now, 1); break;
       case 'ALL':
       default:
-        return data;
+        return validData;
     }
 
-    return data.filter(d => {
+    return validData.filter(d => {
       const date = typeof d.date === 'string' ? parseISO(d.date) : new Date(d.date);
       return date >= startDate;
     });
@@ -188,9 +192,9 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
       </div>
 
       {/* Chart */}
-      <div className="flex-1 h-[300px] md:h-[380px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+      <div className="h-[300px] md:h-[450px] w-full mt-4">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 10 }}>
             <defs>
               <linearGradient id="xirrGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={XIRR_COLOR} stopOpacity={0.15} />
@@ -202,22 +206,24 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
               </linearGradient>
             </defs>
 
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
 
             <XAxis
               dataKey="dateStr"
+              stroke="#6b7280"
               ticks={monthTicks}
               tickFormatter={v => format(parseISO(v), "MMM 'yy")}
-              tick={{ fill: '#6b7280', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
+              tick={{ fill: '#9ca3af', fontSize: 11 }}
+              tickLine={{ stroke: '#4b5563' }}
+              axisLine={{ stroke: '#374151' }}
             />
 
             <YAxis
+              stroke="#6b7280"
               tickFormatter={v => `${(v * 100).toFixed(0)}%`}
-              tick={{ fill: '#6b7280', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
+              tick={{ fill: '#9ca3af', fontSize: 11 }}
+              tickLine={{ stroke: '#4b5563' }}
+              axisLine={{ stroke: '#374151' }}
               width={48}
             />
 
