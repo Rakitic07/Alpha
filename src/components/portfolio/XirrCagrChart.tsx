@@ -146,7 +146,7 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center">
             <FontAwesomeIcon icon={faChartLine} className="text-emerald-400 text-lg" />
           </div>
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">XIRR &amp; CAGR (Annualised)</span>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">XIRR &amp; CAGR</span>
         </div>
 
         {/* Date Range Toggle */}
@@ -163,38 +163,10 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
         </ToggleButtonGroup>
       </div>
 
-      {/* Series Legend Pills */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        <button
-          onClick={() => setVisibleXirr(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-            visibleXirr
-              ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10'
-              : 'border-white/10 text-gray-500 bg-white/5 grayscale opacity-40'
-          }`}
-        >
-          <span className="w-4 h-0.5 bg-emerald-400 inline-block rounded" />
-          XIRR
-        </button>
-        {hasCagr && (
-          <button
-            onClick={() => setVisibleCagr(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-              visibleCagr
-                ? 'border-violet-500/40 text-violet-400 bg-violet-500/10'
-                : 'border-white/10 text-gray-500 bg-white/5 grayscale opacity-40'
-            }`}
-          >
-            <span className="w-4 h-0.5 bg-violet-400 inline-block rounded border-dashed" style={{ borderTop: '2px dashed #8b5cf6', background: 'none' }} />
-            CAGR (NAV-derived)
-          </button>
-        )}
-      </div>
-
       {/* Chart */}
       <div className="h-[300px] md:h-[450px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 10 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -10, bottom: 10 }}>
             <defs>
               <linearGradient id="xirrGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={XIRR_COLOR} stopOpacity={0.15} />
@@ -212,7 +184,7 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
               dataKey="dateStr"
               stroke="#6b7280"
               ticks={monthTicks}
-              tickFormatter={v => format(parseISO(v), "MMM 'yy")}
+              tickFormatter={v => format(parseISO(v), "MMM ''yy")}
               tick={{ fill: '#9ca3af', fontSize: 11 }}
               tickLine={{ stroke: '#4b5563' }}
               axisLine={{ stroke: '#374151' }}
@@ -251,7 +223,6 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
                 name="CAGR"
                 stroke={CAGR_COLOR}
                 strokeWidth={2}
-                strokeDasharray="6 3"
                 dot={false}
                 connectNulls
                 activeDot={{ r: 4, fill: CAGR_COLOR, strokeWidth: 0 }}
@@ -259,6 +230,35 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
             )}
           </ComposedChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Custom Legend at Bottom (matching Equity Curve style) */}
+      <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4">
+        {[
+          { key: 'xirr', label: 'XIRR', color: XIRR_COLOR, visible: visibleXirr, setVisible: setVisibleXirr },
+          ...(hasCagr ? [{ key: 'cagr', label: 'CAGR', color: CAGR_COLOR, visible: visibleCagr, setVisible: setVisibleCagr }] : [])
+        ].map((item) => {
+          const isHidden = !item.visible;
+
+          return (
+            <button 
+              key={item.key}
+              onClick={() => item.setVisible(v => !v)}
+              className={`
+                flex items-center gap-2 py-1 transition-all duration-200 cursor-pointer
+                ${isHidden ? 'opacity-40 grayscale' : 'opacity-70 hover:opacity-100'}
+              `}
+            >
+              <span 
+                className="w-6 h-1.5 rounded-full shadow-sm" 
+                style={{ backgroundColor: item.color }} 
+              />
+              <span className={`text-[11px] font-medium tracking-wide ${isHidden ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
