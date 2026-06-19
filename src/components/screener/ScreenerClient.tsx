@@ -500,16 +500,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     <td className="flex flex-col px-3 py-3 gap-1.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="font-bold text-base text-white truncate leading-none">{row.symbol}</span>
-                        <Link
-                          href={`/fundamentals/${row.symbol}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="p-1 rounded bg-white/5 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/30 text-zinc-400 hover:text-blue-400 transition-all cursor-pointer shrink-0"
-                          title={`${row.symbol} Fundamentals`}
-                        >
-                          <svg className="w-3 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-                          </svg>
-                        </Link>
                         {/* Exit signal badges */}
                         {exit && activeTab === 'portfolio' && (
                           <span
