@@ -202,6 +202,40 @@ export const XirrCard = memo(function XirrCard({ xirrValue, privacyMode = false 
   );
 });
 
+interface CagrCardProps {
+    cagrValue: number | null;
+    privacyMode?: boolean;
+}
+
+export const CagrCard = memo(function CagrCard({ cagrValue, privacyMode = false }: CagrCardProps) {
+  const isCagrPositive = (cagrValue ?? 0) >= 0;
+
+  return (
+        <div className="glass-card p-6 flex flex-col animate-fade-in-up stagger-5 h-full">
+            <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                isCagrPositive
+                    ? 'bg-gradient-to-br from-violet-500/20 to-violet-500/5'
+                    : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
+                }`}>
+                    <FontAwesomeIcon icon={faChartLine} className={`text-lg ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`} />
+                </div>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">CAGR</span>
+            </div>
+
+            <div className="flex-1 flex flex-col justify-center">
+                <h2 className={`text-4xl font-bold ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
+                    {cagrValue != null ? (
+                        <AnimatedNumber value={cagrValue} suffix="%" decimals={2} />
+                    ) : (
+                        <span className="text-gray-600">—</span>
+                    )}
+                </h2>
+            </div>
+        </div>
+  );
+});
+
 // Deprecated
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
 export default function SummaryCards(props: any) {

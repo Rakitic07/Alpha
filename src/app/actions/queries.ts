@@ -92,6 +92,9 @@ export async function fetchDashboardData() {
     dayChangePercent: 0
   })).sort((a, b) => b.value - a.value);
 
+  const latestSnapshot = snapshots[snapshots.length - 1];
+  const cagrValue = latestSnapshot && latestSnapshot.cagr != null ? latestSnapshot.cagr * 100 : null;
+
   return {
     holdings,
     historicalHoldings,
@@ -109,6 +112,7 @@ export async function fetchDashboardData() {
     totalRealizedPnL,
     totalUnrealizedPnL,
     xirrValue,
+    cagrValue,
     isWeekPositive: dashboardStats.weekReturn >= 0
   };
 }

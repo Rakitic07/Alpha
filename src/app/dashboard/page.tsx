@@ -10,7 +10,7 @@ import {
   faBullseye
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { MainChartCards, PnLCard, XirrCard } from '@/components/portfolio/SummaryCards';
+import { MainChartCards, PnLCard, XirrCard, CagrCard } from '@/components/portfolio/SummaryCards';
 import { WinLossCard, AvgHoldingCard, AvgGainLossCard } from '@/components/portfolio/PortfolioStatsCards';
 import MarketCapCard from '@/components/portfolio/MarketCapCard';
 import ReturnsCard from '@/components/portfolio/ReturnsCard';
@@ -83,6 +83,7 @@ export default function DashboardPage() {
     totalRealizedPnL,
     totalUnrealizedPnL,
     xirrValue,
+    cagrValue,
     isWeekPositive
   } = data;
 
@@ -125,8 +126,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Row 2: Secondary Stats (P/L, XIRR, Holding, Win/Loss) - Equal Widths */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 flex-none h-auto md:h-[180px]">
+      {/* Row 2: Secondary Stats (P/L, XIRR, CAGR, Holding, Win/Loss) - Equal Widths */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-8 flex-none h-auto md:h-[180px]">
         {/* P/L Card */}
         <div className="col-span-1 h-full">
              <PnLCard
@@ -140,6 +141,11 @@ export default function DashboardPage() {
         {/* XIRR Card */}
         <div className="col-span-1 h-full">
             <XirrCard xirrValue={xirrValue} privacyMode={privacyMode} />
+        </div>
+
+        {/* CAGR Card */}
+        <div className="col-span-1 h-full">
+            <CagrCard cagrValue={cagrValue} privacyMode={privacyMode} />
         </div>
 
         {/* Avg Holding */}
