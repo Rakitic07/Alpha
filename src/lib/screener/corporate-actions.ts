@@ -8,6 +8,7 @@ import { prisma } from '@/lib/db';
 import { flushAndRefetchStock } from './prices';
 import { withConcurrency } from './utils';
 import { logger } from '@/lib/logger';
+import { seedATH } from './ath';
 
 const caLogger = logger.scope('CorpActions');
 
@@ -86,6 +87,12 @@ export async function detectAndFlushAnomalies(): Promise<{ flushed: string[] }> 
   if (anomalies.length > 0) {
     const result = await withConcurrency(anomalies, async (a) => {
       await flushAndRefetchStock(a.symbol, a.instrumentKey);
+      try {
+        await seedATH([{ symbol: a.symbol, instrumentKey: a.instrumentKey }]);
+        caLogger.info(`Re-seeded ATH for ${a.symbol} after corporate action anomaly`);
+      } catch (athErr) {
+        caLogger.error(`Failed to re-seed ATH for ${a.symbol}:`, athErr);
+      }
       flushed.push(a.symbol);
     }, 1, 0, 500);
 
