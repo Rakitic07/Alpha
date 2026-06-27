@@ -6,6 +6,7 @@ import { computePortfolioState } from '@/lib/finance/recalculation';
 import { computeReturns, sharpeRatio, PARAMS } from '@/lib/screener/scoring';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
+import { getAllInstrumentData } from '@/lib/instrument-service';
 import { createJob, completeJob, failJob } from '@/lib/jobs';
 
 // ── Types ──
@@ -30,11 +31,13 @@ export interface ScreenerRow {
   inPortfolio: boolean;
   isPreFiltered?: boolean;  // only set for 'all' tab — stock also passes pre-filter
   isUnranked?: boolean;
+  unrankedReason?: string;
   exitSignal?: {
     byRank: boolean;    // rank > 50
     byFilter: boolean;  // below 200 DMA AND athProximity < 0.75
     protected: boolean; // last BUY within 14 days (min hold rule)
     isUnranked: boolean; // not in screener universe (e.g. BE category)
+    unrankedReason?: string;
   };
 }
 
@@ -178,7 +181,7 @@ export async function getScreenerData(
   if (tab === 'portfolio') {
     const unrankedSyms = Array.from(portfolioSymbols).filter(s => !rankedSymbols.has(s));
     if (unrankedSyms.length > 0) {
-      const [prices, athRows, mcapRows, amfiRows, lastScores] = await Promise.all([
+      const [prices, athRows, mcapRows, amfiRows, lastScores, instrumentMap, activeAllScores] = await Promise.all([
         prisma.screenerPrice.findMany({
           where: { symbol: { in: unrankedSyms } },
           orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
@@ -196,6 +199,11 @@ export async function getScreenerData(
           where: { symbol: { in: unrankedSyms }, rankType: 'filtered' },
           orderBy: [{ computedDate: 'desc' }],
           select: { symbol: true, marketCapCr: true, marketCapCategory: true },
+        }),
+        getAllInstrumentData(unrankedSyms),
+        prisma.momentumScore.findMany({
+          where: { symbol: { in: unrankedSyms }, isActive: true, rankType: 'all' },
+          select: { symbol: true },
         }),
       ]);
 
@@ -215,6 +223,7 @@ export async function getScreenerData(
       for (const r of amfiRows) {
         if (!amfiMap.has(r.symbol)) amfiMap.set(r.symbol, { category: r.category, companyName: r.companyName });
       }
+      const activeAllSymbols = new Set(activeAllScores.map(r => r.symbol));
 
       for (const sym of unrankedSyms) {
         const candles = pricesBySymbol.get(sym) || [];
@@ -248,6 +257,57 @@ export async function getScreenerData(
         const marketCapCr = mcapMap.get(sym) ?? lastScore?.marketCapCr ?? 0;
         const marketCapCategory = amfi?.category ?? lastScore?.marketCapCategory ?? null;
 
+        // Compute median daily turnover in Crores
+        const volLookback = PARAMS.volumeLookbackDays;
+        const volWindow: number[] = [];
+        for (let i = Math.max(0, candles.length - volLookback); i < candles.length; i++) {
+          volWindow.push(candles[i].close * candles[i].volume);
+        }
+        const sortedVol = [...volWindow].sort((a, b) => a - b);
+        const mid = Math.floor(sortedVol.length / 2);
+        const medianTurnover = sortedVol.length === 0 ? 0 :
+          (sortedVol.length % 2 !== 0 ? sortedVol[mid] : (sortedVol[mid - 1] + sortedVol[mid]) / 2);
+        const medianTurnoverCr = medianTurnover / 1e7;
+
+        // Determine specific exclusion reason
+        const instData = instrumentMap.get(sym);
+        const isBE = instData?.instrumentType === 'BE' || sym.endsWith('-BE');
+
+        let unrankedReason = 'Dropped from screener universe';
+        if (isBE) {
+          unrankedReason = 'BE category (settlement restrictions)';
+        } else if (marketCapCr > 0 && marketCapCr < PARAMS.mcapMinCr) {
+          unrankedReason = `Market cap below threshold (₹${marketCapCr.toFixed(0)} Cr < ₹${PARAMS.mcapMinCr} Cr)`;
+        } else if (closes.length < 269) {
+          unrankedReason = `Insufficient price history (${closes.length} of 269 days)`;
+        } else if (closes.length >= 269 && compositeScore === 0) {
+          unrankedReason = 'Missing/invalid price data';
+        } else {
+          // If in active all ranking but not filtered, determine which filter failed
+          if (activeAllSymbols.has(sym)) {
+            const failedFilters: string[] = [];
+            if (d200 === null || price < d200) {
+              failedFilters.push('Price < 200 DMA');
+            }
+            if (price < PARAMS.minPrice) {
+              failedFilters.push(`Price < ₹${PARAMS.minPrice}`);
+            }
+            if (athProximity < 0.70) {
+              failedFilters.push(`ATH proximity < 70% (${(athProximity * 100).toFixed(0)}%)`);
+            }
+            if (medianTurnoverCr < PARAMS.volumeThresholdCr) {
+              failedFilters.push(`Median daily turnover < ₹${PARAMS.volumeThresholdCr} Cr (₹${medianTurnoverCr.toFixed(1)} Cr)`);
+            }
+            if (failedFilters.length > 0) {
+              unrankedReason = `Failed filters: ${failedFilters.join(', ')}`;
+            } else {
+              unrankedReason = 'Outside top rankings';
+            }
+          } else {
+            unrankedReason = 'Excluded from screener universe';
+          }
+        }
+
         allRows.push({
           rank: 9999,
           symbol: sym,
@@ -264,7 +324,7 @@ export async function getScreenerData(
             above100: d100 !== null && price >= d100,
             above200: d200 !== null && price >= d200,
           },
-          medianTurnoverCr: 0,
+          medianTurnoverCr,
           marketCapCr,
           marketCapCategory,
           sparklineData: closes.slice(-50),
@@ -273,6 +333,7 @@ export async function getScreenerData(
           rankChange: null,
           inPortfolio: true,
           isUnranked: true,
+          unrankedReason,
         });
       }
     }
@@ -304,7 +365,7 @@ export async function getScreenerData(
       if (!byRank && !byFilter) continue;
       const ageDays     = holdingAgeDays.get(row.symbol) ?? 9999;
       const isProtected = ageDays < 14;
-      row.exitSignal = { byRank, byFilter, protected: isProtected, isUnranked };
+      row.exitSignal = { byRank, byFilter, protected: isProtected, isUnranked, unrankedReason: row.unrankedReason };
     }
   }
 
