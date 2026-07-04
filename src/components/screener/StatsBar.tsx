@@ -43,9 +43,9 @@ export default memo(function StatsBar({ stats, activeTab, onTabChange, filteredC
       <div className={`flex items-center gap-4 text-[11px] transition-opacity duration-150 ${activeTab !== 'portfolio' ? 'opacity-0 pointer-events-none' : ''}`}>
           {/* Portfolio rank buckets */}
           <div className="flex items-center gap-2 bg-slate-800/30 border border-white/5 rounded-lg px-3 py-1.5">
-            <StatPill label="HOLD" value={rankBuckets.hold} color="text-emerald-400" icon="🟢" />
-            <StatPill label="WARN" value={rankBuckets.warning} color="text-yellow-400" icon="🟡" />
-            <StatPill label="EXIT" value={rankBuckets.exit} color="text-red-400" icon="🔴" />
+            <StatPill label="HOLD" value={rankBuckets.hold} color="text-emerald-400" />
+            <StatPill label="WARN" value={rankBuckets.warning} color="text-yellow-400" />
+            <StatPill label="EXIT" value={rankBuckets.exit} color="text-red-400" />
           </div>
 
           {/* Market cap breakdown */}
@@ -60,12 +60,10 @@ export default memo(function StatsBar({ stats, activeTab, onTabChange, filteredC
   );
 });
 
-function StatPill({ label, value, color, icon }: { label: string; value: number; color: string; icon?: string }) {
+function StatPill({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className="flex flex-col items-center">
-      <span className="text-gray-500 font-medium uppercase tracking-wider" style={{ fontSize: '9px' }}>
-        {icon && <span className="mr-0.5" style={{ fontSize: '8px' }}>{icon}</span>}{label}
-      </span>
+      <span className="text-gray-500 font-medium uppercase tracking-wider" style={{ fontSize: '9px' }}>{label}</span>
       <span className={`font-bold tabular-nums ${color}`}>{value}</span>
     </div>
   );

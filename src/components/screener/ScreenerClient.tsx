@@ -293,9 +293,31 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
   const displayRows = useMemo(() => {
     return [...rows].sort((a, b) => {
+      // For rank sort: unranked stocks (rank=9999, e.g. BE) are placed
+      // by their compositeScore relative to ranked stocks so they appear
+      // at their natural score position rather than pinned to the bottom.
+      if (sortField === 'rank' || sortField === 'default') {
+        const aUnranked = a.rank === 9999;
+        const bUnranked = b.rank === 9999;
+        if (!aUnranked && !bUnranked) {
+          // Both ranked — sort by rank asc/desc normally
+          return sortDir === 'asc' ? a.rank - b.rank : b.rank - a.rank;
+        }
+        if (aUnranked && bUnranked) {
+          // Both unranked — sort by score desc (higher score = better position)
+          return b.compositeScore - a.compositeScore;
+        }
+        // One ranked, one unranked: find where unranked's score fits
+        const rankedRow = aUnranked ? b : a;
+        const unrankedRow = aUnranked ? a : b;
+        // Unranked goes after ranked stock if ranked score > unranked score
+        const cmp = rankedRow.compositeScore - unrankedRow.compositeScore;
+        // aUnranked: a is unranked; if cmp > 0 ranked is better, so a goes after => +1
+        return aUnranked ? cmp : -cmp;
+      }
+
       let cmp = 0;
       switch (sortField) {
-        case 'rank':   cmp = a.rank - b.rank; break;
         case 'symbol': cmp = a.symbol.localeCompare(b.symbol); break;
         case 'mcap':   cmp = a.marketCapCr - b.marketCapCr; break;
         case 'dd':     cmp = a.athProximity - b.athProximity; break;

@@ -342,20 +342,6 @@ export async function getScreenerData(
     }
   }
 
-  const stats = await computeStats(allRows, portfolioSymbols.size, portfolioSymbols);
-
-  // Mcap breakdown by actual portfolio position value (qty × currentPrice)
-  let mcLarge = 0, mcMid = 0, mcSmall = 0, mcMicro = 0;
-  for (const r of allRows) {
-    if (!r.inPortfolio || r.currentPrice <= 0) continue;
-    const posVal = (holdingQty.get(r.symbol) || 0) * r.currentPrice;
-    const cat = r.marketCapCategory?.toLowerCase() || '';
-    if (cat.includes('large')) mcLarge += posVal;
-    else if (cat.includes('mid')) mcMid += posVal;
-    else if (cat.includes('small')) mcSmall += posVal;
-    else if (r.marketCapCategory) mcMicro += posVal;
-  }
-  stats.mcapBreakdown = { large: mcLarge, mid: mcMid, small: mcSmall, micro: mcMicro };
 
   // Exit signal detection for portfolio stocks
   const portfolioSymArr = Array.from(portfolioSymbols);
@@ -387,6 +373,7 @@ export async function getScreenerData(
     }
   }
 
+  // Filter rows by tab BEFORE computing stats so signal counts reflect the right set
   let rows: ScreenerRow[];
   switch (tab) {
     case 'portfolio':
@@ -395,6 +382,22 @@ export async function getScreenerData(
     default:
       rows = allRows;
   }
+
+  // Compute stats AFTER exit signals are set so hold/warn/exit counts are correct
+  const stats = await computeStats(rows, portfolioSymbols.size, portfolioSymbols);
+
+  // Mcap breakdown by actual portfolio position value (qty × currentPrice)
+  let mcLarge = 0, mcMid = 0, mcSmall = 0, mcMicro = 0;
+  for (const r of rows) {
+    if (!r.inPortfolio || r.currentPrice <= 0) continue;
+    const posVal = (holdingQty.get(r.symbol) || 0) * r.currentPrice;
+    const cat = r.marketCapCategory?.toLowerCase() || '';
+    if (cat.includes('large')) mcLarge += posVal;
+    else if (cat.includes('mid')) mcMid += posVal;
+    else if (cat.includes('small')) mcSmall += posVal;
+    else if (r.marketCapCategory) mcMicro += posVal;
+  }
+  stats.mcapBreakdown = { large: mcLarge, mid: mcMid, small: mcSmall, micro: mcMicro };
 
   return { rows, stats };
 }
