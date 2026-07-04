@@ -20,14 +20,14 @@ function formatMcap(cr: number): string {
 }
 
 const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
-  'Large Cap': { label: 'L', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  'Large':     { label: 'L', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  'Mid Cap':   { label: 'M', cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  'Mid':       { label: 'M', cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  'Small Cap': { label: 'S', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-  'Small':     { label: 'S', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-  'Micro Cap': { label: 'μ', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-  'Micro':     { label: 'μ', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  'Large Cap': { label: 'Large', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  'Large':     { label: 'Large', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  'Mid Cap':   { label: 'Mid',   cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  'Mid':       { label: 'Mid',   cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  'Small Cap': { label: 'Small', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+  'Small':     { label: 'Small', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+  'Micro Cap': { label: 'Micro', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  'Micro':     { label: 'Micro', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
 };
 
 function getRankAccent(rank: number, inPortfolio: boolean): string {
@@ -547,16 +547,10 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             {exit.protected ? 'LOCKED' : exit.signalType === 'yellow' ? 'WARN' : 'EXIT'}
                           </span>
                         )}
-                        {/* Holding icon — portfolio stock in All tab */}
-                        {isAllTab && row.inPortfolio && (
-                          <svg className="w-3 h-3 shrink-0 text-emerald-400" viewBox="0 0 16 16" fill="currentColor" aria-label="In portfolio">
-                            <path d="M6 2a1 1 0 0 0-1 1v1H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-2V3a1 1 0 0 0-1-1H6zm0 1h4v1H6V3zm-3 3h10v2H3V6zm0 3h4v3H3V9zm5 0h5v3H8V9z"/>
-                          </svg>
-                        )}
                         {(() => {
                           const b = MCAP_BADGE[row.marketCapCategory || ''];
                           return b ? (
-                            <span className={`text-[9px] px-0.5 h-3.5 border rounded leading-none shrink-0 flex items-center ${b.cls}`}>
+                            <span className={`text-[9px] px-1.5 h-4 border rounded font-medium leading-none shrink-0 flex items-center ${b.cls}`}>
                               {b.label}
                             </span>
                           ) : null;
