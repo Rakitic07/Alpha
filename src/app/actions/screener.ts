@@ -37,7 +37,10 @@ export interface ScreenerRow {
     byFilter: boolean;  // below 200 DMA AND athProximity < 0.75
     protected: boolean; // last BUY within 14 days (min hold rule)
     isUnranked: boolean; // not in screener universe (e.g. BE category)
+    isBE: boolean;       // specifically moved to BE (T+0 settlement) category
     unrankedReason?: string;
+    // Signal classification
+    signalType: 'green' | 'yellow' | 'red';
   };
 }
 
@@ -46,7 +49,7 @@ export interface ScreenerStats {
   allTotal: number;
   portfolioCount: number;
   rankedPortfolioCount: number;
-  rankBuckets: { top25: number; top50: number; above50: number };
+  rankBuckets: { hold: number; warning: number; exit: number };
   mcapBreakdown: { large: number; mid: number; small: number; micro: number };
   dataDate: string | null;
 }
@@ -124,7 +127,7 @@ export async function getScreenerData(
       rows: [],
       stats: {
         total: 0, allTotal: 0, portfolioCount: 0, rankedPortfolioCount: 0,
-        rankBuckets: { top25: 0, top50: 0, above50: 0 },
+        rankBuckets: { hold: 0, warning: 0, exit: 0 },
         mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0 },
         dataDate: null,
       },
@@ -360,12 +363,27 @@ export async function getScreenerData(
     for (const row of allRows) {
       if (!row.inPortfolio) continue;
       const isUnranked = row.isUnranked === true;
+      const isBE = isUnranked && (row.unrankedReason?.includes('BE category') ?? false);
       const byRank   = isUnranked || row.rank > 50;
       const byFilter = !row.dmaSwatches.above200 && row.athProximity < 0.75;
       if (!byRank && !byFilter) continue;
       const ageDays     = holdingAgeDays.get(row.symbol) ?? 9999;
       const isProtected = ageDays < 14;
-      row.exitSignal = { byRank, byFilter, protected: isProtected, isUnranked, unrankedReason: row.unrankedReason };
+
+      // Determine signal type:
+      // Yellow: BE category (warning — exit signal but treated as caution)
+      //         OR rank in 51-60 range (borderline)
+      // Red: rank > 60, or below-filter exit, or other unranked reasons
+      let signalType: 'green' | 'yellow' | 'red';
+      if (isBE) {
+        signalType = 'yellow';
+      } else if (!isUnranked && row.rank >= 51 && row.rank <= 60) {
+        signalType = 'yellow';
+      } else {
+        signalType = 'red';
+      }
+
+      row.exitSignal = { byRank, byFilter, protected: isProtected, isUnranked, isBE, unrankedReason: row.unrankedReason, signalType };
     }
   }
 
@@ -388,15 +406,17 @@ async function computeStats(
   portfolioCount: number = 0,
   portfolioSymbols?: Set<string>,
 ): Promise<ScreenerStats> {
-  // Rank-bucket pills — derived from current rows (only meaningful on portfolio tab)
-  let top25 = 0, top50 = 0;
+  // Signal bucket counts for portfolio tab (hold/warning/exit)
+  let holdCount = 0, warningCount = 0, exitCount = 0;
   for (const r of rows) {
-    if (r.inPortfolio && !r.isUnranked) {
-      if (r.rank <= 25) top25++;
-      else if (r.rank <= 50) top50++;
+    if (!r.inPortfolio) continue;
+    if (r.exitSignal) {
+      if (r.exitSignal.signalType === 'yellow') warningCount++;
+      else exitCount++;
+    } else {
+      holdCount++;
     }
   }
-  const above50 = Math.max(0, portfolioCount - top25 - top50);
 
   // Always query canonical counts regardless of which tab's rows we received
   const symList = portfolioSymbols && portfolioSymbols.size > 0 ? [...portfolioSymbols] : [];
@@ -413,7 +433,7 @@ async function computeStats(
     allTotal,                      // always all-universe count
     portfolioCount,                // always total portfolio size (holdings)
     rankedPortfolioCount,          // portfolio stocks in pre-filtered set
-    rankBuckets: { top25, top50, above50 },
+    rankBuckets: { hold: holdCount, warning: warningCount, exit: exitCount },
     mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0 },
     dataDate: null,
   };

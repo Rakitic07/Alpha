@@ -427,10 +427,10 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                   </td>
                 </tr>
               ) : displayRows.map(row => {
-                const isUnranked = row.isUnranked;
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
-                const isExitCandidate = !!exit && !exit.protected;
-                const isProtected    = !!exit && exit.protected;
+                const isExitCandidate = !!exit && exit.signalType === 'red' && !exit.protected;
+                const isWarning        = !!exit && exit.signalType === 'yellow';
+                const isProtected      = !!exit && exit.protected;
 
                 // All-tab tier: portfolio > pre-filtered > universe-only
                 const isAllTab = activeTab === 'all';
@@ -445,16 +445,19 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                   : 'rgb(39,39,42)'
                   : isExitCandidate
                     ? 'rgb(239,68,68)'
-                    : isUnranked || isProtected
-                      ? 'rgb(63,63,70)'
-                      : getRankAccent(row.rank, row.inPortfolio);
+                    : isWarning
+                      ? 'rgb(234,179,8)'
+                      : row.isUnranked || isProtected
+                        ? 'rgb(63,63,70)'
+                        : getRankAccent(row.rank, row.inPortfolio);
 
                 const rowBg = isAllTab
                   ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
                   : 'bg-zinc-950 hover:bg-zinc-800/40'
                   : isExitCandidate           ? 'bg-rose-950/30 hover:bg-rose-950/40'
+                  : isWarning                 ? 'bg-yellow-950/20 hover:bg-yellow-950/30'
                   : isProtected               ? 'bg-zinc-950 hover:bg-zinc-800/60'
-                  : isUnranked                ? 'bg-zinc-950'
+                  : row.isUnranked            ? 'bg-zinc-950'
                   : row.inPortfolio && activeTab !== 'portfolio' ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
                   : 'bg-zinc-950 hover:bg-zinc-800/60';
 
@@ -471,7 +474,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                   >
                     {/* Rank — left accent bar */}
                     <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 4px 0 0 ${accentColor}` }}>
-                      {isUnranked ? (
+                      {row.isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
                       ) : (
                         <span className={`font-mono text-xl font-black tabular-nums leading-none ${
@@ -487,7 +490,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
                     {/* Rank change */}
                     <td className="px-1 py-3 text-center">
-                      {!isUnranked && (
+                      {!row.isUnranked && (
                         row.rankChange == null || row.rankChange === 0
                           ? <span className="text-zinc-600 text-xs">—</span>
                           : <span className={`font-mono text-xs font-semibold tabular-nums ${row.rankChange > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -500,22 +503,26 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     <td className="flex flex-col px-3 py-3 gap-1.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="font-bold text-base text-white truncate leading-none">{row.symbol}</span>
-                        {/* Exit signal badges */}
+                        {/* Exit / Warning signal badges */}
                         {exit && activeTab === 'portfolio' && (
                           <span
                             className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-bold border tracking-wide ${
                               exit.protected
                                 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                : exit.signalType === 'yellow'
+                                  ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+                                  : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                             }`}
                             title={[
-                              exit.isUnranked ? (exit.unrankedReason ? `① ${exit.unrankedReason}` : '① Dropped from screener universe') :
-                              exit.byRank   ? '① Rank > 50' : '',
+                              exit.isUnranked
+                                ? (exit.unrankedReason ? `① ${exit.unrankedReason}` : '① Dropped from screener universe')
+                                : exit.byRank ? (exit.isBE ? '① BE category (settlement restrictions)' : `① Rank > ${exit.signalType === 'yellow' ? '50 (borderline 51-60)' : '60'}`) : '',
                               exit.byFilter ? '② Below 200 DMA & outside 25% of ATH' : '',
                               exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
+                              exit.signalType === 'yellow' && !exit.protected ? '⚠️ Warning — monitor closely' : '',
                             ].filter(Boolean).join('\n')}
                           >
-                            {exit.protected ? 'LOCKED' : 'EXIT'}
+                            {exit.protected ? 'LOCKED' : exit.signalType === 'yellow' ? 'WARN' : 'EXIT'}
                           </span>
                         )}
                         {/* Holding icon — portfolio stock in All tab */}
@@ -552,10 +559,10 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
                     {/* Score */}
                     <td className="px-1 py-3 text-center">
-                      {isUnranked && row.compositeScore === 0 ? (
+                      {row.isUnranked && row.compositeScore === 0 ? (
                         <span className="text-zinc-700 text-xs">—</span>
                       ) : (
-                        <span className={`font-mono text-xs font-semibold tabular-nums ${isUnranked ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                        <span className={`font-mono text-xs font-semibold tabular-nums ${row.isUnranked ? 'text-zinc-500' : 'text-zinc-300'}`}>
                           {row.compositeScore.toFixed(2)}
                         </span>
                       )}
