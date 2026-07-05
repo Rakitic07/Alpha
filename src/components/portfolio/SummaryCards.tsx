@@ -239,7 +239,7 @@ export const PnLRow = memo(function PnLRow({
                 iconBg={realizedPnL >= 0 ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5' : 'bg-gradient-to-br from-red-500/20 to-red-500/5'}
                 iconColor={realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
                 value={realizedPnL}
-                prefix={realizedPnL >= 0 ? '+₹' : '-₹'}
+                prefix={realizedPnL >= 0 ? '₹' : '-₹'}
                 valueColor={realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
                 privacyMode={privacyMode}
             />
@@ -251,7 +251,7 @@ export const PnLRow = memo(function PnLRow({
                 iconBg={unrealizedPnL >= 0 ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5' : 'bg-gradient-to-br from-red-500/20 to-red-500/5'}
                 iconColor={unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
                 value={unrealizedPnL}
-                prefix={unrealizedPnL >= 0 ? '+₹' : '-₹'}
+                prefix={unrealizedPnL >= 0 ? '₹' : '-₹'}
                 valueColor={unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
                 privacyMode={privacyMode}
             />
@@ -294,7 +294,7 @@ export const PnLRow = memo(function PnLRow({
                         {privacyMode ? '****' : (
                             <AnimatedNumber
                                 value={Math.abs(netPnL)}
-                                prefix={isNetPositive ? '+₹' : '-₹'}
+                                prefix={isNetPositive ? '₹' : '-₹'}
                                 formatOptions={{ maximumFractionDigits: 0 }}
                             />
                         )}
