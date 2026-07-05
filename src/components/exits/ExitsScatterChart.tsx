@@ -29,6 +29,7 @@ interface ChartDataPoint {
   y: number;        // holding period in days
   symbol: string;
   gainLoss: number;
+  netGainLoss: number;
   size: number;     // bubble size value
   color: string;    // bubble color based on gain/loss
 }
@@ -40,6 +41,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload as ChartDataPoint;
     const isGain = data.x >= 0;
+    const netIsGain = data.netGainLoss >= 0;
     
     return (
       <div className="glass-card p-3 border border-white/10 shadow-xl bg-black/90 backdrop-blur-md min-w-[180px]">
@@ -56,9 +58,15 @@ const CustomTooltip = ({ active, payload }: any) => {
             <span className="font-mono text-gray-200">{data.y} days</span>
           </div>
           <div className="flex justify-between gap-6">
-            <span className="text-gray-400">P&L</span>
+            <span className="text-gray-400">Gross P&L</span>
             <span className={`font-mono font-medium ${data.gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {privacyMode ? '••••' : formatCurrency(data.gainLoss, 0, 0)}
+            </span>
+          </div>
+          <div className="flex justify-between gap-6 border-t border-white/10 pt-1">
+            <span className="text-gray-400">Net P&L</span>
+            <span className={`font-mono font-semibold ${netIsGain ? 'text-emerald-400' : 'text-red-400'}`}>
+              {privacyMode ? '••••' : formatCurrency(data.netGainLoss, 0, 0)}
             </span>
           </div>
         </div>
@@ -117,6 +125,7 @@ export default function ExitsScatterChart({ exits }: ExitsScatterChartProps) {
         y: exit.timeHeld,
         symbol: exit.symbol,
         gainLoss: exit.gainLoss,
+        netGainLoss: exit.netGainLoss ?? exit.gainLoss,
         size: 100, // Reduced size
         color: getPointColor(exit.changePercent),
       };

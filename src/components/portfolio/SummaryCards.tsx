@@ -31,11 +31,16 @@ interface PnLCardProps {
     totalPnL: number;
     realizedPnL: number;
     unrealizedPnL: number;
+    totalCharges?: number;
+    totalTax?: number;
     privacyMode?: boolean;
 }
 
 interface XirrCardProps {
     xirrValue: number;
+    totalCharges?: number;
+    totalTax?: number;
+    totalInvested?: number;
     privacyMode?: boolean;
 }
 
@@ -134,8 +139,9 @@ export const MainChartCards = memo(function MainChartCards({
   );
 });
 
-export const PnLCard = memo(function PnLCard({ totalPnL, realizedPnL, unrealizedPnL, privacyMode = false }: PnLCardProps) {
+export const PnLCard = memo(function PnLCard({ totalPnL, realizedPnL, unrealizedPnL, totalCharges = 0, totalTax = 0, privacyMode = false }: PnLCardProps) {
   const isProfit = totalPnL >= 0;
+  const netRealizedPnL = realizedPnL - totalCharges - totalTax;
 
   return (
         <div className="glass-card p-6 flex flex-col justify-between animate-fade-in-up stagger-4 h-full">
@@ -166,6 +172,26 @@ export const PnLCard = memo(function PnLCard({ totalPnL, realizedPnL, unrealized
                     {privacyMode ? '****' : <AnimatedNumber value={Math.abs(realizedPnL)} prefix={realizedPnL >= 0 ? '+' : '-'} formatOptions={{ maximumFractionDigits: 0 }} />}
                 </span>
              </div>
+             {totalCharges > 0 && (
+               <div className="flex justify-between pl-3">
+                 <span className="text-gray-600 font-medium">↳ Charges</span>
+                 <span className="font-mono text-orange-400/80">−{privacyMode ? '****' : <AnimatedNumber value={totalCharges} formatOptions={{ maximumFractionDigits: 0 }} />}</span>
+               </div>
+             )}
+             {totalTax > 0 && (
+               <div className="flex justify-between pl-3">
+                 <span className="text-gray-600 font-medium">↳ Tax (STCG/LTCG)</span>
+                 <span className="font-mono text-yellow-400/80">−{privacyMode ? '****' : <AnimatedNumber value={totalTax} formatOptions={{ maximumFractionDigits: 0 }} />}</span>
+               </div>
+             )}
+             {(totalCharges > 0 || totalTax > 0) && (
+               <div className="flex justify-between border-t border-gray-700/30 pt-1">
+                 <span className="text-gray-500 font-semibold">Net Realized</span>
+                 <span className={`font-semibold ${netRealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                   {privacyMode ? '****' : <AnimatedNumber value={Math.abs(netRealizedPnL)} prefix={netRealizedPnL >= 0 ? '+' : '-'} formatOptions={{ maximumFractionDigits: 0 }} />}
+                 </span>
+               </div>
+             )}
              <div className="flex justify-between">
                 <span className="text-gray-500 font-medium">Unrealized</span>
                 <span className={`font-semibold ${unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -177,8 +203,12 @@ export const PnLCard = memo(function PnLCard({ totalPnL, realizedPnL, unrealized
   );
 });
 
-export const XirrCard = memo(function XirrCard({ xirrValue, privacyMode = false }: XirrCardProps) {
+export const XirrCard = memo(function XirrCard({ xirrValue, totalCharges = 0, totalTax = 0, totalInvested = 0, privacyMode = false }: XirrCardProps) {
   const isXirrPositive = xirrValue >= 0;
+  // Post-charges drag: (charges + tax) as % of invested, then subtract from XIRR as rough proxy
+  const chargeDragPct = totalInvested > 0 ? ((totalCharges + totalTax) / totalInvested) * 100 : 0;
+  const postChargesXirr = xirrValue - chargeDragPct;
+  const hasCharges = chargeDragPct > 0;
 
   return (
         <div className="glass-card p-6 flex flex-col animate-fade-in-up stagger-5 h-full">
@@ -197,6 +227,14 @@ export const XirrCard = memo(function XirrCard({ xirrValue, privacyMode = false 
                 <h2 className={`text-4xl font-bold ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`}>
                     <AnimatedNumber value={xirrValue} suffix="%" decimals={2} />
                 </h2>
+                {hasCharges && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500 font-medium">Post charges</span>
+                    <span className={`text-xs font-semibold ${postChargesXirr >= 0 ? 'text-fuchsia-400/60' : 'text-red-400/80'}`}>
+                      <AnimatedNumber value={postChargesXirr} suffix="%" decimals={2} />
+                    </span>
+                  </div>
+                )}
             </div>
         </div>
   );
@@ -204,11 +242,17 @@ export const XirrCard = memo(function XirrCard({ xirrValue, privacyMode = false 
 
 interface CagrCardProps {
     cagrValue: number | null;
+    totalCharges?: number;
+    totalTax?: number;
+    totalInvested?: number;
     privacyMode?: boolean;
 }
 
-export const CagrCard = memo(function CagrCard({ cagrValue, privacyMode = false }: CagrCardProps) {
+export const CagrCard = memo(function CagrCard({ cagrValue, totalCharges = 0, totalTax = 0, totalInvested = 0, privacyMode = false }: CagrCardProps) {
   const isCagrPositive = (cagrValue ?? 0) >= 0;
+  const chargeDragPct = totalInvested > 0 ? ((totalCharges + totalTax) / totalInvested) * 100 : 0;
+  const postChargesCagr = cagrValue != null ? cagrValue - chargeDragPct : null;
+  const hasCharges = chargeDragPct > 0 && cagrValue != null;
 
   return (
         <div className="glass-card p-6 flex flex-col animate-fade-in-up stagger-5 h-full">
@@ -231,6 +275,14 @@ export const CagrCard = memo(function CagrCard({ cagrValue, privacyMode = false 
                         <span className="text-gray-600">—</span>
                     )}
                 </h2>
+                {hasCharges && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500 font-medium">Post charges</span>
+                    <span className={`text-xs font-semibold ${(postChargesCagr ?? 0) >= 0 ? 'text-violet-400/60' : 'text-red-400/80'}`}>
+                      <AnimatedNumber value={postChargesCagr!} suffix="%" decimals={2} />
+                    </span>
+                  </div>
+                )}
             </div>
         </div>
   );

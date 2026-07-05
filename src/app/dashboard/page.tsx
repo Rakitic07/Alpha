@@ -82,6 +82,8 @@ export default function DashboardPage() {
     totalPnL,
     totalRealizedPnL,
     totalUnrealizedPnL,
+    totalCharges,
+    totalTax,
     xirrValue,
     cagrValue,
     isWeekPositive
@@ -134,18 +136,20 @@ export default function DashboardPage() {
                 totalPnL={totalPnL}
                 realizedPnL={totalRealizedPnL}
                 unrealizedPnL={totalUnrealizedPnL}
+                totalCharges={totalCharges}
+                totalTax={totalTax}
                 privacyMode={privacyMode}
              />
         </div>
 
         {/* XIRR Card */}
         <div className="col-span-1 h-full">
-            <XirrCard xirrValue={xirrValue} privacyMode={privacyMode} />
+            <XirrCard xirrValue={xirrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
         </div>
 
         {/* CAGR Card */}
         <div className="col-span-1 h-full">
-            <CagrCard cagrValue={cagrValue} privacyMode={privacyMode} />
+            <CagrCard cagrValue={cagrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
         </div>
 
         {/* Avg Holding */}

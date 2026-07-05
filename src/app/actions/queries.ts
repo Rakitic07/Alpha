@@ -2,6 +2,7 @@
 
 import { getPortfolioHoldings, getHistoricalPortfolioHoldings, getLatestPortfolioStats, getDashboardStats, calculatePortfolioXIRR } from '@/lib/finance';
 import { getPortfolioExits } from '@/lib/exits';
+import { calculateNetCapitalGainsTax } from '@/lib/charges';
 import { prisma } from '@/lib/db';
 import { getWeeklySnapshots } from '@/app/actions/snapshots';
 import { PortfolioHolding, SectorAllocation } from '@/lib/types';
@@ -95,6 +96,11 @@ export async function fetchDashboardData() {
   const latestSnapshot = snapshots[snapshots.length - 1];
   const cagrValue = latestSnapshot && latestSnapshot.cagr != null ? latestSnapshot.cagr * 100 : null;
 
+  // Aggregate charges & net tax from exits (zero extra DB calls)
+  // Tax uses portfolio-level netting: losses offset gains before applying rate
+  const totalCharges = exits.reduce((sum, e) => sum + (e.chargesBreakdown?.totalCharges ?? 0), 0);
+  const { totalTax } = calculateNetCapitalGainsTax(exits.map(e => ({ gainLoss: e.gainLoss, timeHeld: e.timeHeld })));
+
   return {
     holdings,
     historicalHoldings,
@@ -111,6 +117,8 @@ export async function fetchDashboardData() {
     totalPnL,
     totalRealizedPnL,
     totalUnrealizedPnL,
+    totalCharges,
+    totalTax,
     xirrValue,
     cagrValue,
     isWeekPositive: dashboardStats.weekReturn >= 0

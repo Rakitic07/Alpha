@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { differenceInCalendarDays } from 'date-fns';
 import type { MarketCapCategory } from './amfi';
 import { getCategoriesBatch, mapAMFIToMarketCapCategory, getSymbolResolver } from './amfi';
+import { calculateBrokerageCharges, calculateCapitalGainsTax, ChargesBreakdown, TaxBreakdown } from './charges';
 
 export interface ExitRecord {
     id: string; // Composite ID
@@ -12,9 +13,13 @@ export interface ExitRecord {
     buyPrice: number; // Avg buy price
     sellPrice: number; // Avg sell price
     changePercent: number;
-    gainLoss: number;
+    gainLoss: number;           // Gross P&L (before charges & tax)
     timeHeld: number; // Days
     marketCapCategory?: MarketCapCategory;
+    // Computed cost fields
+    chargesBreakdown?: ChargesBreakdown; // Itemized transaction charges
+    taxBreakdown?: TaxBreakdown;         // STCG or LTCG tax
+    netGainLoss?: number;                // gainLoss - totalCharges - taxAmount
 }
 
 interface TradeCycle {
@@ -95,6 +100,13 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
                     const amfiCategory = categoriesMap.get(tx.symbol) || 'Small';
                     const marketCapCategory = mapAMFIToMarketCapCategory(amfiCategory);
 
+                    // Compute charges and tax
+                    const buyValue = existingCycle.cumulativeCost;
+                    const sellValue = existingCycle.cumulativeRevenue;
+                    const chargesBreakdown = calculateBrokerageCharges(buyValue, sellValue);
+                    const taxBreakdown = calculateCapitalGainsTax(gainLoss, days);
+                    const netGainLoss = gainLoss - chargesBreakdown.totalCharges - taxBreakdown.taxAmount;
+
                     exits.push({
                         id: `${tx.symbol}-${tx.date.toISOString()}`,
                         symbol: tx.symbol,
@@ -106,7 +118,10 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
                         changePercent,
                         gainLoss,
                         timeHeld: days,
-                        marketCapCategory
+                        marketCapCategory,
+                        chargesBreakdown,
+                        taxBreakdown,
+                        netGainLoss,
                     });
 
                     // Clear cycle
