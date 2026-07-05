@@ -126,7 +126,6 @@ const PnLCard = memo(function PnLCard({
             {isPlaceholder ? (
                 <div className="flex-1 flex flex-col justify-center">
                     <div className="text-sm text-gray-600 font-medium">Coming soon</div>
-                    <div className="text-xs text-gray-700 mt-0.5">Not yet tracked</div>
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col justify-center">
@@ -137,7 +136,6 @@ const PnLCard = memo(function PnLCard({
                                 : '—'
                         )}
                     </div>
-                    {subLabel && <div className="text-[10px] text-gray-600 font-medium mt-1">{subLabel}</div>}
                 </div>
             )}
         </div>
@@ -243,7 +241,6 @@ export const PnLRow = memo(function PnLRow({
                 value={realizedPnL}
                 prefix={realizedPnL >= 0 ? '+₹' : '-₹'}
                 valueColor={realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
-                subLabel="from closed trades"
                 privacyMode={privacyMode}
             />
 
@@ -251,12 +248,11 @@ export const PnLRow = memo(function PnLRow({
             <PnLCard
                 label="Unrealized P/L"
                 icon={unrealizedPnL >= 0 ? faArrowTrendUp : faArrowTrendDown}
-                iconBg={unrealizedPnL >= 0 ? 'bg-gradient-to-br from-sky-500/20 to-sky-500/5' : 'bg-gradient-to-br from-red-500/20 to-red-500/5'}
-                iconColor={unrealizedPnL >= 0 ? 'text-sky-400' : 'text-red-400'}
+                iconBg={unrealizedPnL >= 0 ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5' : 'bg-gradient-to-br from-red-500/20 to-red-500/5'}
+                iconColor={unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
                 value={unrealizedPnL}
                 prefix={unrealizedPnL >= 0 ? '+₹' : '-₹'}
-                valueColor={unrealizedPnL >= 0 ? 'text-sky-400' : 'text-red-400'}
-                subLabel="open positions"
+                valueColor={unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
                 privacyMode={privacyMode}
             />
 
@@ -269,7 +265,6 @@ export const PnLRow = memo(function PnLRow({
                 value={totalCosts}
                 prefix="-₹"
                 valueColor="text-orange-400"
-                subLabel="brokerage + STCG/LTCG"
                 privacyMode={privacyMode}
             />
 
@@ -304,7 +299,6 @@ export const PnLRow = memo(function PnLRow({
                             />
                         )}
                     </div>
-                    <div className="text-[10px] text-gray-600 font-medium mt-1">after charges & tax</div>
                 </div>
             </div>
         </div>
