@@ -56,6 +56,8 @@ interface CagrCardProps {
     totalCharges?: number;
     totalTax?: number;
     totalInvested?: number;
+    niftyCagr?: number | null;
+    nifty500M50Cagr?: number | null;
     privacyMode?: boolean;
 }
 
@@ -349,7 +351,15 @@ export const XirrCard = memo(function XirrCard({ xirrValue, totalCharges = 0, to
 // Row 3 — CAGR Card
 // ============================================================================
 
-export const CagrCard = memo(function CagrCard({ cagrValue, totalCharges = 0, totalTax = 0, totalInvested = 0, privacyMode = false }: CagrCardProps) {
+export const CagrCard = memo(function CagrCard({
+  cagrValue,
+  totalCharges = 0,
+  totalTax = 0,
+  totalInvested = 0,
+  niftyCagr = null,
+  nifty500M50Cagr = null,
+  privacyMode = false
+}: CagrCardProps) {
   const isCagrPositive = (cagrValue ?? 0) >= 0;
   const chargeDragPct = totalInvested > 0 ? ((totalCharges + totalTax) / totalInvested) * 100 : 0;
   const postChargesCagr = cagrValue != null ? cagrValue - chargeDragPct : null;
@@ -369,21 +379,46 @@ export const CagrCard = memo(function CagrCard({ cagrValue, totalCharges = 0, to
             </div>
 
             <div className="flex-1 flex flex-col justify-center">
-                <h2 className={`text-4xl font-bold ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
-                    {cagrValue != null ? (
-                        <AnimatedNumber value={cagrValue} suffix="%" decimals={2} />
-                    ) : (
-                        <span className="text-gray-600">—</span>
+                <div className="flex justify-between items-end">
+                    <div className="flex-1 flex flex-col justify-center">
+                        <h2 className={`text-4xl font-bold ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
+                            {cagrValue != null ? (
+                                <AnimatedNumber value={cagrValue} suffix="%" decimals={2} />
+                            ) : (
+                                <span className="text-gray-600">—</span>
+                            )}
+                        </h2>
+                        {hasCharges && (
+                          <div className="mt-1.5 flex items-center gap-1.5">
+                            <span className="text-[10px] text-gray-500 font-medium">Post charges</span>
+                            <span className={`text-xs font-semibold ${(postChargesCagr ?? 0) >= 0 ? 'text-violet-400/60' : 'text-red-400/80'}`}>
+                              <AnimatedNumber value={postChargesCagr!} suffix="%" decimals={2} />
+                            </span>
+                          </div>
+                        )}
+                    </div>
+
+                    {(niftyCagr !== null || nifty500M50Cagr !== null) && (
+                        <div className="flex-none text-right text-[10px] text-gray-500 font-medium space-y-1 pb-0.5">
+                            {niftyCagr !== null && (
+                                <div className="flex items-center gap-1 justify-end">
+                                    <span>vs Nifty:</span>
+                                    <span className={niftyCagr >= 0 ? 'text-emerald-400/80 font-semibold' : 'text-red-400/80 font-semibold'}>
+                                        {niftyCagr.toFixed(2)}%
+                                    </span>
+                                </div>
+                            )}
+                            {nifty500M50Cagr !== null && (
+                                <div className="flex items-center gap-1 justify-end">
+                                    <span>vs n500m50:</span>
+                                    <span className={nifty500M50Cagr >= 0 ? 'text-emerald-400/80 font-semibold' : 'text-red-400/80 font-semibold'}>
+                                        {nifty500M50Cagr.toFixed(2)}%
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     )}
-                </h2>
-                {hasCharges && (
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <span className="text-[10px] text-gray-500 font-medium">Post charges</span>
-                    <span className={`text-xs font-semibold ${(postChargesCagr ?? 0) >= 0 ? 'text-violet-400/60' : 'text-red-400/80'}`}>
-                      <AnimatedNumber value={postChargesCagr!} suffix="%" decimals={2} />
-                    </span>
-                  </div>
-                )}
+                </div>
             </div>
         </div>
   );

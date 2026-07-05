@@ -96,6 +96,23 @@ export async function fetchDashboardData() {
   const latestSnapshot = snapshots[snapshots.length - 1];
   const cagrValue = latestSnapshot && latestSnapshot.cagr != null ? latestSnapshot.cagr * 100 : null;
 
+  let niftyCagr: number | null = null;
+  let nifty500M50Cagr: number | null = null;
+
+  if (snapshots.length > 0 && latestSnapshot) {
+    const firstSnapshot = snapshots[0];
+    const d1 = new Date(firstSnapshot.date);
+    const d2 = new Date(latestSnapshot.date);
+    const daysElapsed = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24)));
+
+    if (latestSnapshot.niftyNAV) {
+      niftyCagr = (Math.pow(latestSnapshot.niftyNAV / 100, 365 / daysElapsed) - 1) * 100;
+    }
+    if (latestSnapshot.nifty500Momentum50NAV) {
+      nifty500M50Cagr = (Math.pow(latestSnapshot.nifty500Momentum50NAV / 100, 365 / daysElapsed) - 1) * 100;
+    }
+  }
+
   // Aggregate charges & net tax from exits (zero extra DB calls)
   // Tax uses portfolio-level netting: losses offset gains before applying rate
   const totalCharges = exits.reduce((sum, e) => sum + (e.chargesBreakdown?.totalCharges ?? 0), 0);
@@ -121,6 +138,8 @@ export async function fetchDashboardData() {
     totalTax,
     xirrValue,
     cagrValue,
+    niftyCagr,
+    nifty500M50Cagr,
     isWeekPositive: dashboardStats.weekReturn >= 0
   };
 }

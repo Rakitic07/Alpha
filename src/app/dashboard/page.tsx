@@ -86,6 +86,8 @@ export default function DashboardPage() {
     totalTax,
     xirrValue,
     cagrValue,
+    niftyCagr,
+    nifty500M50Cagr,
     isWeekPositive
   } = data;
 
@@ -145,7 +147,15 @@ export default function DashboardPage() {
             <XirrCard xirrValue={xirrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
         </div>
         <div className="h-full">
-            <CagrCard cagrValue={cagrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
+            <CagrCard
+              cagrValue={cagrValue}
+              totalCharges={totalCharges}
+              totalTax={totalTax}
+              totalInvested={totalInvested}
+              niftyCagr={niftyCagr}
+              nifty500M50Cagr={nifty500M50Cagr}
+              privacyMode={privacyMode}
+            />
         </div>
         <div className="h-full">
             <AvgHoldingCard avgHoldingPeriod={portfolioStats.avgHoldingPeriod} />
