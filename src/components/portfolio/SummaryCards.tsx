@@ -12,6 +12,7 @@ import {
   faReceipt,
   faHandHoldingDollar,
   faEquals,
+  faScaleBalanced,
 } from '@fortawesome/free-solid-svg-icons';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
@@ -56,9 +57,15 @@ interface CagrCardProps {
     totalCharges?: number;
     totalTax?: number;
     totalInvested?: number;
-    niftyCagr?: number | null;
-    nifty500M50Cagr?: number | null;
     privacyMode?: boolean;
+}
+
+interface AlphaCardProps {
+    cagrValue: number | null;
+    niftyCagr: number | null;
+    nifty500M50Cagr: number | null;
+    niftyMidcapCagr: number | null;
+    niftySmallcapCagr: number | null;
 }
 
 // ============================================================================
@@ -356,8 +363,6 @@ export const CagrCard = memo(function CagrCard({
   totalCharges = 0,
   totalTax = 0,
   totalInvested = 0,
-  niftyCagr = null,
-  nifty500M50Cagr = null,
   privacyMode = false
 }: CagrCardProps) {
   const isCagrPositive = (cagrValue ?? 0) >= 0;
@@ -379,49 +384,92 @@ export const CagrCard = memo(function CagrCard({
             </div>
 
             <div className="flex-1 flex flex-col justify-center">
-                <div className="flex justify-between items-end">
-                    <div className="flex-1 flex flex-col justify-center">
-                        <h2 className={`text-4xl font-bold ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
-                            {cagrValue != null ? (
-                                <AnimatedNumber value={cagrValue} suffix="%" decimals={2} />
-                            ) : (
-                                <span className="text-gray-600">—</span>
-                            )}
-                        </h2>
-                        {hasCharges && (
-                          <div className="mt-1.5 flex items-center gap-1.5">
-                            <span className="text-[10px] text-gray-500 font-medium">Post charges</span>
-                            <span className={`text-xs font-semibold ${(postChargesCagr ?? 0) >= 0 ? 'text-violet-400/60' : 'text-red-400/80'}`}>
-                              <AnimatedNumber value={postChargesCagr!} suffix="%" decimals={2} />
-                            </span>
-                          </div>
-                        )}
-                    </div>
-
-                    {(niftyCagr !== null || nifty500M50Cagr !== null) && (
-                        <div className="flex-none text-right text-[10px] text-gray-500 font-medium space-y-1 pb-0.5">
-                            {niftyCagr !== null && (
-                                <div className="flex items-center gap-1 justify-end">
-                                    <span>vs Nifty:</span>
-                                    <span className={niftyCagr >= 0 ? 'text-emerald-400/80 font-semibold' : 'text-red-400/80 font-semibold'}>
-                                        {niftyCagr.toFixed(2)}%
-                                    </span>
-                                </div>
-                            )}
-                            {nifty500M50Cagr !== null && (
-                                <div className="flex items-center gap-1 justify-end">
-                                    <span>vs n500m50:</span>
-                                    <span className={nifty500M50Cagr >= 0 ? 'text-emerald-400/80 font-semibold' : 'text-red-400/80 font-semibold'}>
-                                        {nifty500M50Cagr.toFixed(2)}%
-                                    </span>
-                                </div>
-                            )}
-                        </div>
+                <h2 className={`text-4xl font-bold ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
+                    {cagrValue != null ? (
+                        <AnimatedNumber value={cagrValue} suffix="%" decimals={2} />
+                    ) : (
+                        <span className="text-gray-600">—</span>
                     )}
-                </div>
+                </h2>
+                {hasCharges && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500 font-medium">Post charges</span>
+                    <span className={`text-xs font-semibold ${(postChargesCagr ?? 0) >= 0 ? 'text-violet-400/60' : 'text-red-400/80'}`}>
+                      <AnimatedNumber value={postChargesCagr!} suffix="%" decimals={2} />
+                    </span>
+                  </div>
+                )}
             </div>
         </div>
   );
+});
+
+// ============================================================================
+// Row 3 — Alpha Card (Benchmark comparisons with center-aligned bar indicators)
+// ============================================================================
+
+export const AlphaCard = memo(function AlphaCard({
+    cagrValue,
+    niftyCagr = null,
+    nifty500M50Cagr = null,
+    niftyMidcapCagr = null,
+    niftySmallcapCagr = null
+}: AlphaCardProps) {
+    const benchmarks = [
+        { label: 'Nifty 50', val: niftyCagr },
+        { label: 'n500m50', val: nifty500M50Cagr },
+        { label: 'Midcap 100', val: niftyMidcapCagr },
+        { label: 'Smallcap 250', val: niftySmallcapCagr },
+    ];
+
+    const maxRange = 30; // Caps alpha visual width at ±30%
+
+    return (
+        <div className="glass-card p-5 flex flex-col animate-fade-in-up stagger-5 h-full">
+            <div className="flex items-center gap-2.5 mb-2.5 flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center flex-shrink-0">
+                    <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-sm" />
+                </div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">Index Alpha</span>
+            </div>
+
+            <div className="flex-1 flex flex-col justify-center gap-2 min-h-[90px]">
+                {benchmarks.map(({ label, val }) => {
+                    if (val === null || cagrValue === null) return null;
+                    const alpha = cagrValue - val;
+                    const isPositive = alpha >= 0;
+                    const pct = Math.min(Math.abs(alpha) / maxRange, 1) * 50;
+
+                    return (
+                        <div key={label} className="flex flex-col gap-0.5">
+                            <div className="flex justify-between items-center text-[9px] font-semibold">
+                                <span className="text-gray-400">{label}</span>
+                                <span className={isPositive ? 'text-emerald-400' : 'text-rose-400 font-mono'}>
+                                    {isPositive ? '+' : ''}{alpha.toFixed(2)}%
+                                </span>
+                            </div>
+                            <div className="h-1 bg-gray-800/40 rounded-full relative overflow-hidden flex items-center">
+                                {/* Center marker line */}
+                                <div className="absolute left-1/2 w-[1px] h-full bg-gray-700/50 z-10" />
+                                {/* Alpha bar */}
+                                <div
+                                    className={`absolute h-full rounded-full transition-all duration-1000 ${
+                                        isPositive
+                                            ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                                            : 'bg-gradient-to-l from-rose-500 to-rose-400'
+                                    }`}
+                                    style={{
+                                        left: isPositive ? '50%' : `${50 - pct}%`,
+                                        width: `${pct}%`,
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
 });
 
 // Deprecated

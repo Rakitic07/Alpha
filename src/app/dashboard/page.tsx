@@ -10,7 +10,7 @@ import {
   faBullseye
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { MainChartCards, PnLRow, XirrCard, CagrCard } from '@/components/portfolio/SummaryCards';
+import { MainChartCards, PnLRow, XirrCard, CagrCard, AlphaCard } from '@/components/portfolio/SummaryCards';
 import { WinLossCard, AvgHoldingCard, AvgGainLossCard } from '@/components/portfolio/PortfolioStatsCards';
 import MarketCapCard from '@/components/portfolio/MarketCapCard';
 import ReturnsCard from '@/components/portfolio/ReturnsCard';
@@ -88,6 +88,8 @@ export default function DashboardPage() {
     cagrValue,
     niftyCagr,
     nifty500M50Cagr,
+    niftyMidcapCagr,
+    niftySmallcapCagr,
     isWeekPositive
   } = data;
 
@@ -141,20 +143,21 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Row 3: XIRR, CAGR, Avg Holding, Win/Loss — 4×25% */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 flex-none h-auto md:h-[180px]">
+      {/* Row 3: XIRR, CAGR, Alpha, Avg Holding, Win/Loss — 5 equal cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 flex-none h-auto md:h-[180px]">
         <div className="h-full">
             <XirrCard xirrValue={xirrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
         </div>
         <div className="h-full">
-            <CagrCard
+            <CagrCard cagrValue={cagrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
+        </div>
+        <div className="h-full col-span-2 md:col-span-1">
+            <AlphaCard
               cagrValue={cagrValue}
-              totalCharges={totalCharges}
-              totalTax={totalTax}
-              totalInvested={totalInvested}
               niftyCagr={niftyCagr}
               nifty500M50Cagr={nifty500M50Cagr}
-              privacyMode={privacyMode}
+              niftyMidcapCagr={niftyMidcapCagr}
+              niftySmallcapCagr={niftySmallcapCagr}
             />
         </div>
         <div className="h-full">

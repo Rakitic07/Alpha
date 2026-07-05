@@ -98,6 +98,8 @@ export async function fetchDashboardData() {
 
   let niftyCagr: number | null = null;
   let nifty500M50Cagr: number | null = null;
+  let niftyMidcapCagr: number | null = null;
+  let niftySmallcapCagr: number | null = null;
 
   if (snapshots.length > 0 && latestSnapshot) {
     const firstSnapshot = snapshots[0];
@@ -110,6 +112,12 @@ export async function fetchDashboardData() {
     }
     if (latestSnapshot.nifty500Momentum50NAV) {
       nifty500M50Cagr = (Math.pow(latestSnapshot.nifty500Momentum50NAV / 100, 365 / daysElapsed) - 1) * 100;
+    }
+    if (latestSnapshot.niftyMidcap100NAV) {
+      niftyMidcapCagr = (Math.pow(latestSnapshot.niftyMidcap100NAV / 100, 365 / daysElapsed) - 1) * 100;
+    }
+    if (latestSnapshot.niftySmallcap250NAV) {
+      niftySmallcapCagr = (Math.pow(latestSnapshot.niftySmallcap250NAV / 100, 365 / daysElapsed) - 1) * 100;
     }
   }
 
@@ -140,6 +148,8 @@ export async function fetchDashboardData() {
     cagrValue,
     niftyCagr,
     nifty500M50Cagr,
+    niftyMidcapCagr,
+    niftySmallcapCagr,
     isWeekPositive: dashboardStats.weekReturn >= 0
   };
 }
