@@ -726,7 +726,7 @@ export async function recalculatePortfolioHistoryInternal(
         }
 
         const daysElapsed = differenceInDays(currentDate, portfolioStartDate);
-        if (daysElapsed >= 365 && nav > 0) {
+        if (daysElapsed > 0 && nav > 0) {
             dailyCagr = roundPercent(Math.pow(nav / 100, 365 / daysElapsed) - 1);
         }
 

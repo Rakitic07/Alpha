@@ -511,6 +511,8 @@ export async function captureHolidaySnapshot(date: Date = new Date()) {
             // Carry over risk metrics
             drawdown: latest.drawdown,
             navMA200: latest.navMA200,
+            xirr: latest.xirr,
+            cagr: latest.cagr,
 
             // Carry over index benchmarks
             nifty500Momentum50NAV: latest.nifty500Momentum50NAV,
