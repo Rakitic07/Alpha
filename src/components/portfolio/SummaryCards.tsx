@@ -8,10 +8,17 @@ import {
   faArrowTrendDown, 
   faBullseye, 
   faChartColumn, 
-  faChartLine 
+  faChartLine,
+  faReceipt,
+  faHandHoldingDollar,
+  faEquals,
 } from '@fortawesome/free-solid-svg-icons';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface ChartCardsProps {
     totalCurrentValue: number;
@@ -27,12 +34,12 @@ interface ChartCardsProps {
     privacyMode?: boolean;
 }
 
-interface PnLCardProps {
-    totalPnL: number;
+export interface PnLRowProps {
     realizedPnL: number;
     unrealizedPnL: number;
-    totalCharges?: number;
-    totalTax?: number;
+    totalCharges: number;
+    totalTax: number;
+    dividends?: number; // upcoming feature
     privacyMode?: boolean;
 }
 
@@ -44,8 +51,19 @@ interface XirrCardProps {
     privacyMode?: boolean;
 }
 
+interface CagrCardProps {
+    cagrValue: number | null;
+    totalCharges?: number;
+    totalTax?: number;
+    totalInvested?: number;
+    privacyMode?: boolean;
+}
 
-// Helper for mini charts - memoized to prevent re-renders
+// ============================================================================
+// Helpers
+// ============================================================================
+
+// Mini sparkline widget — memoized to prevent re-renders
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ChartWidget = memo(({ data, dataKey, color, domain }: { data: any[], dataKey: string, color: string, domain?: any }) => (
   <div className="absolute bottom-0 left-0 right-0 h-[80px] opacity-30 pointer-events-none">
@@ -72,6 +90,64 @@ const ChartWidget = memo(({ data, dataKey, color, domain }: { data: any[], dataK
   </div>
 ));
 ChartWidget.displayName = 'ChartWidget';
+
+// Shared card shell for P/L row items
+const PnLCard = memo(function PnLCard({
+    label,
+    icon,
+    iconBg,
+    iconColor,
+    value,
+    prefix,
+    valueColor,
+    subLabel,
+    privacyMode,
+    isPlaceholder = false,
+}: {
+    label: string;
+    icon: React.ComponentProps<typeof FontAwesomeIcon>['icon'];
+    iconBg: string;
+    iconColor: string;
+    value?: number;
+    prefix?: string;
+    valueColor: string;
+    subLabel?: string;
+    privacyMode?: boolean;
+    isPlaceholder?: boolean;
+}) {
+    return (
+        <div className="glass-card p-5 flex flex-col justify-between animate-fade-in-up h-full">
+            <div className="flex items-center gap-2.5 mb-3">
+                <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
+                    <FontAwesomeIcon icon={icon} className={`${iconColor} text-sm`} />
+                </div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">{label}</span>
+            </div>
+            {isPlaceholder ? (
+                <div className="flex-1 flex flex-col justify-center">
+                    <div className="text-sm text-gray-600 font-medium">Coming soon</div>
+                    <div className="text-xs text-gray-700 mt-0.5">Not yet tracked</div>
+                </div>
+            ) : (
+                <div className="flex-1 flex flex-col justify-center">
+                    <div className={`text-2xl font-bold ${valueColor} leading-tight`}>
+                        {privacyMode ? '****' : (
+                            value !== undefined
+                                ? <AnimatedNumber value={Math.abs(value)} prefix={prefix} formatOptions={{ maximumFractionDigits: 0 }} />
+                                : '—'
+                        )}
+                    </div>
+                    {subLabel && <div className="text-[10px] text-gray-600 font-medium mt-1">{subLabel}</div>}
+                </div>
+            )}
+        </div>
+    );
+});
+PnLCard.displayName = 'PnLCard';
+
+// ============================================================================
+// Row 1 — Main Chart Cards (Current Value, NAV, Drawdown)
+// ============================================================================
 
 export const MainChartCards = memo(function MainChartCards({
     totalCurrentValue,
@@ -139,73 +215,108 @@ export const MainChartCards = memo(function MainChartCards({
   );
 });
 
-export const PnLCard = memo(function PnLCard({ totalPnL, realizedPnL, unrealizedPnL, totalCharges = 0, totalTax = 0, privacyMode = false }: PnLCardProps) {
-  const isProfit = totalPnL >= 0;
-  const netRealizedPnL = realizedPnL - totalCharges - totalTax;
+// ============================================================================
+// Row 2 — P/L Breakdown (5 cards spanning full width)
+// Realized + Unrealized − Charges − Tax + Dividends = Net P/L
+// ============================================================================
 
-  return (
-        <div className="glass-card p-6 flex flex-col justify-between animate-fade-in-up stagger-4 h-full">
-            <div className="flex items-center gap-3 mb-2">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isProfit
-                    ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5'
-                    : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
-                }`}>
-                    <FontAwesomeIcon
-                        icon={isProfit ? faArrowTrendUp : faArrowTrendDown}
-                        className={`text-lg ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}
-                    />
+export const PnLRow = memo(function PnLRow({
+    realizedPnL,
+    unrealizedPnL,
+    totalCharges,
+    totalTax,
+    dividends = 0,
+    privacyMode = false,
+}: PnLRowProps) {
+    const netPnL = realizedPnL + unrealizedPnL - totalCharges - totalTax + dividends;
+    const totalCosts = totalCharges + totalTax;
+    const isNetPositive = netPnL >= 0;
+
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 h-full">
+            {/* Realized P/L */}
+            <PnLCard
+                label="Realized P/L"
+                icon={realizedPnL >= 0 ? faArrowTrendUp : faArrowTrendDown}
+                iconBg={realizedPnL >= 0 ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5' : 'bg-gradient-to-br from-red-500/20 to-red-500/5'}
+                iconColor={realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
+                value={realizedPnL}
+                prefix={realizedPnL >= 0 ? '+₹' : '-₹'}
+                valueColor={realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}
+                subLabel="from closed trades"
+                privacyMode={privacyMode}
+            />
+
+            {/* Unrealized P/L */}
+            <PnLCard
+                label="Unrealized P/L"
+                icon={unrealizedPnL >= 0 ? faArrowTrendUp : faArrowTrendDown}
+                iconBg={unrealizedPnL >= 0 ? 'bg-gradient-to-br from-sky-500/20 to-sky-500/5' : 'bg-gradient-to-br from-red-500/20 to-red-500/5'}
+                iconColor={unrealizedPnL >= 0 ? 'text-sky-400' : 'text-red-400'}
+                value={unrealizedPnL}
+                prefix={unrealizedPnL >= 0 ? '+₹' : '-₹'}
+                valueColor={unrealizedPnL >= 0 ? 'text-sky-400' : 'text-red-400'}
+                subLabel="open positions"
+                privacyMode={privacyMode}
+            />
+
+            {/* Charges & Tax */}
+            <PnLCard
+                label="Charges & Tax"
+                icon={faReceipt}
+                iconBg="bg-gradient-to-br from-orange-500/20 to-orange-500/5"
+                iconColor="text-orange-400"
+                value={totalCosts}
+                prefix="-₹"
+                valueColor="text-orange-400"
+                subLabel="brokerage + STCG/LTCG"
+                privacyMode={privacyMode}
+            />
+
+            {/* Dividends — Coming Soon */}
+            <PnLCard
+                label="Dividends"
+                icon={faHandHoldingDollar}
+                iconBg="bg-gradient-to-br from-teal-500/20 to-teal-500/5"
+                iconColor="text-teal-500"
+                valueColor="text-teal-400"
+                isPlaceholder={true}
+                privacyMode={privacyMode}
+            />
+
+            {/* Net P/L */}
+            <div className="glass-card p-5 flex flex-col justify-between animate-fade-in-up h-full border border-white/10 relative overflow-hidden">
+                {/* Subtle highlight ring */}
+                <div className={`absolute inset-0 rounded-xl pointer-events-none ${isNetPositive ? 'ring-1 ring-emerald-500/20' : 'ring-1 ring-red-500/20'}`} />
+                <div className="flex items-center gap-2.5 mb-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isNetPositive ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5' : 'bg-gradient-to-br from-red-500/20 to-red-500/5'}`}>
+                        <FontAwesomeIcon icon={faEquals} className={`text-sm ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`} />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">Net P/L</span>
                 </div>
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Overall P/L</span>
+                <div className="flex-1 flex flex-col justify-center">
+                    <div className={`text-2xl font-bold leading-tight ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {privacyMode ? '****' : (
+                            <AnimatedNumber
+                                value={Math.abs(netPnL)}
+                                prefix={isNetPositive ? '+₹' : '-₹'}
+                                formatOptions={{ maximumFractionDigits: 0 }}
+                            />
+                        )}
+                    </div>
+                    <div className="text-[10px] text-gray-600 font-medium mt-1">after charges & tax</div>
+                </div>
             </div>
-
-            <div className="mb-2">
-                 <h2 className={`text-3xl font-bold ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {privacyMode ? '****' : <AnimatedNumber value={Math.abs(totalPnL)} prefix={isProfit ? '+₹' : '-₹'} formatOptions={{ maximumFractionDigits: 0 }} />}
-                </h2>
-            </div>
-
-          <div className="flex flex-col gap-1 text-xs border-t border-gray-700/50 pt-3">
-             <div className="flex justify-between">
-                <span className="text-gray-500 font-medium">Realized</span>
-                <span className={`font-semibold ${realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {privacyMode ? '****' : <AnimatedNumber value={Math.abs(realizedPnL)} prefix={realizedPnL >= 0 ? '+' : '-'} formatOptions={{ maximumFractionDigits: 0 }} />}
-                </span>
-             </div>
-             {totalCharges > 0 && (
-               <div className="flex justify-between pl-3">
-                 <span className="text-gray-600 font-medium">↳ Charges</span>
-                 <span className="font-mono text-orange-400/80">−{privacyMode ? '****' : <AnimatedNumber value={totalCharges} formatOptions={{ maximumFractionDigits: 0 }} />}</span>
-               </div>
-             )}
-             {totalTax > 0 && (
-               <div className="flex justify-between pl-3">
-                 <span className="text-gray-600 font-medium">↳ Tax (STCG/LTCG)</span>
-                 <span className="font-mono text-yellow-400/80">−{privacyMode ? '****' : <AnimatedNumber value={totalTax} formatOptions={{ maximumFractionDigits: 0 }} />}</span>
-               </div>
-             )}
-             {(totalCharges > 0 || totalTax > 0) && (
-               <div className="flex justify-between border-t border-gray-700/30 pt-1">
-                 <span className="text-gray-500 font-semibold">Net Realized</span>
-                 <span className={`font-semibold ${netRealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                   {privacyMode ? '****' : <AnimatedNumber value={Math.abs(netRealizedPnL)} prefix={netRealizedPnL >= 0 ? '+' : '-'} formatOptions={{ maximumFractionDigits: 0 }} />}
-                 </span>
-               </div>
-             )}
-             <div className="flex justify-between">
-                <span className="text-gray-500 font-medium">Unrealized</span>
-                <span className={`font-semibold ${unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {privacyMode ? '****' : <AnimatedNumber value={Math.abs(unrealizedPnL)} prefix={unrealizedPnL >= 0 ? '+' : '-'} formatOptions={{ maximumFractionDigits: 0 }} />}
-                </span>
-             </div>
-          </div>
         </div>
-  );
+    );
 });
+
+// ============================================================================
+// Row 3 — XIRR Card
+// ============================================================================
 
 export const XirrCard = memo(function XirrCard({ xirrValue, totalCharges = 0, totalTax = 0, totalInvested = 0, privacyMode = false }: XirrCardProps) {
   const isXirrPositive = xirrValue >= 0;
-  // Post-charges drag: (charges + tax) as % of invested, then subtract from XIRR as rough proxy
   const chargeDragPct = totalInvested > 0 ? ((totalCharges + totalTax) / totalInvested) * 100 : 0;
   const postChargesXirr = xirrValue - chargeDragPct;
   const hasCharges = chargeDragPct > 0;
@@ -240,13 +351,9 @@ export const XirrCard = memo(function XirrCard({ xirrValue, totalCharges = 0, to
   );
 });
 
-interface CagrCardProps {
-    cagrValue: number | null;
-    totalCharges?: number;
-    totalTax?: number;
-    totalInvested?: number;
-    privacyMode?: boolean;
-}
+// ============================================================================
+// Row 3 — CAGR Card
+// ============================================================================
 
 export const CagrCard = memo(function CagrCard({ cagrValue, totalCharges = 0, totalTax = 0, totalInvested = 0, privacyMode = false }: CagrCardProps) {
   const isCagrPositive = (cagrValue ?? 0) >= 0;
@@ -293,4 +400,3 @@ export const CagrCard = memo(function CagrCard({ cagrValue, totalCharges = 0, to
 export default function SummaryCards(props: any) {
     return null; 
 }
-

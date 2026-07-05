@@ -8,14 +8,13 @@
  *   npx tsx scripts/sync-amfi.ts --file path.xlsx   # Sync from local file
  */
 
-import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
+import { prisma } from './lib/db';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
-
-// Initialize Prisma with production database
-const prisma = new PrismaClient();
 
 type AMFICategory = 'Large' | 'Mid' | 'Small' | 'Micro';
 
@@ -66,51 +65,70 @@ async function parseAMFIExcel(buffer: ArrayBuffer): Promise<AMFIStockClassificat
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
-    const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { 
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { 
+        header: 1,
         defval: '',
         raw: false 
     });
     
+    if (rawRows.length < 3) {
+        console.error('Excel file too short');
+        return [];
+    }
+
+    // Skip title row (row 0), headers are in row 1
+    const headerRow = rawRows[1] as string[];
+    const dataRows = rawRows.slice(2);
+
+    // Build column index map
+    const colIndex = new Map<string, number>();
+    headerRow.forEach((header, idx) => {
+        if (header) colIndex.set(String(header).trim(), idx);
+    });
+
+    const getCell = (row: unknown[], ...headers: string[]): string => {
+        for (const h of headers) {
+            const idx = colIndex.get(h);
+            if (idx !== undefined && row[idx] != null) {
+                return String(row[idx]).trim();
+            }
+        }
+        return '';
+    };
+
     const classifications: AMFIStockClassification[] = [];
     
-    for (const row of rawData) {
-        const rankValue = row['Sr. No.'] || row['Rank'] || row['Sr.No.'] || row['S.No.'] || row['S. No.'];
-        const rank = parseInt(String(rankValue), 10);
-        
+    for (const row of dataRows) {
+        const rowArr = row as unknown[];
+
+        const rankStr = getCell(rowArr, 'Sr. No.', 'Rank', 'Sr.No.', 'S.No.');
+        const rank = parseInt(rankStr, 10);
         if (isNaN(rank) || rank <= 0) continue;
-        
-        const companyName = String(
-            row['Company Name'] || 
-            row['Name of the Company'] || 
-            row['Company'] || 
-            ''
-        ).trim();
-        
+
+        const companyName = getCell(rowArr, 'Company name', 'Company Name', 'Name of the Company');
         if (!companyName) continue;
-        
-        const symbol = String(
-            row['Symbol'] || 
-            row['NSE Symbol'] || 
-            row['Scrip Code'] ||
-            row['NSE Code'] ||
-            ''
-        ).trim().toUpperCase();
-        
-        const isin = String(
-            row['ISIN'] || 
-            row['ISIN Code'] || 
-            row['ISIN No.'] ||
-            ''
-        ).trim().toUpperCase();
-        
-        const mcapValue = row['Average Market Cap (Rs. Cr.)'] || 
-                         row['Average Market Cap'] || 
-                         row['Avg. Market Cap'] ||
-                         row['Market Cap'] ||
-                         row['Avg Market Cap (Rs. Cr.)'] ||
-                         0;
+
+        let symbol = getCell(rowArr, 'NSE Symbol', 'NSE Code').toUpperCase().trim();
+        if (!symbol || symbol === '-' || symbol === 'N/A' || symbol === 'NA') {
+            symbol = getCell(rowArr, 'BSE Symbol', 'Symbol', 'Scrip Code').toUpperCase().trim();
+        }
+
+        // Skip if still no valid symbol
+        if (!symbol || symbol === '-' || symbol === 'N/A' || symbol === 'NA') {
+            continue;
+        }
+
+        const isin = getCell(rowArr, 'ISIN', 'ISIN Code').toUpperCase();
+
+        const mcapValue = getCell(
+            rowArr,
+            'Average of All Exchanges (Rs. Cr.)',
+            'Average Market Cap (Rs. Cr.)',
+            'Average Market Cap',
+            'Market Cap'
+        );
         const avgMarketCap = parseFloat(String(mcapValue).replace(/,/g, '')) || 0;
-        
+
         classifications.push({
             rank,
             companyName,
@@ -121,9 +139,20 @@ async function parseAMFIExcel(buffer: ArrayBuffer): Promise<AMFIStockClassificat
         });
     }
     
+    // Sort by rank ascending
     classifications.sort((a, b) => a.rank - b.rank);
+
+    // Deduplicate by symbol (keep the one with lower rank / higher market cap)
+    const seenSymbols = new Set<string>();
+    const uniqueClassifications: AMFIStockClassification[] = [];
+    for (const c of classifications) {
+        if (!seenSymbols.has(c.symbol)) {
+            seenSymbols.add(c.symbol);
+            uniqueClassifications.push(c);
+        }
+    }
     
-    return classifications;
+    return uniqueClassifications;
 }
 
 async function downloadAMFIData(period: AMFIPeriod): Promise<ArrayBuffer> {
@@ -149,57 +178,43 @@ async function syncToDatabase(
     period: AMFIPeriod
 ): Promise<{ created: number; updated: number }> {
     const periodStr = `${period.year}_${period.halfYear}`;
-    let created = 0;
-    let updated = 0;
+    const validClassifications = classifications.filter((c) => c.symbol);
     
-    console.log(`\nSyncing ${classifications.length} classifications to database...`);
+    console.log(`\nSyncing ${validClassifications.length} classifications to database in bulk batches...`);
     
-    for (const classification of classifications) {
-        if (!classification.symbol && !classification.isin) continue;
-        
-        const existing = await prisma.aMFIClassification.findFirst({
-            where: {
+    // Get existing count
+    const existingCount = await prisma.aMFIClassification.count({
+        where: { period: periodStr },
+    });
+    
+    // Delete existing data for this period
+    await prisma.aMFIClassification.deleteMany({
+        where: { period: periodStr },
+    });
+    
+    // Bulk insert in batches
+    const BATCH_SIZE = 500;
+    let insertedCount = 0;
+    
+    for (let i = 0; i < validClassifications.length; i += BATCH_SIZE) {
+        const batch = validClassifications.slice(i, i + BATCH_SIZE);
+        await prisma.aMFIClassification.createMany({
+            data: batch.map((c) => ({
                 period: periodStr,
-                symbol: classification.symbol
-            }
+                rank: c.rank,
+                companyName: c.companyName,
+                symbol: c.symbol,
+                isin: c.isin,
+                category: c.category,
+                avgMarketCap: c.avgMarketCap,
+            })),
         });
-        
-        if (existing) {
-            await prisma.aMFIClassification.update({
-                where: { id: existing.id },
-                data: {
-                    rank: classification.rank,
-                    companyName: classification.companyName,
-                    symbol: classification.symbol || existing.symbol,
-                    isin: classification.isin || existing.isin,
-                    category: classification.category,
-                    avgMarketCap: classification.avgMarketCap
-                }
-            });
-            updated++;
-        } else {
-            await prisma.aMFIClassification.create({
-                data: {
-                    period: periodStr,
-                    rank: classification.rank,
-                    companyName: classification.companyName,
-                    symbol: classification.symbol,
-                    isin: classification.isin,
-                    category: classification.category,
-                    avgMarketCap: classification.avgMarketCap
-                }
-            });
-            created++;
-        }
-        
-        // Progress indicator
-        if ((created + updated) % 100 === 0) {
-            process.stdout.write(`\rProcessed ${created + updated} / ${classifications.length}`);
-        }
+        insertedCount += batch.length;
+        process.stdout.write(`\rProcessed ${insertedCount} / ${validClassifications.length}`);
     }
     
-    console.log(`\n\nSync complete: ${created} created, ${updated} updated`);
-    return { created, updated };
+    console.log(`\n\nSync complete: ${insertedCount} created, ${existingCount} updated/replaced`);
+    return { created: insertedCount, updated: existingCount };
 }
 
 async function showStatus() {

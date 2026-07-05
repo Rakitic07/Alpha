@@ -380,7 +380,16 @@ export async function parseExcel(buffer: ArrayBuffer): Promise<AMFIStockClassifi
     const companyName = getCell(rowArr, 'Company name', 'Company Name', 'Name of the Company');
     if (!companyName) continue;
 
-    const symbol = getCell(rowArr, 'NSE Symbol', 'Symbol', 'NSE Code').toUpperCase();
+    let symbol = getCell(rowArr, 'NSE Symbol', 'NSE Code').toUpperCase().trim();
+    if (!symbol || symbol === '-' || symbol === 'N/A' || symbol === 'NA') {
+      symbol = getCell(rowArr, 'BSE Symbol', 'Symbol', 'Scrip Code').toUpperCase().trim();
+    }
+
+    // Skip if still no valid symbol
+    if (!symbol || symbol === '-' || symbol === 'N/A' || symbol === 'NA') {
+      continue;
+    }
+
     const isin = getCell(rowArr, 'ISIN', 'ISIN Code').toUpperCase();
 
     const mcapStr = getCell(
@@ -422,15 +431,26 @@ export async function parseExcel(buffer: ArrayBuffer): Promise<AMFIStockClassifi
     });
   }
 
+  // Sort by rank ascending
   classifications.sort((a, b) => a.rank - b.rank);
 
-  amfiLogger.info(`Parsed ${classifications.length} classifications`);
-  amfiLogger.info(`Large: ${classifications.filter((c) => c.category === 'Large').length}`);
-  amfiLogger.info(`Mid: ${classifications.filter((c) => c.category === 'Mid').length}`);
-  amfiLogger.info(`Small: ${classifications.filter((c) => c.category === 'Small').length}`);
-  amfiLogger.info(`Micro: ${classifications.filter((c) => c.category === 'Micro').length}`);
+  // Deduplicate by symbol (keep the one with lower rank / higher market cap)
+  const seenSymbols = new Set<string>();
+  const uniqueClassifications: AMFIStockClassification[] = [];
+  for (const c of classifications) {
+    if (!seenSymbols.has(c.symbol)) {
+      seenSymbols.add(c.symbol);
+      uniqueClassifications.push(c);
+    }
+  }
 
-  return classifications;
+  amfiLogger.info(`Parsed ${uniqueClassifications.length} classifications`);
+  amfiLogger.info(`Large: ${uniqueClassifications.filter((c) => c.category === 'Large').length}`);
+  amfiLogger.info(`Mid: ${uniqueClassifications.filter((c) => c.category === 'Mid').length}`);
+  amfiLogger.info(`Small: ${uniqueClassifications.filter((c) => c.category === 'Small').length}`);
+  amfiLogger.info(`Micro: ${uniqueClassifications.filter((c) => c.category === 'Micro').length}`);
+
+  return uniqueClassifications;
 }
 
 // ============================================================================
