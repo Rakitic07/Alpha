@@ -526,25 +526,22 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="font-bold text-base text-white truncate leading-none">{row.symbol}</span>
                         {/* Exit / Warning signal badges */}
-                        {exit && activeTab === 'portfolio' && (
+                        {exit && activeTab === 'portfolio' && (exit.protected || exit.signalType === 'red') && (
                           <span
                             className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-bold border tracking-wide ${
                               exit.protected
                                 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-                                : exit.signalType === 'yellow'
-                                  ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-                                  : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                             }`}
                             title={[
                               exit.isUnranked
                                 ? (exit.unrankedReason ? `① ${exit.unrankedReason}` : '① Dropped from screener universe')
-                                : exit.byRank ? (exit.isBE ? '① BE category (settlement restrictions)' : `① Rank > ${exit.signalType === 'yellow' ? '50 (borderline 51-60)' : '60'}`) : '',
+                                : exit.byRank ? `① Rank > 50` : '',
                               exit.byFilter ? '② Below 200 DMA & outside 25% of ATH' : '',
                               exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
-                              exit.signalType === 'yellow' && !exit.protected ? '⚠️ Warning — monitor closely' : '',
                             ].filter(Boolean).join('\n')}
                           >
-                            {exit.protected ? 'LOCKED' : exit.signalType === 'yellow' ? 'WARN' : 'EXIT'}
+                            {exit.protected ? 'LOCKED' : 'EXIT'}
                           </span>
                         )}
                         {(() => {
