@@ -30,57 +30,59 @@ export default memo(function StatsBar({
   ];
 
   return (
-    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-      {/* Left side: Tabs + Switch */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-slate-800/50 border border-white/5 rounded-xl p-1">
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => onTabChange(tab.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                activeTab === tab.key
-                  ? 'bg-slate-700 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              {tab.label} <span className="text-gray-500 ml-0.5">({tab.count})</span>
-            </button>
-          ))}
-        </div>
+    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full">
+      {/* Left side: Tabs */}
+      <div className="flex items-center gap-1 bg-slate-800/50 border border-white/5 rounded-xl p-1">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => onTabChange(tab.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              activeTab === tab.key
+                ? 'bg-slate-700 text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            {tab.label} <span className="text-gray-500 ml-0.5">({tab.count})</span>
+          </button>
+        ))}
+      </div>
 
+      {/* Right side: Switch or Portfolio Stats */}
+      <div className="flex items-center gap-4 text-[11px]">
         {/* Hide Portfolio Switch */}
         {activeTab === 'prefiltered' && (
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-gray-400 hover:text-gray-200 transition-colors sm:ml-1 py-1">
+          <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-gray-400 hover:text-gray-200 transition-colors py-1">
             <input
               type="checkbox"
               checked={hidePortfolio}
               onChange={(e) => onHidePortfolioChange(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="relative w-8 h-4.5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:bg-emerald-400 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-gray-500 after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-500/20 border border-white/10 peer-checked:border-emerald-500/30"></div>
+            <div className="relative w-8 h-4 bg-slate-850 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:bg-emerald-400 after:content-[''] after:absolute after:top-[1px] after:start-[1px] after:bg-gray-500 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500/20 border border-white/10 peer-checked:border-emerald-500/30"></div>
             <span>Hide Portfolio Stocks</span>
           </label>
         )}
-      </div>
 
-      {/* Portfolio rank distribution + Market cap breakdown — always rendered to prevent layout jump */}
-      <div className={`flex items-center gap-4 text-[11px] transition-opacity duration-150 ${activeTab !== 'portfolio' ? 'opacity-0 pointer-events-none' : ''}`}>
-          {/* Portfolio rank buckets */}
-          <div className="flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-2">
-            <StatPill label="HOLD" value={rankBuckets.hold} color="text-emerald-400" />
-            <StatPill label="WARN" value={rankBuckets.warning} color="text-yellow-400" />
-            <StatPill label="EXIT" value={rankBuckets.exit} color="text-red-400" />
-          </div>
+        {/* Portfolio rank distribution + Market cap breakdown — rendered only for portfolio tab */}
+        {activeTab === 'portfolio' && (
+          <div className="flex items-center gap-4 text-[11px]">
+            {/* Portfolio rank buckets */}
+            <div className="flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-2">
+              <StatPill label="HOLD" value={rankBuckets.hold} color="text-emerald-400" />
+              <StatPill label="WARN" value={rankBuckets.warning} color="text-yellow-400" />
+              <StatPill label="EXIT" value={rankBuckets.exit} color="text-red-400" />
+            </div>
 
-          {/* Market cap breakdown */}
-          <div className="hidden md:flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-2">
-            <McapPill label="LARGE" value={mcapBreakdown.large} total={totalMcap} color="text-blue-400" />
-            <McapPill label="MID" value={mcapBreakdown.mid} total={totalMcap} color="text-yellow-400" />
-            <McapPill label="SMALL" value={mcapBreakdown.small} total={totalMcap} color="text-green-400" />
-            <McapPill label="MICRO" value={mcapBreakdown.micro} total={totalMcap} color="text-purple-400" />
+            {/* Market cap breakdown */}
+            <div className="hidden md:flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-2">
+              <McapPill label="LARGE" value={mcapBreakdown.large} total={totalMcap} color="text-blue-400" />
+              <McapPill label="MID" value={mcapBreakdown.mid} total={totalMcap} color="text-yellow-400" />
+              <McapPill label="SMALL" value={mcapBreakdown.small} total={totalMcap} color="text-green-400" />
+              <McapPill label="MICRO" value={mcapBreakdown.micro} total={totalMcap} color="text-purple-400" />
+            </div>
           </div>
+        )}
       </div>
     </div>
   );
