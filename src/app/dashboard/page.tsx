@@ -10,7 +10,7 @@ import {
   faBullseye
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { MainChartCards, PnLRow, XirrCard, CagrCard, AlphaCard } from '@/components/portfolio/SummaryCards';
+import { MainChartCards, PnLSummaryCard, MetricsComboCard } from '@/components/portfolio/SummaryCards';
 import { WinLossCard, AvgHoldingCard, AvgGainLossCard } from '@/components/portfolio/PortfolioStatsCards';
 import MarketCapCard from '@/components/portfolio/MarketCapCard';
 import ReturnsCard from '@/components/portfolio/ReturnsCard';
@@ -132,39 +132,44 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Row 2: P/L Breakdown — full width, 5 equal cards */}
-      <div className="flex-none h-auto md:h-[160px]">
-        <PnLRow
-          realizedPnL={totalRealizedPnL}
-          unrealizedPnL={totalUnrealizedPnL}
-          totalCharges={totalCharges}
-          totalTax={totalTax}
-          privacyMode={privacyMode}
-        />
-      </div>
+      {/* Rows 2+3 combined: 5-col × 2-row grid */}
+      <div className="grid grid-cols-1 md:grid-cols-5 md:grid-rows-2 gap-4 md:gap-6 flex-none h-auto md:h-[390px]">
 
-      {/* Row 3: XIRR, CAGR, Alpha, Avg Holding, Win/Loss — 5 equal cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 flex-none h-auto md:h-[180px]">
-        <div className="h-full">
-            <XirrCard xirrValue={xirrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
+        {/* Card 1 — P/L Summary: col-span-2, row-span-2 */}
+        <div className="md:col-span-2 md:row-span-2 h-full min-h-[240px] md:min-h-0">
+          <PnLSummaryCard
+            realizedPnL={totalRealizedPnL}
+            unrealizedPnL={totalUnrealizedPnL}
+            totalCharges={totalCharges}
+            totalTax={totalTax}
+            privacyMode={privacyMode}
+          />
         </div>
-        <div className="h-full">
-            <CagrCard cagrValue={cagrValue} totalCharges={totalCharges} totalTax={totalTax} totalInvested={totalInvested} privacyMode={privacyMode} />
+
+        {/* Card 2 — Metrics Combo (XIRR+CAGR+Alpha): col-span-2, row-span-2 */}
+        <div className="md:col-span-2 md:row-span-2 h-full min-h-[280px] md:min-h-0">
+          <MetricsComboCard
+            xirrValue={xirrValue}
+            cagrValue={cagrValue}
+            totalCharges={totalCharges}
+            totalTax={totalTax}
+            totalInvested={totalInvested}
+            niftyCagr={niftyCagr}
+            nifty500M50Cagr={nifty500M50Cagr}
+            niftyMidcapCagr={niftyMidcapCagr}
+            niftySmallcapCagr={niftySmallcapCagr}
+            privacyMode={privacyMode}
+          />
         </div>
-        <div className="h-full col-span-2 md:col-span-1">
-            <AlphaCard
-              cagrValue={cagrValue}
-              niftyCagr={niftyCagr}
-              nifty500M50Cagr={nifty500M50Cagr}
-              niftyMidcapCagr={niftyMidcapCagr}
-              niftySmallcapCagr={niftySmallcapCagr}
-            />
+
+        {/* Card 3 — Avg Holding: col 5, row 1 */}
+        <div className="md:col-span-1 md:row-span-1 h-full min-h-[150px] md:min-h-0">
+          <AvgHoldingCard avgHoldingPeriod={portfolioStats.avgHoldingPeriod} />
         </div>
-        <div className="h-full">
-            <AvgHoldingCard avgHoldingPeriod={portfolioStats.avgHoldingPeriod} />
-        </div>
-        <div className="h-full">
-            <WinLossCard winPercent={portfolioStats.winPercent} lossPercent={portfolioStats.lossPercent} />
+
+        {/* Card 4 — Win/Loss: col 5, row 2 */}
+        <div className="md:col-span-1 md:row-span-1 h-full min-h-[150px] md:min-h-0">
+          <WinLossCard winPercent={portfolioStats.winPercent} lossPercent={portfolioStats.lossPercent} />
         </div>
       </div>
 

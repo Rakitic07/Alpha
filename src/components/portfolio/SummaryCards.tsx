@@ -68,6 +68,19 @@ interface AlphaCardProps {
     niftySmallcapCagr: number | null;
 }
 
+interface MetricsComboCardProps {
+    xirrValue: number;
+    cagrValue: number | null;
+    totalCharges: number;
+    totalTax: number;
+    totalInvested: number;
+    niftyCagr: number | null;
+    nifty500M50Cagr: number | null;
+    niftyMidcapCagr: number | null;
+    niftySmallcapCagr: number | null;
+    privacyMode?: boolean;
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -452,6 +465,253 @@ export const AlphaCard = memo(function AlphaCard({
                                 {/* Center marker line */}
                                 <div className="absolute left-1/2 w-[1px] h-full bg-gray-700/50 z-10" />
                                 {/* Alpha bar */}
+                                <div
+                                    className={`absolute h-full rounded-full transition-all duration-1000 ${
+                                        isPositive
+                                            ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                                            : 'bg-gradient-to-l from-rose-500 to-rose-400'
+                                    }`}
+                                    style={{
+                                        left: isPositive ? '50%' : `${50 - pct}%`,
+                                        width: `${pct}%`,
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+});
+
+// ============================================================================
+// Combined Card: P/L Summary (single card, all items stacked)
+// ============================================================================
+
+export const PnLSummaryCard = memo(function PnLSummaryCard({
+    realizedPnL,
+    unrealizedPnL,
+    totalCharges,
+    totalTax,
+    dividends = 0,
+    privacyMode = false,
+}: PnLRowProps) {
+    const netPnL = realizedPnL + unrealizedPnL - totalCharges - totalTax + dividends;
+    const totalCosts = totalCharges + totalTax;
+    const isNetPositive = netPnL >= 0;
+
+    const rows: { label: string; icon: React.ComponentProps<typeof FontAwesomeIcon>['icon']; iconColor: string; value: number | null; prefix?: string; valueColor: string }[] = [
+        {
+            label: 'Realized',
+            icon: realizedPnL >= 0 ? faArrowTrendUp : faArrowTrendDown,
+            iconColor: realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400',
+            value: realizedPnL,
+            prefix: realizedPnL >= 0 ? '₹' : '-₹',
+            valueColor: realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400',
+        },
+        {
+            label: 'Unrealized',
+            icon: unrealizedPnL >= 0 ? faArrowTrendUp : faArrowTrendDown,
+            iconColor: unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400',
+            value: unrealizedPnL,
+            prefix: unrealizedPnL >= 0 ? '₹' : '-₹',
+            valueColor: unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400',
+        },
+        {
+            label: 'Charges & Tax',
+            icon: faReceipt,
+            iconColor: 'text-orange-400',
+            value: totalCosts,
+            prefix: '-₹',
+            valueColor: 'text-orange-400',
+        },
+        {
+            label: 'Dividends',
+            icon: faHandHoldingDollar,
+            iconColor: 'text-teal-500',
+            value: null,
+            valueColor: 'text-teal-400',
+        },
+    ];
+
+    return (
+        <div className="glass-card p-5 flex flex-col h-full animate-fade-in-up">
+            {/* Header */}
+            <div className="flex items-center gap-2.5 mb-3 flex-shrink-0">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    isNetPositive
+                        ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5'
+                        : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
+                }`}>
+                    <FontAwesomeIcon
+                        icon={isNetPositive ? faArrowTrendUp : faArrowTrendDown}
+                        className={`text-sm ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}
+                    />
+                </div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">P/L Summary</span>
+            </div>
+
+            {/* Line items */}
+            <div className="flex-1 flex flex-col justify-center gap-2.5">
+                {rows.map(({ label, icon, iconColor, value, prefix, valueColor }) => (
+                    <div key={label} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <FontAwesomeIcon icon={icon} className={`${iconColor} w-3 text-xs`} />
+                            <span className="text-xs text-gray-500 font-medium">{label}</span>
+                        </div>
+                        {value === null ? (
+                            <span className="text-xs text-gray-600 font-medium">Coming soon</span>
+                        ) : (
+                            <span className={`text-sm font-bold ${valueColor}`}>
+                                {privacyMode ? '****' : (
+                                    <AnimatedNumber value={Math.abs(value)} prefix={prefix} formatOptions={{ maximumFractionDigits: 0 }} />
+                                )}
+                            </span>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            {/* Net P/L divider row */}
+            <div className="border-t border-gray-700/50 mt-3 pt-3 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-2">
+                    <FontAwesomeIcon icon={faEquals} className={`text-xs ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`} />
+                    <span className="text-xs font-bold text-gray-300 uppercase tracking-wide">Net P/L</span>
+                </div>
+                <span className={`text-xl font-bold ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {privacyMode ? '****' : (
+                        <AnimatedNumber
+                            value={Math.abs(netPnL)}
+                            prefix={isNetPositive ? '₹' : '-₹'}
+                            formatOptions={{ maximumFractionDigits: 0 }}
+                        />
+                    )}
+                </span>
+            </div>
+        </div>
+    );
+});
+
+// ============================================================================
+// Combined Card: Metrics (XIRR + CAGR top, Index Alpha bottom)
+// ============================================================================
+
+export const MetricsComboCard = memo(function MetricsComboCard({
+    xirrValue,
+    cagrValue,
+    totalCharges,
+    totalTax,
+    totalInvested,
+    niftyCagr,
+    nifty500M50Cagr,
+    niftyMidcapCagr,
+    niftySmallcapCagr,
+    privacyMode = false,
+}: MetricsComboCardProps) {
+    const isXirrPositive = xirrValue >= 0;
+    const isCagrPositive = (cagrValue ?? 0) >= 0;
+    const chargeDragPct = totalInvested > 0 ? ((totalCharges + totalTax) / totalInvested) * 100 : 0;
+    const postChargesXirr = xirrValue - chargeDragPct;
+    const postChargesCagr = cagrValue != null ? cagrValue - chargeDragPct : null;
+    const hasCharges = chargeDragPct > 0;
+
+    const benchmarks = [
+        { label: 'Nifty 50',     val: niftyCagr },
+        { label: 'n500m50',      val: nifty500M50Cagr },
+        { label: 'Midcap 100',   val: niftyMidcapCagr },
+        { label: 'Smallcap 250', val: niftySmallcapCagr },
+    ];
+    const maxRange = 30;
+
+    return (
+        <div className="glass-card p-5 flex flex-col h-full animate-fade-in-up">
+            {/* Top half: XIRR + CAGR side by side */}
+            <div className="flex gap-4 flex-shrink-0">
+                {/* XIRR */}
+                <div className="flex-1 flex flex-col">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
+                            isXirrPositive
+                                ? 'bg-gradient-to-br from-fuchsia-500/20 to-fuchsia-500/5'
+                                : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
+                        }`}>
+                            <FontAwesomeIcon icon={faBullseye} className={`text-[9px] ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`} />
+                        </div>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">XIRR</span>
+                    </div>
+                    <div className={`text-3xl font-bold leading-none ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`}>
+                        <AnimatedNumber value={xirrValue} suffix="%" decimals={2} />
+                    </div>
+                    {hasCharges && (
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[9px] text-gray-500">Post charges</span>
+                            <span className={`text-[10px] font-semibold ${postChargesXirr >= 0 ? 'text-fuchsia-400/60' : 'text-red-400/80'}`}>
+                                <AnimatedNumber value={postChargesXirr} suffix="%" decimals={2} />
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Vertical divider */}
+                <div className="w-px bg-gray-700/40 self-stretch" />
+
+                {/* CAGR */}
+                <div className="flex-1 flex flex-col">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
+                            isCagrPositive
+                                ? 'bg-gradient-to-br from-violet-500/20 to-violet-500/5'
+                                : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
+                        }`}>
+                            <FontAwesomeIcon icon={faChartLine} className={`text-[9px] ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`} />
+                        </div>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">CAGR</span>
+                    </div>
+                    <div className={`text-3xl font-bold leading-none ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
+                        {cagrValue != null ? (
+                            <AnimatedNumber value={cagrValue} suffix="%" decimals={2} />
+                        ) : (
+                            <span className="text-gray-600">—</span>
+                        )}
+                    </div>
+                    {hasCharges && postChargesCagr != null && (
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[9px] text-gray-500">Post charges</span>
+                            <span className={`text-[10px] font-semibold ${postChargesCagr >= 0 ? 'text-violet-400/60' : 'text-red-400/80'}`}>
+                                <AnimatedNumber value={postChargesCagr} suffix="%" decimals={2} />
+                            </span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Horizontal divider */}
+            <div className="h-px bg-gray-700/30 my-3 flex-shrink-0" />
+
+            {/* Bottom: Index Alpha */}
+            <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+                <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center">
+                    <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-[8px]" />
+                </div>
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Index Alpha</span>
+            </div>
+            <div className="flex-1 flex flex-col justify-center gap-1.5">
+                {benchmarks.map(({ label, val }) => {
+                    if (val === null || cagrValue === null) return null;
+                    const alpha = cagrValue - val;
+                    const isPositive = alpha >= 0;
+                    const pct = Math.min(Math.abs(alpha) / maxRange, 1) * 50;
+                    return (
+                        <div key={label} className="flex flex-col gap-0.5">
+                            <div className="flex justify-between items-center text-[9px] font-semibold">
+                                <span className="text-gray-400">{label}</span>
+                                <span className={isPositive ? 'text-emerald-400' : 'text-rose-400'}>
+                                    {isPositive ? '+' : ''}{alpha.toFixed(2)}%
+                                </span>
+                            </div>
+                            <div className="h-1 bg-gray-800/40 rounded-full relative overflow-hidden">
+                                <div className="absolute left-1/2 w-px h-full bg-gray-700/50 z-10" />
                                 <div
                                     className={`absolute h-full rounded-full transition-all duration-1000 ${
                                         isPositive
