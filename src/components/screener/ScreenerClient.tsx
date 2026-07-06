@@ -168,7 +168,8 @@ function SortHeader({
 export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [rows, setRows] = useState<ScreenerRow[]>(initialData.rows);
   const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
-  const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio'>('prefiltered');
+  const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio'>('portfolio');
+  const [hidePortfolio, setHidePortfolio] = useState(true);
   const [loading, setLoading] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -292,7 +293,11 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   };
 
   const displayRows = useMemo(() => {
-    return [...rows].sort((a, b) => {
+    let filtered = [...rows];
+    if (activeTab === 'prefiltered' && hidePortfolio) {
+      filtered = filtered.filter(r => !r.inPortfolio);
+    }
+    return filtered.sort((a, b) => {
       // For rank sort: unranked stocks (rank=9999, e.g. BE) are placed
       // by their compositeScore relative to ranked stocks so they appear
       // at their natural score position rather than pinned to the bottom.
@@ -327,7 +332,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [rows, sortField, sortDir]);
+  }, [rows, sortField, sortDir, activeTab, hidePortfolio]);
 
   const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered' || activeTab === 'portfolio';
 
@@ -402,6 +407,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         activeTab={activeTab}
         onTabChange={handleTabChange}
         filteredCount={rows.length}
+        hidePortfolio={hidePortfolio}
+        onHidePortfolioChange={setHidePortfolio}
       />
 
       {/* Table */}
