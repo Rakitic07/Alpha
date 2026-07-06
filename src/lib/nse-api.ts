@@ -390,19 +390,7 @@ async function fetchASMListInternal(): Promise<ASMItem[]> {
             }
         }
 
-        // Process shortterm
-        if (json.shortterm && Array.isArray(json.shortterm.data)) {
-            for (const item of json.shortterm.data) {
-                if (!item.symbol) continue;
-                const stage = parseAsmStage(item.asmSurvIndicator);
-                items.push({
-                    symbol: item.symbol.toUpperCase(),
-                    type: 'ST',
-                    stage,
-                    desc: item.survDesc || 'Short Term Additional Surveillance Measure'
-                });
-            }
-        }
+
 
         apiLogger.info(`[NSE] Successfully fetched ${items.length} ASM items`);
         return items;
