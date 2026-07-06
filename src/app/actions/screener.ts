@@ -35,6 +35,7 @@ export interface ScreenerRow {
   exitSignal?: {
     byRank: boolean;    // rank > 50
     byFilter: boolean;  // below 200 DMA AND athProximity < 0.75
+    by100Dma: boolean;  // below 100 DMA
     protected: boolean; // last BUY within 14 days (min hold rule)
     isUnranked: boolean; // not in screener universe (e.g. BE category)
     isBE: boolean;       // specifically moved to BE (T+0 settlement) category
@@ -352,24 +353,23 @@ export async function getScreenerData(
       const isBE = isUnranked && (row.unrankedReason?.includes('BE category') ?? false);
       const byRank   = isUnranked || row.rank > 50;
       const byFilter = !row.dmaSwatches.above200 && row.athProximity < 0.75;
-      if (!byRank && !byFilter) continue;
+      const by100Dma = !row.dmaSwatches.above100;
+      if (!byRank && !byFilter && !by100Dma) continue;
       const ageDays     = holdingAgeDays.get(row.symbol) ?? 9999;
       const isProtected = ageDays < 14;
 
       // Determine signal type:
-      // Yellow: BE category (warning — exit signal but treated as caution)
-      //         OR rank in 51-60 range (borderline)
-      // Red: rank > 60, or below-filter exit, or other unranked reasons
+      // Red: rank > 60, or below-filter exit (byFilter), or other unranked reasons (not BE)
+      // Yellow: BE category OR rank 51-60 OR below 100 DMA (unless meeting red criteria)
       let signalType: 'green' | 'yellow' | 'red';
-      if (isBE) {
-        signalType = 'yellow';
-      } else if (!isUnranked && row.rank >= 51 && row.rank <= 60) {
-        signalType = 'yellow';
-      } else {
+      const isRed = byFilter || (isUnranked && !isBE) || (!isUnranked && row.rank > 60);
+      if (isRed) {
         signalType = 'red';
+      } else {
+        signalType = 'yellow';
       }
 
-      row.exitSignal = { byRank, byFilter, protected: isProtected, isUnranked, isBE, unrankedReason: row.unrankedReason, signalType };
+      row.exitSignal = { byRank, byFilter, by100Dma, protected: isProtected, isUnranked, isBE, unrankedReason: row.unrankedReason, signalType };
     }
   }
 
