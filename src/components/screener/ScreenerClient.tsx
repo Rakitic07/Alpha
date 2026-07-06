@@ -30,13 +30,23 @@ const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
   'Micro':     { label: 'Micro', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
 };
 
-function getRankAccent(rank: number, inPortfolio: boolean): string {
+function getRankAccent(rank: number, inPortfolio: boolean, isPrefiltered: boolean = false): string {
+  if (isPrefiltered) {
+    if (rank <= 30) return 'rgb(34,197,94)';
+    if (rank <= 50) return 'rgb(234,179,8)';
+    return 'rgba(239,68,68,0.6)';
+  }
   if (inPortfolio) return 'rgb(99,102,241)';
   if (rank <= 50) return 'rgb(34,197,94)';
   return 'rgba(239,68,68,0.6)';
 }
 
-function getRankTextColor(rank: number): string {
+function getRankTextColor(rank: number, isPrefiltered: boolean = false): string {
+  if (isPrefiltered) {
+    if (rank <= 30) return 'text-green-400';
+    if (rank <= 50) return 'text-yellow-400';
+    return 'text-red-400';
+  }
   if (rank <= 50) return 'text-green-400';
   return 'text-red-400';
 }
@@ -478,7 +488,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       ? 'rgb(234,179,8)'
                       : row.isUnranked || isProtected
                         ? 'rgb(63,63,70)'
-                        : getRankAccent(row.rank, row.inPortfolio);
+                        : getRankAccent(row.rank, row.inPortfolio, activeTab === 'prefiltered');
 
                 const rowBg = isAllTab
                   ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
@@ -510,7 +520,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                           isAllTab
                             ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'text-emerald-400'
                             : 'text-zinc-400'
-                            : getRankTextColor(row.rank)
+                            : getRankTextColor(row.rank, activeTab === 'prefiltered')
                         }`}>
                           {row.rank}
                         </span>
