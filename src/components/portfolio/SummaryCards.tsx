@@ -557,13 +557,13 @@ export const PnLSummaryCard = memo(function PnLSummaryCard({
                 {rows.map(({ label, icon, iconColor, value, prefix, valueColor }) => (
                     <div key={label} className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                            <FontAwesomeIcon icon={icon} className={`${iconColor} text-sm w-4`} />
-                            <span className="text-sm text-gray-400 font-medium">{label}</span>
+                            <FontAwesomeIcon icon={icon} className={`${iconColor} text-base w-4`} />
+                            <span className="text-base text-gray-400 font-medium">{label}</span>
                         </div>
                         {value === null ? (
-                            <span className="text-sm text-gray-600 font-medium">Coming soon</span>
+                            <span className="text-base text-gray-600 font-medium">Coming soon</span>
                         ) : (
-                            <span className={`text-base font-bold ${valueColor}`}>
+                            <span className={`text-lg font-bold ${valueColor}`}>
                                 {privacyMode ? '****' : (
                                     <AnimatedNumber value={Math.abs(value)} prefix={prefix} formatOptions={{ maximumFractionDigits: 0 }} />
                                 )}
@@ -576,10 +576,10 @@ export const PnLSummaryCard = memo(function PnLSummaryCard({
             {/* Net P/L divider row */}
             <div className="border-t border-gray-700/50 mt-4 pt-4 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2.5">
-                    <FontAwesomeIcon icon={faEquals} className={`text-sm ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`} />
-                    <span className="text-sm font-bold text-gray-300 uppercase tracking-wide">Net P/L</span>
+                    <FontAwesomeIcon icon={faEquals} className={`text-base ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`} />
+                    <span className="text-base font-bold text-gray-300 uppercase tracking-wide">Net P/L</span>
                 </div>
-                <span className={`text-2xl font-bold ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                <span className={`text-3xl font-bold ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}>
                     {privacyMode ? '****' : (
                         <AnimatedNumber
                             value={Math.abs(netPnL)}
@@ -689,12 +689,12 @@ export const MetricsComboCard = memo(function MetricsComboCard({
             {/* Horizontal divider */}
             <div className="h-px bg-gray-700/30 my-4 flex-shrink-0" />
 
-            {/* Bottom: Index Alpha */}
+            {/* Bottom: Strategy Alpha */}
             <div className="flex items-center gap-3 mb-3 flex-shrink-0">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center">
                     <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-lg" />
                 </div>
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Index Alpha</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Strategy Alpha</span>
             </div>
             <div className="flex-1 flex flex-col justify-center gap-3">
                 {benchmarks.map(({ label, val }) => {
