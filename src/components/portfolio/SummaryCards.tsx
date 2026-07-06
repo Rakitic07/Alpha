@@ -538,32 +538,32 @@ export const PnLSummaryCard = memo(function PnLSummaryCard({
     return (
         <div className="glass-card p-5 flex flex-col h-full animate-fade-in-up">
             {/* Header */}
-            <div className="flex items-center gap-2.5 mb-3 flex-shrink-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+            <div className="flex items-center gap-3 mb-4 flex-shrink-0">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                     isNetPositive
                         ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-500/5'
                         : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
                 }`}>
                     <FontAwesomeIcon
                         icon={isNetPositive ? faArrowTrendUp : faArrowTrendDown}
-                        className={`text-sm ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}
+                        className={`text-lg ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}
                     />
                 </div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">P/L Summary</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">P/L Summary</span>
             </div>
 
             {/* Line items */}
-            <div className="flex-1 flex flex-col justify-center gap-2.5">
+            <div className="flex-1 flex flex-col justify-center gap-4">
                 {rows.map(({ label, icon, iconColor, value, prefix, valueColor }) => (
                     <div key={label} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <FontAwesomeIcon icon={icon} className={`${iconColor} w-3 text-xs`} />
-                            <span className="text-xs text-gray-500 font-medium">{label}</span>
+                        <div className="flex items-center gap-2.5">
+                            <FontAwesomeIcon icon={icon} className={`${iconColor} text-sm w-4`} />
+                            <span className="text-sm text-gray-400 font-medium">{label}</span>
                         </div>
                         {value === null ? (
-                            <span className="text-xs text-gray-600 font-medium">Coming soon</span>
+                            <span className="text-sm text-gray-600 font-medium">Coming soon</span>
                         ) : (
-                            <span className={`text-sm font-bold ${valueColor}`}>
+                            <span className={`text-base font-bold ${valueColor}`}>
                                 {privacyMode ? '****' : (
                                     <AnimatedNumber value={Math.abs(value)} prefix={prefix} formatOptions={{ maximumFractionDigits: 0 }} />
                                 )}
@@ -574,12 +574,12 @@ export const PnLSummaryCard = memo(function PnLSummaryCard({
             </div>
 
             {/* Net P/L divider row */}
-            <div className="border-t border-gray-700/50 mt-3 pt-3 flex items-center justify-between flex-shrink-0">
-                <div className="flex items-center gap-2">
-                    <FontAwesomeIcon icon={faEquals} className={`text-xs ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`} />
-                    <span className="text-xs font-bold text-gray-300 uppercase tracking-wide">Net P/L</span>
+            <div className="border-t border-gray-700/50 mt-4 pt-4 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                    <FontAwesomeIcon icon={faEquals} className={`text-sm ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`} />
+                    <span className="text-sm font-bold text-gray-300 uppercase tracking-wide">Net P/L</span>
                 </div>
-                <span className={`text-xl font-bold ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                <span className={`text-2xl font-bold ${isNetPositive ? 'text-emerald-400' : 'text-red-400'}`}>
                     {privacyMode ? '****' : (
                         <AnimatedNumber
                             value={Math.abs(netPnL)}
@@ -618,7 +618,7 @@ export const MetricsComboCard = memo(function MetricsComboCard({
 
     const benchmarks = [
         { label: 'Nifty 50',     val: niftyCagr },
-        { label: 'n500m50',      val: nifty500M50Cagr },
+        { label: 'N500M50',      val: nifty500M50Cagr },
         { label: 'Midcap 100',   val: niftyMidcapCagr },
         { label: 'Smallcap 250', val: niftySmallcapCagr },
     ];
@@ -630,23 +630,23 @@ export const MetricsComboCard = memo(function MetricsComboCard({
             <div className="flex gap-4 flex-shrink-0">
                 {/* XIRR */}
                 <div className="flex-1 flex flex-col">
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                             isXirrPositive
                                 ? 'bg-gradient-to-br from-fuchsia-500/20 to-fuchsia-500/5'
                                 : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
                         }`}>
-                            <FontAwesomeIcon icon={faBullseye} className={`text-[9px] ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`} />
+                            <FontAwesomeIcon icon={faBullseye} className={`text-lg ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`} />
                         </div>
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">XIRR</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">XIRR</span>
                     </div>
-                    <div className={`text-3xl font-bold leading-none ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`}>
+                    <div className={`text-4xl font-bold leading-none ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`}>
                         <AnimatedNumber value={xirrValue} suffix="%" decimals={2} />
                     </div>
                     {hasCharges && (
-                        <div className="flex items-center gap-1 mt-1">
-                            <span className="text-[9px] text-gray-500">Post charges</span>
-                            <span className={`text-[10px] font-semibold ${postChargesXirr >= 0 ? 'text-fuchsia-400/60' : 'text-red-400/80'}`}>
+                        <div className="flex items-center gap-1.5 mt-2">
+                            <span className="text-xs text-gray-500">Post charges</span>
+                            <span className={`text-xs font-semibold ${postChargesXirr >= 0 ? 'text-fuchsia-400/70' : 'text-red-400/80'}`}>
                                 <AnimatedNumber value={postChargesXirr} suffix="%" decimals={2} />
                             </span>
                         </div>
@@ -658,17 +658,17 @@ export const MetricsComboCard = memo(function MetricsComboCard({
 
                 {/* CAGR */}
                 <div className="flex-1 flex flex-col">
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                             isCagrPositive
                                 ? 'bg-gradient-to-br from-violet-500/20 to-violet-500/5'
                                 : 'bg-gradient-to-br from-red-500/20 to-red-500/5'
                         }`}>
-                            <FontAwesomeIcon icon={faChartLine} className={`text-[9px] ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`} />
+                            <FontAwesomeIcon icon={faChartLine} className={`text-lg ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`} />
                         </div>
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">CAGR</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">CAGR</span>
                     </div>
-                    <div className={`text-3xl font-bold leading-none ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
+                    <div className={`text-4xl font-bold leading-none ${isCagrPositive ? 'text-violet-400' : 'text-red-400'}`}>
                         {cagrValue != null ? (
                             <AnimatedNumber value={cagrValue} suffix="%" decimals={2} />
                         ) : (
@@ -676,9 +676,9 @@ export const MetricsComboCard = memo(function MetricsComboCard({
                         )}
                     </div>
                     {hasCharges && postChargesCagr != null && (
-                        <div className="flex items-center gap-1 mt-1">
-                            <span className="text-[9px] text-gray-500">Post charges</span>
-                            <span className={`text-[10px] font-semibold ${postChargesCagr >= 0 ? 'text-violet-400/60' : 'text-red-400/80'}`}>
+                        <div className="flex items-center gap-1.5 mt-2">
+                            <span className="text-xs text-gray-500">Post charges</span>
+                            <span className={`text-xs font-semibold ${postChargesCagr >= 0 ? 'text-violet-400/70' : 'text-red-400/80'}`}>
                                 <AnimatedNumber value={postChargesCagr} suffix="%" decimals={2} />
                             </span>
                         </div>
@@ -687,36 +687,36 @@ export const MetricsComboCard = memo(function MetricsComboCard({
             </div>
 
             {/* Horizontal divider */}
-            <div className="h-px bg-gray-700/30 my-3 flex-shrink-0" />
+            <div className="h-px bg-gray-700/30 my-4 flex-shrink-0" />
 
             {/* Bottom: Index Alpha */}
-            <div className="flex items-center gap-2 mb-2 flex-shrink-0">
-                <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center">
-                    <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-[8px]" />
+            <div className="flex items-center gap-3 mb-3 flex-shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center">
+                    <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-lg" />
                 </div>
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Index Alpha</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Index Alpha</span>
             </div>
-            <div className="flex-1 flex flex-col justify-center gap-1.5">
+            <div className="flex-1 flex flex-col justify-center gap-3">
                 {benchmarks.map(({ label, val }) => {
                     if (val === null || cagrValue === null) return null;
                     const alpha = cagrValue - val;
                     const isPositive = alpha >= 0;
                     const pct = Math.min(Math.abs(alpha) / maxRange, 1) * 50;
                     return (
-                        <div key={label} className="flex flex-col gap-0.5">
-                            <div className="flex justify-between items-center text-[9px] font-semibold">
-                                <span className="text-gray-400">{label}</span>
-                                <span className={isPositive ? 'text-emerald-400' : 'text-rose-400'}>
+                        <div key={label} className="flex flex-col gap-1">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-semibold text-gray-400">{label}</span>
+                                <span className={`text-xs font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
                                     {isPositive ? '+' : ''}{alpha.toFixed(2)}%
                                 </span>
                             </div>
-                            <div className="h-1 bg-gray-800/40 rounded-full relative overflow-hidden">
-                                <div className="absolute left-1/2 w-px h-full bg-gray-700/50 z-10" />
+                            <div className="h-2.5 bg-gray-800/60 rounded-full relative overflow-hidden">
+                                <div className="absolute left-1/2 w-px h-full bg-gray-600/60 z-10" />
                                 <div
                                     className={`absolute h-full rounded-full transition-all duration-1000 ${
                                         isPositive
-                                            ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
-                                            : 'bg-gradient-to-l from-rose-500 to-rose-400'
+                                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                                            : 'bg-gradient-to-l from-rose-600 to-rose-400'
                                     }`}
                                     style={{
                                         left: isPositive ? '50%' : `${50 - pct}%`,
