@@ -30,7 +30,7 @@ export default memo(function StatsBar({
   ];
 
   return (
-    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full">
+    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full md:h-12">
       {/* Left side: Tabs */}
       <div className="flex items-center gap-1 bg-slate-800/50 border border-white/5 rounded-xl p-1">
         {tabs.map(tab => (
@@ -68,14 +68,14 @@ export default memo(function StatsBar({
         {activeTab === 'portfolio' && (
           <div className="flex items-center gap-4 text-[11px]">
             {/* Portfolio rank buckets */}
-            <div className="flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-2">
+            <div className="flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-1.5">
               <StatPill label="HOLD" value={rankBuckets.hold} color="text-emerald-400" />
               <StatPill label="WARN" value={rankBuckets.warning} color="text-yellow-400" />
               <StatPill label="EXIT" value={rankBuckets.exit} color="text-red-400" />
             </div>
 
             {/* Market cap breakdown */}
-            <div className="hidden md:flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-2">
+            <div className="hidden md:flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-1.5">
               <McapPill label="LARGE" value={mcapBreakdown.large} total={totalMcap} color="text-blue-400" />
               <McapPill label="MID" value={mcapBreakdown.mid} total={totalMcap} color="text-yellow-400" />
               <McapPill label="SMALL" value={mcapBreakdown.small} total={totalMcap} color="text-green-400" />
