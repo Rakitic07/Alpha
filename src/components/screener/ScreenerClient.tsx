@@ -51,6 +51,20 @@ function getRankTextColor(rank: number, isPrefiltered: boolean = false): string 
   return 'text-red-400';
 }
 
+function getAsmBadgeCls(stage: string): string {
+  switch (stage) {
+    case '1':
+      return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+    case '2':
+      return 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30';
+    case '3':
+      return 'bg-rose-500/20 text-rose-400 border-rose-500/30';
+    case '4':
+    default:
+      return 'bg-red-500/20 text-red-400 border-red-500/30';
+  }
+}
+
 // ─── Price Sparkline ─────────────────────────────────────────────────────────
 
 function buildSparklinePath(data: number[], w: number, h: number): string | null {
@@ -572,7 +586,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         })()}
                         {row.asmInfo && (
                           <span
-                            className="text-[9px] px-1.5 h-4 rounded font-bold border shrink-0 flex items-center bg-amber-500/20 text-amber-400 border-amber-500/30 gap-0.5"
+                            className={`text-[9px] px-1.5 h-4 rounded font-bold border shrink-0 flex items-center gap-0.5 ${getAsmBadgeCls(row.asmInfo.stage)}`}
                             title={row.asmInfo.desc}
                           >
                             <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
