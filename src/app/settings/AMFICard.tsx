@@ -15,8 +15,13 @@ import { initializeJob, triggerRecalculatePortfolio } from '@/app/actions';
 
 export default function AMFICard() {
     const [amfiFile, setAmfiFile] = useState<File | null>(null);
-    const [amfiYear, setAmfiYear] = useState<number>(new Date().getFullYear());
-    const [amfiHalf, setAmfiHalf] = useState<'H1' | 'H2'>(new Date().getMonth() < 6 ? 'H1' : 'H2');
+    const [amfiYear, setAmfiYear] = useState<number>(() => {
+        const now = new Date();
+        return now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear();
+    });
+    const [amfiHalf, setAmfiHalf] = useState<'H1' | 'H2'>(() => {
+        return new Date().getMonth() < 6 ? 'H2' : 'H1';
+    });
     const [isUploadingAMFI, setIsUploadingAMFI] = useState(false);
     const [amfiHistory, setAmfiHistory] = useState<Array<{ period: string; count: number; updatedAt: string }>>([]);
     const [amfiStatus, setAmfiStatus] = useState<{ needsUpdate: boolean; message: string; appliedPeriod: string } | null>(null);
@@ -141,7 +146,7 @@ export default function AMFICard() {
                                 onChange={(e) => setAmfiYear(Number(e.target.value))}
                                 sx={{ color: 'white', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }, fontSize: '0.75rem' }}
                             >
-                                {[2023, 2024, 2025, 2026].map(y => (
+                                {Array.from({ length: new Date().getFullYear() - 2023 + 2 }, (_, idx) => 2023 + idx).map(y => (
                                     <MenuItem key={y} value={y}>{y}</MenuItem>
                                 ))}
                             </Select>
@@ -166,7 +171,23 @@ export default function AMFICard() {
                                 style={{ display: 'none' }}
                                 id="amfi-upload-file-card"
                                 type="file"
-                                onChange={(e) => setAmfiFile(e.target.files?.[0] || null)}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0] || null;
+                                    setAmfiFile(file);
+                                    if (file) {
+                                        const match = file.name.match(/(\d{4})/);
+                                        if (match) {
+                                            const year = parseInt(match[1], 10);
+                                            setAmfiYear(year);
+                                            const nameLower = file.name.toLowerCase();
+                                            if (nameLower.includes('jun') || nameLower.includes('30.06') || nameLower.includes('30-06')) {
+                                                setAmfiHalf('H1');
+                                            } else if (nameLower.includes('dec') || nameLower.includes('31.12') || nameLower.includes('31-12')) {
+                                                setAmfiHalf('H2');
+                                            }
+                                        }
+                                    }
+                                }}
                             />
                             <label htmlFor="amfi-upload-file-card" className="flex-1">
                                 <Button

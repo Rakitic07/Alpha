@@ -8,6 +8,7 @@ import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
 import { getAllInstrumentData } from '@/lib/instrument-service';
 import { createJob, completeJob, failJob } from '@/lib/jobs';
+import { fetchASMList } from '@/lib/nse-api';
 
 // ── Types ──
 
@@ -42,6 +43,11 @@ export interface ScreenerRow {
     unrankedReason?: string;
     // Signal classification
     signalType: 'green' | 'yellow' | 'red';
+  };
+  asmInfo?: {
+    type: 'ST' | 'LT';
+    stage: string;
+    desc: string;
   };
 }
 
@@ -94,6 +100,15 @@ export async function getScreenerData(
   }
 
   const scores = await getCachedActiveScores(rankTypeForScores);
+
+  // Fetch ASM surveillance list
+  let asmMap = new Map<string, { symbol: string; type: 'ST' | 'LT'; stage: string; desc: string }>();
+  try {
+    const asmList = await fetchASMList();
+    asmMap = new Map(asmList.map(item => [item.symbol, item]));
+  } catch (error) {
+    // Fail-safe, keep empty map
+  }
 
   let portfolioSymbols: Set<string>;
   let portfolioNames: Map<string, string>;
@@ -153,6 +168,8 @@ export async function getScreenerData(
     const prevRank = prevDayRanks.get(s.symbol) ?? null;
     const rankChange = prevRank !== null ? prevRank - s.rank : null;
 
+    const asm = asmMap.get(s.symbol);
+
     return {
       rank: s.rank,
       symbol: s.symbol,
@@ -178,6 +195,7 @@ export async function getScreenerData(
       rankChange,
       inPortfolio,
       isPreFiltered: filteredSymbols.size > 0 ? filteredSymbols.has(s.symbol) : undefined,
+      asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
     };
   });
 
@@ -312,6 +330,8 @@ export async function getScreenerData(
           }
         }
 
+        const asm = asmMap.get(sym);
+
         allRows.push({
           rank: 9999,
           symbol: sym,
@@ -338,6 +358,7 @@ export async function getScreenerData(
           inPortfolio: true,
           isUnranked: true,
           unrankedReason,
+          asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
         });
       }
     }

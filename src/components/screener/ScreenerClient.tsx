@@ -570,6 +570,17 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             </span>
                           ) : null;
                         })()}
+                        {row.asmInfo && (
+                          <span
+                            className="text-[9px] px-1.5 h-4 rounded font-bold border shrink-0 flex items-center bg-amber-500/20 text-amber-400 border-amber-500/30 gap-0.5"
+                            title={row.asmInfo.desc}
+                          >
+                            <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            {row.asmInfo.type}-{row.asmInfo.stage}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">
                         {row.companyName}

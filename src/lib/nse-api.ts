@@ -5,6 +5,7 @@
  * Used as a fallback when Upstox data is unavailable.
  */
 
+import { unstable_cache } from 'next/cache';
 import { formatDateDMY } from './format';
 import { apiLogger } from '@/lib/logger';
 
@@ -327,3 +328,94 @@ export async function fetchNSECorporateActions(
         return null;
     }
 }
+
+// ============================================================================
+// ASM List Fetching
+// ============================================================================
+
+export interface ASMItem {
+    symbol: string;
+    type: 'ST' | 'LT';
+    stage: string;
+    desc: string;
+}
+
+function parseAsmStage(indicator: string | null | undefined): string {
+    if (!indicator) return '1';
+    const match = indicator.match(/Stage\s+([IVXLCDM]+|\d+)/i);
+    if (match) {
+        const stageVal = match[1];
+        const map: Record<string, string> = {
+            'I': '1',
+            'II': '2',
+            'III': '3',
+            'IV': '4',
+            'V': '5'
+        };
+        return map[stageVal.toUpperCase()] || stageVal;
+    }
+    return indicator.replace(/Stage/i, '').trim() || '1';
+}
+
+async function fetchASMListInternal(): Promise<ASMItem[]> {
+    try {
+        apiLogger.info('[NSE] Fetching ASM list...');
+        const cookies = await getNSECookies();
+        if (!cookies) throw new Error('No cookies received from NSE homepage');
+
+        const res = await fetch('https://www.nseindia.com/api/reportASM', {
+            headers: {
+                ...NSE_HEADERS,
+                'Cookie': cookies,
+                'Referer': 'https://www.nseindia.com/'
+            }
+        });
+
+        if (!res.ok) throw new Error(`NSE ASM API returned status ${res.status}`);
+
+        const json = await res.json();
+        const items: ASMItem[] = [];
+
+        // Process longterm
+        if (json.longterm && Array.isArray(json.longterm.data)) {
+            for (const item of json.longterm.data) {
+                if (!item.symbol) continue;
+                const stage = parseAsmStage(item.asmSurvIndicator);
+                items.push({
+                    symbol: item.symbol.toUpperCase(),
+                    type: 'LT',
+                    stage,
+                    desc: item.survDesc || 'Long Term Additional Surveillance Measure'
+                });
+            }
+        }
+
+        // Process shortterm
+        if (json.shortterm && Array.isArray(json.shortterm.data)) {
+            for (const item of json.shortterm.data) {
+                if (!item.symbol) continue;
+                const stage = parseAsmStage(item.asmSurvIndicator);
+                items.push({
+                    symbol: item.symbol.toUpperCase(),
+                    type: 'ST',
+                    stage,
+                    desc: item.survDesc || 'Short Term Additional Surveillance Measure'
+                });
+            }
+        }
+
+        apiLogger.info(`[NSE] Successfully fetched ${items.length} ASM items`);
+        return items;
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        apiLogger.error('[NSE] Failed to fetch ASM list:', msg);
+        return [];
+    }
+}
+
+export const fetchASMList = unstable_cache(
+    fetchASMListInternal,
+    ['nse-asm-list'],
+    { revalidate: 3600, tags: ['market-data'] }
+);
+
