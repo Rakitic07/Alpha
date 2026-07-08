@@ -24,7 +24,7 @@ export default async function SettingsPage() {
         <SettingsContainer>
             <SettingsClient initialDataLockDate={dataLockDate} freshness={freshness} />
             <SettingsSection>
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <AMFICard />
                     <DividendsCard />
                     <SymbolMappingsCard initialMappings={symbolMappings} />
