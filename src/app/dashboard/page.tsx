@@ -84,6 +84,7 @@ export default function DashboardPage() {
     totalUnrealizedPnL,
     totalCharges,
     totalTax,
+    totalDividends,
     xirrValue,
     cagrValue,
     niftyCagr,
@@ -142,6 +143,7 @@ export default function DashboardPage() {
             unrealizedPnL={totalUnrealizedPnL}
             totalCharges={totalCharges}
             totalTax={totalTax}
+            dividends={totalDividends}
             privacyMode={privacyMode}
           />
         </div>
@@ -154,6 +156,7 @@ export default function DashboardPage() {
             totalCharges={totalCharges}
             totalTax={totalTax}
             totalInvested={totalInvested}
+            totalDividends={totalDividends}
             niftyCagr={niftyCagr}
             nifty500M50Cagr={nifty500M50Cagr}
             niftyMidcapCagr={niftyMidcapCagr}

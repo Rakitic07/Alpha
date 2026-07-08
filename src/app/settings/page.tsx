@@ -3,6 +3,7 @@ import SettingsClient from './SettingsClient';
 import CorporateActionsCard from './CorporateActionsCard';
 import SymbolMappingsCard from './SymbolMappingsCard';
 import AMFICard from './AMFICard';
+import DividendsCard from './DividendsCard';
 import { getDataLockDate } from '@/app/actions/settings';
 import { getCorporateActions } from '@/app/actions';
 import { getSymbolMappings } from '@/app/actions/symbol-mappings';
@@ -23,8 +24,9 @@ export default async function SettingsPage() {
         <SettingsContainer>
             <SettingsClient initialDataLockDate={dataLockDate} freshness={freshness} />
             <SettingsSection>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                     <AMFICard />
+                    <DividendsCard />
                     <SymbolMappingsCard initialMappings={symbolMappings} />
                     <CorporateActionsCard initialActions={corporateActions} />
                 </div>

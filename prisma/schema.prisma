@@ -327,3 +327,27 @@ model StockMarketCap {
   marketCap Float    // in Crores
   updatedAt DateTime @default(now())
 }
+
+// Dividend records from Zerodha Tax P&L upload
+// Dedup key: (isin, exDate) — upsert on re-upload of same period
+model Dividend {
+  id           Int       @id @default(autoincrement())
+  isin         String
+  symbol       String?   // NSE symbol (resolved from ISIN if available)
+  exDate       DateTime  // Ex-dividend date
+  payDate      DateTime? // Payment date (optional, may not be in sheet)
+  amount       Float     // Total dividend received (₹)
+  dps          Float?    // Dividend per share (₹)
+  quantity     Float?    // Shares held at ex-date
+  fiscalYear   String    // e.g. "2026_2027" — extracted from filename
+  quarter      String?   // e.g. "Q1-Q2" — extracted from filename
+  source       String    @default("zerodha_taxpnl")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([isin, exDate])
+  @@index([isin])
+  @@index([symbol])
+  @@index([fiscalYear])
+  @@index([exDate])
+}

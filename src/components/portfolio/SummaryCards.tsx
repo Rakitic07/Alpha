@@ -74,6 +74,7 @@ interface MetricsComboCardProps {
     totalCharges: number;
     totalTax: number;
     totalInvested: number;
+    totalDividends?: number;
     niftyCagr: number | null;
     nifty500M50Cagr: number | null;
     niftyMidcapCagr: number | null;
@@ -603,6 +604,7 @@ export const MetricsComboCard = memo(function MetricsComboCard({
     totalCharges,
     totalTax,
     totalInvested,
+    totalDividends = 0,
     niftyCagr,
     nifty500M50Cagr,
     niftyMidcapCagr,
@@ -612,9 +614,12 @@ export const MetricsComboCard = memo(function MetricsComboCard({
     const isXirrPositive = xirrValue >= 0;
     const isCagrPositive = (cagrValue ?? 0) >= 0;
     const chargeDragPct = totalInvested > 0 ? ((totalCharges + totalTax) / totalInvested) * 100 : 0;
-    const postChargesXirr = xirrValue - chargeDragPct;
-    const postChargesCagr = cagrValue != null ? cagrValue - chargeDragPct : null;
-    const hasCharges = chargeDragPct > 0;
+    const dividendYieldPct = totalInvested > 0 ? (totalDividends / totalInvested) * 100 : 0;
+    // post-charges & dividends: subtract charge drag, add dividend yield
+    const postNetXirr = xirrValue - chargeDragPct + dividendYieldPct;
+    const postNetCagr = cagrValue != null ? cagrValue - chargeDragPct + dividendYieldPct : null;
+    const hasAdjustment = chargeDragPct > 0 || dividendYieldPct > 0;
+    const postLabel = totalDividends > 0 ? 'Post charges & dividends' : 'Post charges';
 
     const benchmarks = [
         { label: 'Nifty 50',     val: niftyCagr },
@@ -643,11 +648,11 @@ export const MetricsComboCard = memo(function MetricsComboCard({
                     <div className={`text-4xl font-bold leading-none ${isXirrPositive ? 'text-fuchsia-400' : 'text-red-400'}`}>
                         <AnimatedNumber value={xirrValue} suffix="%" decimals={2} />
                     </div>
-                    {hasCharges && (
+                    {hasAdjustment && (
                         <div className="flex items-center gap-1.5 mt-2">
-                            <span className="text-xs text-gray-500">Post charges</span>
-                            <span className={`text-xs font-semibold ${postChargesXirr >= 0 ? 'text-fuchsia-400/70' : 'text-red-400/80'}`}>
-                                <AnimatedNumber value={postChargesXirr} suffix="%" decimals={2} />
+                            <span className="text-xs text-gray-500">{postLabel}</span>
+                            <span className={`text-xs font-semibold ${postNetXirr >= 0 ? 'text-fuchsia-400/70' : 'text-red-400/80'}`}>
+                                <AnimatedNumber value={postNetXirr} suffix="%" decimals={2} />
                             </span>
                         </div>
                     )}
@@ -675,11 +680,11 @@ export const MetricsComboCard = memo(function MetricsComboCard({
                             <span className="text-gray-600">—</span>
                         )}
                     </div>
-                    {hasCharges && postChargesCagr != null && (
+                    {hasAdjustment && postNetCagr != null && (
                         <div className="flex items-center gap-1.5 mt-2">
-                            <span className="text-xs text-gray-500">Post charges</span>
-                            <span className={`text-xs font-semibold ${postChargesCagr >= 0 ? 'text-violet-400/70' : 'text-red-400/80'}`}>
-                                <AnimatedNumber value={postChargesCagr} suffix="%" decimals={2} />
+                            <span className="text-xs text-gray-500">{postLabel}</span>
+                            <span className={`text-xs font-semibold ${postNetCagr >= 0 ? 'text-violet-400/70' : 'text-red-400/80'}`}>
+                                <AnimatedNumber value={postNetCagr} suffix="%" decimals={2} />
                             </span>
                         </div>
                     )}

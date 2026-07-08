@@ -3,6 +3,7 @@
 import { getPortfolioHoldings, getHistoricalPortfolioHoldings, getLatestPortfolioStats, getDashboardStats, calculatePortfolioXIRR } from '@/lib/finance';
 import { getPortfolioExits } from '@/lib/exits';
 import { calculateNetCapitalGainsTax } from '@/lib/charges';
+import { getTotalDividends } from '@/lib/dividends';
 import { prisma } from '@/lib/db';
 import { getWeeklySnapshots } from '@/app/actions/snapshots';
 import { PortfolioHolding, SectorAllocation } from '@/lib/types';
@@ -33,7 +34,8 @@ export async function fetchDashboardData() {
     snapshots,
     weeklySnapshots,
     monthlySnapshots,
-    exits
+    exits,
+    totalDividends,
   ] = await Promise.all([
     getPortfolioHoldings(),
     getHistoricalPortfolioHoldings(),
@@ -42,7 +44,8 @@ export async function fetchDashboardData() {
     prisma.dailyPortfolioSnapshot.findMany({ orderBy: { date: 'asc' } }),
     getWeeklySnapshots(),
     prisma.monthlyPortfolioSnapshot.findMany({ orderBy: { date: 'asc' } }),
-    getPortfolioExits()
+    getPortfolioExits(),
+    getTotalDividends().catch(() => 0), // graceful fallback before migration
   ]);
 
   const totalCurrentValue = holdings.reduce((sum, h) => sum + h.currentValue, 0);
@@ -144,6 +147,7 @@ export async function fetchDashboardData() {
     totalUnrealizedPnL,
     totalCharges,
     totalTax,
+    totalDividends,
     xirrValue,
     cagrValue,
     niftyCagr,
