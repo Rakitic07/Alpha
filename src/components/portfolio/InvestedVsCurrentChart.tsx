@@ -38,7 +38,7 @@ const formatCurrency = (num: number) =>
 // ─── Gap fill: pixel-perfect SVG paths between the two lines ──────────────────
 // Uses Recharts' `offset` (plot-area bounds) passed to every Customized child.
 // chartData and yDomain are passed as explicit props on <Customized>.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const GapFill = ({ chartData: cd, yDomain, offset }: any) => {
   if (!cd?.length || !offset || !yDomain) return null;
 
@@ -62,7 +62,7 @@ const GapFill = ({ chartData: cd, yDomain, offset }: any) => {
 
   type Pt = { x: number; yi: number; yc: number }; // yi = invested px, yc = current px
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const pts: Pt[] = cd.map((d: any, i: number) => ({
     x:  toX(i),
     yi: toY(d.investedCapital),
@@ -146,31 +146,24 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
     });
   }, [data, dateRange]);
 
-  if (!data || data.length === 0) {
-    return (
-      <div className="glass-card p-8 text-center animate-fade-in">
-        <FontAwesomeIcon icon={faScaleBalanced} className="text-4xl text-gray-600 mb-4 block" />
-        <p className="text-gray-400">No data to display</p>
-      </div>
-    );
-  }
+  const chartData = useMemo(() => {
+    return (filteredData || []).map(d => ({
+      ...d,
+      dateStr: format(new Date(d.date), 'yyyy-MM-dd'),
+      date: new Date(d.date),
+      investedCapital: d.investedCapital ?? 0,
+      totalEquity:     d.totalEquity     ?? 0,
+    }));
+  }, [filteredData]);
 
-  const chartData = filteredData.map(d => ({
-    ...d,
-    dateStr: format(new Date(d.date), 'yyyy-MM-dd'),
-    date: new Date(d.date),
-    investedCapital: d.investedCapital ?? 0,
-    totalEquity:     d.totalEquity     ?? 0,
-  }));
-
-  const monthTicks = (() => {
+  const monthTicks = useMemo(() => {
     const seen = new Set<string>(); const ticks: string[] = [];
     for (const d of chartData) {
       const ym = d.dateStr.slice(0, 7);
       if (!seen.has(ym)) { seen.add(ym); ticks.push(d.dateStr); }
     }
     return ticks;
-  })();
+  }, [chartData]);
 
   const yDomain = useMemo((): [number, number] => {
     if (chartData.length === 0) return [0, 1];
@@ -179,6 +172,15 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
     const range = dMax - dMin || dMax * 0.1;
     return [Math.max(0, dMin - range * 0.05), dMax + range * 0.05];
   }, [chartData]);
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="glass-card p-8 text-center animate-fade-in">
+        <FontAwesomeIcon icon={faScaleBalanced} className="text-4xl text-gray-600 mb-4 block" />
+        <p className="text-gray-400">No data to display</p>
+      </div>
+    );
+  }
 
   const handleDateRangeChange = (_e: React.MouseEvent<HTMLElement>, v: DateRange | null) => {
     if (v) setDateRange(v);
@@ -288,12 +290,12 @@ export default function InvestedVsCurrentChart({ data }: { data: DataPoint[] }) 
 }
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const invested = payload.find((p: any) => p.name === 'Invested')?.value      ?? 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const current  = payload.find((p: any) => p.name === 'Current Value')?.value ?? 0;
   const pnl = current - invested;
   const pos = pnl >= 0;

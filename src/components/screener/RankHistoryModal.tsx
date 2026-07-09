@@ -29,7 +29,7 @@ function fmtFull(s: string) {
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const RankTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   const entry = payload.find((p: { dataKey: string }) => p.dataKey === 'rank');
@@ -48,7 +48,7 @@ const RankTooltip = ({ active, payload, label }: any) => {
 
 // ── Dots ──────────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const RankDot = (props: any) => {
   const { cx, cy, payload, index, dataLength } = props;
   if (cx == null || cy == null) return null;
@@ -74,7 +74,7 @@ const RankDot = (props: any) => {
   return null;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const RankActiveDot = (props: any) => {
   const { cx, cy, payload } = props;
   if (cx == null || cy == null) return null;
@@ -334,7 +334,7 @@ export default function RankHistoryModal({
                         isAnimationActive
                         animationDuration={800}
                         animationEasing="ease-out"
-                        dot={(props: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                        dot={(props: any) => (  
                           <RankDot {...props} dataLength={chartData.length} />
                         )}
                         activeDot={<RankActiveDot />}

@@ -10,7 +10,7 @@ import { getDatabaseData } from '@/app/actions/db';
 
 export default function DatabaseViewer({ models }: { models: string[] }) {
   const [selectedModel, setSelectedModel] = useState<string>(models[0] || '');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [rowCount, setRowCount] = useState(0);
@@ -35,13 +35,6 @@ export default function DatabaseViewer({ models }: { models: string[] }) {
     return () => clearTimeout(handler);
   }, [search]);
 
-  // Fetch Data
-  useEffect(() => {
-    if (selectedModel) {
-      loadData(selectedModel, paginationModel, debouncedSearch);
-    }
-  }, [selectedModel, paginationModel, debouncedSearch]);
-
   const loadData = async (model: string, pagination: GridPaginationModel, searchQuery: string) => {
     setLoading(true);
     setError(null);
@@ -50,7 +43,7 @@ export default function DatabaseViewer({ models }: { models: string[] }) {
       const result = await getDatabaseData(model, pagination.page + 1, pagination.pageSize, searchQuery);
       
       // Ensure each row has an 'id' for DataGrid
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const dataWithIds = result.data.map((row: any, index: number) => ({
         ...row,
         id: row.id !== undefined ? row.id : `row-${index}`, // Fallback if no ID
@@ -65,6 +58,13 @@ export default function DatabaseViewer({ models }: { models: string[] }) {
       setLoading(false);
     }
   };
+
+  // Fetch Data
+  useEffect(() => {
+    if (selectedModel) {
+      loadData(selectedModel, paginationModel, debouncedSearch);
+    }
+  }, [selectedModel, paginationModel, debouncedSearch]);
 
   // Dynamic Columns
   const columns: GridColDef[] = useMemo(() => {

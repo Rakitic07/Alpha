@@ -35,6 +35,10 @@ const DailyPnLChart = dynamic(() => import('@/components/portfolio/DailyPnLChart
   loading: () => <div className="h-[300px] bg-slate-800/30 rounded-xl animate-pulse" />,
   ssr: false,
 });
+const RollingReturnsChart = dynamic(() => import('@/components/portfolio/RollingReturnsChart'), {
+  loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
 const PerformanceHeatmap = dynamic(() => import('@/components/portfolio/CalendarHeatmap'), {
   loading: () => <div className="h-[280px] bg-slate-800/30 rounded-xl animate-pulse" />,
   ssr: false,
@@ -59,6 +63,11 @@ const XirrCagrChart = dynamic(() => import('@/components/portfolio/XirrCagrChart
 export default function DashboardPage() {
   const { data, isLoading, isFetching } = useDashboardData();
   const { privacyMode } = useLiveData();
+
+  const drawdownData = useMemo(
+    () => (data?.dashboardHistory || []).map(d => ({ date: d.date, drawdown: d.drawdown })),
+    [data?.dashboardHistory]
+  );
 
   if (isLoading && !data) {
     return null; // Next.js loading.tsx handles the skeleton
@@ -93,11 +102,6 @@ export default function DashboardPage() {
     niftySmallcapCagr,
     isWeekPositive
   } = data;
-
-  const drawdownData = useMemo(
-    () => dashboardHistory.map(d => ({ date: d.date, drawdown: d.drawdown })),
-    [dashboardHistory]
-  );
 
   return (
     <div className="flex flex-col gap-4 md:gap-8 pb-8 md:pb-0">
@@ -274,6 +278,17 @@ export default function DashboardPage() {
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Daily P&L Chart">
                        <DailyPnLChart data={chartData} />
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </div>
+
+      {/* Row 5.7: Rolling Returns Chart */}
+      <div className="w-full h-auto flex-none">
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Rolling Returns Chart">
+                       <RollingReturnsChart data={chartData} />
                      </ChartErrorBoundary>
                 </div>
           </div>

@@ -35,7 +35,7 @@ interface ChartDataPoint {
 }
 
 // Custom tooltip component
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const CustomTooltip = ({ active, payload }: any) => {
   const { privacyMode } = useLiveData();
   if (active && payload && payload.length) {
@@ -77,7 +77,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 // Custom label component for scatter points
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const renderCustomLabel = (props: any) => {
   const { x, y, value } = props;
   return (

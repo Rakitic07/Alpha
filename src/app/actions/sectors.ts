@@ -199,7 +199,7 @@ const MANUAL_SECTOR_MAPPINGS: StockSector[] = [
     });
     sectorsLogger.info('='.repeat(60));
     
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (revalidateTag as any)('portfolio-data', 'max');
 
     return { success: true, count: uniqueStocks.length };

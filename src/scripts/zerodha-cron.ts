@@ -34,11 +34,11 @@ const require = createRequire(import.meta.url);
 const Module = require('module');
 const originalLoad = Module._load;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 Module._load = function(request: string, parent: any, isMain: boolean) {
     if (request === 'next/cache') {
         return {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             unstable_cache: (fn: any) => fn,
             revalidateTag: () => console.log('[Mock] revalidateTag'),
             revalidatePath: () => console.log('[Mock] revalidatePath'),

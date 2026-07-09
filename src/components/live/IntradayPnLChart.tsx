@@ -23,7 +23,7 @@ interface IntradayPnLChartProps {
   isMobile: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile }: any) {
   if (!active || !payload || !payload.length) return null;
   

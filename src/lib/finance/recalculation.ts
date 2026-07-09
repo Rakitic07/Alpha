@@ -132,7 +132,7 @@ export async function recalculatePortfolioHistoryInternal(
 
     // Fetch market holidays for the simulation period
     let marketHolidays = new Set<string>();
-    let specialTradingDays = new Set<string>();
+    const specialTradingDays = new Set<string>();
     try {
         const holidays = await getMarketHolidays();
         marketHolidays = new Set(holidays.map(h => format(new Date(h.date), 'yyyy-MM-dd')));
@@ -944,9 +944,9 @@ export async function recalculatePortfolioHistoryInternal(
     financeLogger.info("Recalculation Complete.");
     try {
         // Invalidate caches - using 'as any' to bypass potential signature mismatch in tooling
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (revalidateTag as any)('portfolio-data');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (revalidateTag as any)('dashboard-stats');
     } catch (e) {
         financeLogger.warn("revalidateTag failed (expected when run outside Next.js server context):", e);

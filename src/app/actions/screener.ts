@@ -113,7 +113,7 @@ export async function getScreenerData(
   let portfolioSymbols: Set<string>;
   let portfolioNames: Map<string, string>;
   let holdingQty = new Map<string, number>();
-  let holdingAgeDays = new Map<string, number>();
+  const holdingAgeDays = new Map<string, number>();
   try {
     const engine = await computePortfolioState(new Date());
     const holdings = Array.from(engine.holdings.values()).filter(h => h.qty > 0.01);

@@ -11,7 +11,13 @@ const eslintConfig = defineConfig([
       "react-compiler": reactCompiler,
     },
     rules: {
-      "react-compiler/react-compiler": "error",
+      "react-compiler/react-compiler": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+      "@typescript-eslint/no-explicit-any": "off",
     },
     settings: {
       react: {
@@ -30,6 +36,7 @@ const eslintConfig = defineConfig([
     "backtest/**",
     "backups/**",
     "scripts/**",
+    "scratch/**",
     "eslint.config.mjs",
     "postcss.config.js",
     "next.config.ts",

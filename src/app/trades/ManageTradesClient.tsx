@@ -320,7 +320,7 @@ export default function ManageTradesClient({
         setDeleteConfirmation({ open: false, id: null });
     }, []);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const handleSubmit = useCallback(async (data: any) => {
         try {
             if (editingTrade) {
@@ -376,28 +376,6 @@ export default function ManageTradesClient({
             return { valid: false, error: 'File size must be less than 10MB' };
         }
         return { valid: true };
-    };
-
-    const handleFile = useCallback((selectedFile: File) => {
-        setUploadStatus('validating');
-        setUploadMessage('Validating file...');
-        
-        const validation = validateFileType(selectedFile);
-        if (!validation.valid) {
-            setUploadStatus('error');
-            setUploadMessage(validation.error || 'Invalid file');
-            return;
-        }
-
-        setFile(selectedFile);
-        handleValidateAndPreview(selectedFile);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            handleFile(e.target.files[0]);
-        }
     };
 
     const handleValidateAndPreview = async (fileOrEvent: React.FormEvent | File) => {
@@ -505,6 +483,28 @@ export default function ManageTradesClient({
             setUploadStatus('error');
             setUploadMessage(errorMessage);
             setUploadProgress(0);
+        }
+    };
+
+    const handleFile = useCallback((selectedFile: File) => {
+        setUploadStatus('validating');
+        setUploadMessage('Validating file...');
+        
+        const validation = validateFileType(selectedFile);
+        if (!validation.valid) {
+            setUploadStatus('error');
+            setUploadMessage(validation.error || 'Invalid file');
+            return;
+        }
+
+        setFile(selectedFile);
+        handleValidateAndPreview(selectedFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            handleFile(e.target.files[0]);
         }
     };
 

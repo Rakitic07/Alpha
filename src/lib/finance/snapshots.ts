@@ -523,8 +523,8 @@ export async function captureHolidaySnapshot(date: Date = new Date()) {
     });
 
     // Also revalidate paths
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (revalidateTag as any)('portfolio-data', 'max');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (revalidateTag as any)('dashboard-stats', 'max');
 }

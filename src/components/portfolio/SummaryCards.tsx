@@ -87,7 +87,7 @@ interface MetricsComboCardProps {
 // ============================================================================
 
 // Mini sparkline widget — memoized to prevent re-renders
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const ChartWidget = memo(({ data, dataKey, color, domain }: { data: any[], dataKey: string, color: string, domain?: any }) => (
   <div className="absolute bottom-0 left-0 right-0 h-[80px] opacity-30 pointer-events-none">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -739,7 +739,7 @@ export const MetricsComboCard = memo(function MetricsComboCard({
 });
 
 // Deprecated
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function SummaryCards(props: any) {
     return null; 
 }

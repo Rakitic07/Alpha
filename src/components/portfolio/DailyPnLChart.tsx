@@ -270,7 +270,7 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const CustomTooltip = ({ active, payload, label, displayMode }: any) => {
   if (active && payload && payload.length) {
     const value = payload[0]?.value ?? 0;

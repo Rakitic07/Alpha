@@ -24,14 +24,14 @@ export async function getDatabaseData(model: string, page: number = 1, pageSize:
   try {
     const skip = (page - 1) * pageSize;
     
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const delegate = (prisma as any)[model];
 
     if (!delegate) {
       throw new Error(`Model ${model} not found`);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const where: any = {};
     if (search) {
       // Basic search logic depending on model fields

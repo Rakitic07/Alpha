@@ -36,9 +36,7 @@ export default memo(function MarketHeatmap({
   loading,
   onRefresh,
 }: MarketHeatmapProps) {
-  if (!constituents || constituents.length === 0) return null;
-
-  const count = constituents.length;
+  const count = constituents?.length || 0;
 
   // Dynamic height: scale up for indices with many constituents
   const height = useMemo(() => {
@@ -51,13 +49,15 @@ export default memo(function MarketHeatmap({
   const treeData = useMemo(() => ({
     name: 'Market',
     color: 'transparent',
-    children: constituents.map(c => ({
+    children: (constituents || []).map(c => ({
       name: c.symbol,
       value: Math.max(c.weight, 0.01),
       changePercent: c.changePercent,
       lastPrice: c.lastPrice,
     })),
   }), [constituents]);
+
+  if (!constituents || constituents.length === 0) return null;
 
   const hasIndexStats = indexName !== undefined;
   const total = (advancing ?? 0) + (declining ?? 0) + (unchanged ?? 0);

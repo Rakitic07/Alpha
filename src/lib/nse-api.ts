@@ -248,7 +248,7 @@ export async function fetchNSEIndexHistory(
             }
 
             try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                 
                 const json = await apiRes.json() as any;
                 
                 // Handle both response structures

@@ -520,14 +520,14 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     const validNames = ['My NAV', 'Nifty', 'N500M50', 'Midcap 100', 'Smallcap 250', 'Microcap 250'];
     const filteredPayload = payload
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       .filter((entry: any) => validNames.includes(entry.name))
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       .sort((a: any, b: any) => validNames.indexOf(a.name) - validNames.indexOf(b.name));
     
     if (filteredPayload.length === 0) return null;
@@ -535,7 +535,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return (
       <div className="glass-card p-2 border border-white/10 shadow-xl bg-black/80 backdrop-blur-md">
         <p className="text-[10px] text-gray-400 mb-1">{format(parseISO(label), 'MMM dd, yyyy')}</p>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        { }
         {filteredPayload.map((entry: any, index: number) => (
           <div key={index} className="flex justify-between items-center gap-4 text-xs">
             <span className="font-medium" style={{ color: entry.color }}>{entry.name}</span>

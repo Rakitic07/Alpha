@@ -25,7 +25,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const Module  = require('module');
 const _orig   = Module._load;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 Module._load = function(req: string, parent: any, isMain: boolean) {
   if (req === 'server-only') return {};
   if (req === 'next/cache')  return { unstable_cache: (fn: any) => fn, revalidateTag: () => {}, revalidatePath: () => {} };

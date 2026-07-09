@@ -261,7 +261,7 @@ export async function getLiveQuoteV3(instrumentKeys: string[], retryOnAuth = tru
             // Response format: { status: "success", data: { "NSE_EQ:RELIANCE": { last_price: ..., cp: ..., instrument_token: "NSE_EQ|INE..." } } }
             if (json.data) {
                 for (const [responseKey, val] of Object.entries(json.data)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                     
                     const value = val as any;
                     
                     // Try multiple strategies to find the original request key:
@@ -431,7 +431,7 @@ export async function getOHLC(
     // { data: { "NSE_EQ:SYMBOL": { last_price, instrument_token, live_ohlc: { open, high, low, close, volume, ts }, prev_ohlc: {...} } } }
     if (json.data) {
         for (const [responseKey, value] of Object.entries(json.data)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             const data = value as any;
             
             // Prefer live_ohlc, fall back to prev_ohlc

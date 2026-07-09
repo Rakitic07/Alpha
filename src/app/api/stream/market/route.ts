@@ -96,7 +96,7 @@ async function ensureStreamer(instrumentKeys: string[], accessToken: string) {
         });
 
         // Event: Error
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         streamer.on('error', (err: any) => {
             state.status = 'error';
             state.lastError = err.message || 'Unknown stream error';

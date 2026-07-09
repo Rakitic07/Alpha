@@ -124,7 +124,7 @@ export default function SectorHistoryChart({ data }: Props) {
         });
 
         // 4. Transform into dense matrix for Recharts
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const processedData: any[] = filtered.map(d => {
             const allocs = parseAllocations(d.sectorAllocation);
             // Create a lookup for this snapshot
@@ -134,7 +134,7 @@ export default function SectorHistoryChart({ data }: Props) {
             });
 
             // Build item with ALL sectors present (default to 0)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             const item: any = {
                 date: new Date(d.date).toISOString(), // Use simple string for keys if needed, but we rely on index usually
                 displayDate: format(new Date(d.date), 'dd MMM yy'),

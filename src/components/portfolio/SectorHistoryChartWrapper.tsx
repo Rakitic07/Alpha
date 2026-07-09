@@ -7,7 +7,7 @@ const SectorHistoryChart = dynamic(() => import('./SectorHistoryChart'), {
   ssr: false
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export default function SectorHistoryChartWrapper(props: any) {
   return <SectorHistoryChart {...props} />;
 }

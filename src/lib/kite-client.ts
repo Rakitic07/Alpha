@@ -194,7 +194,7 @@ export async function fetchExecutedOrders(kc: typeof KiteConnect.prototype): Pro
     // Filter for executed or partially executed orders
     // status: COMPLETE means fully filled. 
     // Best metric: filled_quantity > 0
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const executedOrders = orders.filter((o: any) => o.filled_quantity > 0);
     
     if (executedOrders.length === 0) {
@@ -205,7 +205,7 @@ export async function fetchExecutedOrders(kc: typeof KiteConnect.prototype): Pro
     kiteLogger.info(`Fetched ${executedOrders.length} executed orders.`);
 
     // Map to standardized format
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return executedOrders.map((o: any) => ({
         orderId: o.order_id,
         symbol: o.tradingsymbol,
