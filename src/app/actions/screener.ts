@@ -36,7 +36,7 @@ export interface ScreenerRow {
   exitSignal?: {
     byRank: boolean;    // rank > 50
     byFilter: boolean;  // below 200 DMA AND athProximity < 0.75
-    by100Dma: boolean;  // below 100 DMA
+    by50Dma: boolean;   // below 50 DMA
     protected: boolean; // last BUY within 14 days (min hold rule)
     isUnranked: boolean; // not in screener universe (e.g. BE category)
     isBE: boolean;       // specifically moved to BE (T+0 settlement) category
@@ -374,14 +374,14 @@ export async function getScreenerData(
       const isBE = isUnranked && (row.unrankedReason?.includes('BE category') ?? false);
       const byRank   = isUnranked || row.rank > 50;
       const byFilter = !row.dmaSwatches.above200 && row.athProximity < 0.75;
-      const by100Dma = !row.dmaSwatches.above100;
-      if (!byRank && !byFilter && !by100Dma) continue;
+      const by50Dma = !row.dmaSwatches.above50;
+      if (!byRank && !byFilter && !by50Dma) continue;
       const ageDays     = holdingAgeDays.get(row.symbol) ?? 9999;
       const isProtected = ageDays < 14;
 
       // Determine signal type:
       // Red: rank > 60, or below-filter exit (byFilter), or other unranked reasons (not BE)
-      // Yellow: BE category OR rank 51-60 OR below 100 DMA (unless meeting red criteria)
+      // Yellow: BE category OR rank 51-60 OR below 50 DMA (unless meeting red criteria)
       let signalType: 'green' | 'yellow' | 'red';
       const isRed = byFilter || (isUnranked && !isBE) || (!isUnranked && row.rank > 60);
       if (isRed) {
@@ -390,7 +390,7 @@ export async function getScreenerData(
         signalType = 'yellow';
       }
 
-      row.exitSignal = { byRank, byFilter, by100Dma, protected: isProtected, isUnranked, isBE, unrankedReason: row.unrankedReason, signalType };
+      row.exitSignal = { byRank, byFilter, by50Dma, protected: isProtected, isUnranked, isBE, unrankedReason: row.unrankedReason, signalType };
     }
   }
 
