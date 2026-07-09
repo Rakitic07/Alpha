@@ -50,10 +50,10 @@ const WINDOW_TRADING_DAYS: Record<RollingWindow, number> = {
 
 /**
  * Minimum total data points required to display a window option.
- * Using 2× the window size so there's at least a window's worth of
- * rolling data-points to plot.
+ * We need at least windowDays + 1 points to produce even one rolling value.
+ * Use 1× so that as soon as enough history exists the button appears.
  */
-const MIN_POINTS_MULTIPLIER = 2;
+const MIN_POINTS_MULTIPLIER = 1;
 
 const ALL_WINDOWS: RollingWindow[] = ['1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y'];
 
@@ -163,7 +163,7 @@ export default function RollingReturnsChart({ data }: { data: DataPoint[] }) {
 
   if (!data || data.length === 0) {
     return (
-      <div className="glass-card p-8 text-center animate-fade-in">
+      <div className="glass-card p-8 text-center animate-fade-in min-h-[200px] flex flex-col items-center justify-center">
         <FontAwesomeIcon icon={faChartLine} className="text-4xl text-gray-600 mb-4 block" />
         <p className="text-gray-400">No data to display</p>
       </div>
@@ -172,7 +172,7 @@ export default function RollingReturnsChart({ data }: { data: DataPoint[] }) {
 
   if (availableWindows.length === 0) {
     return (
-      <div className="animate-fade-in-up w-full h-full flex flex-col">
+      <div className="animate-fade-in-up w-full h-full flex flex-col min-h-[200px]">
         <CardHeader />
         <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
           Not enough data to compute rolling returns yet.
