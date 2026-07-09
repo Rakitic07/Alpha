@@ -55,24 +55,15 @@ export function parseDividendFilename(filename: string): {
  */
 function findDividendRows(wb: XLSX.WorkBook): Record<string, unknown>[] {
     for (const sheetName of wb.SheetNames) {
-        const ws = wb.Sheets[sheetName];
-        const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-            defval: '',
-            raw: false,
-        });
-
-        // Look for a sheet / region that has dividend-like headers
-        const headerRow = raw.find(row => {
-            const vals = Object.values(row).map(v => String(v).toLowerCase());
-            return vals.some(v => v.includes('isin')) && vals.some(v => v.includes('amount'));
-        });
-
-        if (headerRow) {
-            return raw;
+        // First filter: Only look at sheets that have 'dividend' in their name
+        if (!sheetName.toLowerCase().includes('dividend')) {
+            continue;
         }
 
-        // Zerodha sometimes uses a single sheet with multiple sections.
-        // Re-parse with header detection to find the dividend sub-table.
+        const ws = wb.Sheets[sheetName];
+        
+        // Zerodha sheets have metadata headers (Client ID, PAN) at the top,
+        // so we must use raw AoA to find the actual table headers row.
         const rawAoA = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
         let headerRowIdx = -1;
         for (let i = 0; i < rawAoA.length; i++) {
@@ -83,12 +74,21 @@ function findDividendRows(wb: XLSX.WorkBook): Record<string, unknown>[] {
                 break;
             }
         }
+
         if (headerRowIdx >= 0) {
             const headers = (rawAoA[headerRowIdx] as string[]).map(h => String(h).trim());
             const dataRows: Record<string, unknown>[] = [];
             for (let i = headerRowIdx + 1; i < rawAoA.length; i++) {
                 const cells = rawAoA[i] as unknown[];
-                if (cells.every(c => c === '' || c === null || c === undefined)) break;
+                // Skip empty rows
+                if (cells.every(c => c === '' || c === null || c === undefined)) {
+                    continue;
+                }
+                const firstCell = String(cells[0]).toLowerCase();
+                // Skip total or summary footer rows
+                if (firstCell.includes('total') || firstCell.includes('summary')) {
+                    continue;
+                }
                 const obj: Record<string, unknown> = {};
                 headers.forEach((h, idx) => { obj[h] = cells[idx] ?? ''; });
                 dataRows.push(obj);
