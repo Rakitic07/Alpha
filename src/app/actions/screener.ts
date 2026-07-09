@@ -577,11 +577,13 @@ export async function getDataFreshness(): Promise<{
     prisma.appConfig.findUnique({ where: { key: 'cron.screener.lastRun' } }),
   ]);
 
-  // Count distinct dates
-  const [priceDates, rankDates] = await Promise.all([
-    prisma.screenerPrice.findMany({ select: { date: true }, distinct: ['date'] }),
-    prisma.rankingHistory.findMany({ select: { date: true }, distinct: ['date'] }),
+  // Count distinct dates using raw SQL for efficiency
+  const [priceDatesResult, rankDatesResult] = await Promise.all([
+    prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(DISTINCT date)::int as count FROM "ScreenerPrice"`,
+    prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(DISTINCT date)::int as count FROM "RankingHistory"`,
   ]);
+  const totalPriceDates = priceDatesResult[0]?.count ?? 0;
+  const totalRankDates = rankDatesResult[0]?.count ?? 0;
 
   // Get price count for latest date
   let priceCount = 0;
@@ -605,8 +607,8 @@ export async function getDataFreshness(): Promise<{
       all: latestAllRank?.date ?? null,
     },
     rankCount: { filtered: filteredCount, all: allCount },
-    totalPriceDates: priceDates.length,
-    totalRankDates: rankDates.length,
+    totalPriceDates,
+    totalRankDates,
     lastCronRun,
   };
 }
