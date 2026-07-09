@@ -41,6 +41,7 @@ export interface HistoricalHoldingData {
   realizedPnl: number;
   unrealizedPnl: number;
   totalPnl: number;
+  dividends: number;
 }
 
 /**

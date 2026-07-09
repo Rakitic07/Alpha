@@ -3,7 +3,6 @@ import { differenceInCalendarDays } from 'date-fns';
 import type { MarketCapCategory } from './amfi';
 import { getCategoriesBatch, mapAMFIToMarketCapCategory, getSymbolResolver } from './amfi';
 import { calculateBrokerageCharges, calculateCapitalGainsTax, ChargesBreakdown, TaxBreakdown } from './charges';
-import { getDividendTotalBySymbol } from './dividends';
 
 export interface ExitRecord {
     id: string; // Composite ID
@@ -21,7 +20,6 @@ export interface ExitRecord {
     chargesBreakdown?: ChargesBreakdown; // Itemized transaction charges
     taxBreakdown?: TaxBreakdown;         // STCG or LTCG tax
     netGainLoss?: number;                // gainLoss - totalCharges - taxAmount
-    dividends?: number;                  // Total dividends received while holding
 }
 
 interface TradeCycle {
@@ -148,17 +146,5 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
     }
 
     // Sort by Sell Date Descending
-    const sorted = exits.sort((a, b) => b.sellDate.getTime() - a.sellDate.getTime());
-
-    // Join dividends by symbol
-    try {
-        const dividendMap = await getDividendTotalBySymbol();
-        for (const exit of sorted) {
-            exit.dividends = dividendMap.get(exit.symbol) ?? 0;
-        }
-    } catch {
-        // If dividend table doesn't exist yet (pre-migration), skip gracefully
-    }
-
-    return sorted;
+    return exits.sort((a, b) => b.sellDate.getTime() - a.sellDate.getTime());
 }

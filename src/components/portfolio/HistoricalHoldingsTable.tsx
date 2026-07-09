@@ -20,7 +20,7 @@ import { styled } from '@mui/material/styles';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInbox } from '@fortawesome/free-solid-svg-icons';
 
-type SortKey = 'symbol' | 'totalPnl' | 'realizedPnl' | 'unrealizedPnl' | 'currentValue' | 'quantity';
+type SortKey = 'symbol' | 'totalPnl' | 'realizedPnl' | 'unrealizedPnl' | 'currentValue' | 'quantity' | 'dividends';
 type SortDirection = 'asc' | 'desc';
 
 // Styled components to match the "glass" look
@@ -101,6 +101,10 @@ export default function HistoricalHoldingsTable({ holdings, privacyMode = false 
             aValue = a.totalPnl;
             bValue = b.totalPnl;
             break;
+        case 'dividends':
+            aValue = a.dividends;
+            bValue = b.dividends;
+            break;
         default:
           return 0;
       }
@@ -177,6 +181,9 @@ export default function HistoricalHoldingsTable({ holdings, privacyMode = false 
                     <StyledTableCell align="right" onClick={() => handleSort('unrealizedPnl')} sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: '#111827' }}>
                       Unrealized P/L<SortIndicator columnKey="unrealizedPnl" sortKey={sortKey} sortDirection={sortDirection} />
                     </StyledTableCell>
+                    <StyledTableCell align="right" onClick={() => handleSort('dividends')} sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: '#111827' }}>
+                      Dividends<SortIndicator columnKey="dividends" sortKey={sortKey} sortDirection={sortDirection} />
+                    </StyledTableCell>
 
                     <StyledTableCell align="right" onClick={() => handleSort('totalPnl')} sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: '#111827' }}>
                       Total P/L<SortIndicator columnKey="totalPnl" sortKey={sortKey} sortDirection={sortDirection} />
@@ -209,6 +216,11 @@ export default function HistoricalHoldingsTable({ holdings, privacyMode = false 
                             </StyledTableCell>
                             <StyledTableCell align="right">
                                 {h.quantity > 0 ? (privacyMode ? <span className="text-gray-400">{MASK}</span> : formatPnl(h.unrealizedPnl)) : <span className="text-gray-600">-</span>}
+                            </StyledTableCell>
+                            <StyledTableCell align="right">
+                                <span className="text-teal-400 font-mono font-medium">
+                                    {h.dividends > 0 ? (privacyMode ? MASK : formatCurrency(h.dividends, 0, 0)) : <span className="text-gray-600">-</span>}
+                                </span>
                             </StyledTableCell>
 
                             <StyledTableCell align="right">

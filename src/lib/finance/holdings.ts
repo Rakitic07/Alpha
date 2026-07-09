@@ -10,6 +10,7 @@ import { financeLogger } from '@/lib/logger';
 import { fetchNSECorporateActions } from '@/lib/nse-api';
 import { computePortfolioState } from './recalculation';
 import { Holding, MarketCapResult } from './types';
+import { getDividendTotalBySymbol } from '../dividends';
 
 // Feature flag for Upstox migration - set to true to use Upstox as primary data source
 const USE_UPSTOX = process.env.USE_UPSTOX !== 'false'; // Default to true
@@ -313,6 +314,9 @@ async function getHistoricalPortfolioHoldingsInternal() {
         priceMap.set(p.symbol, p.close);
     }
 
+    // Fetch dividends per symbol
+    const dividendMap = await getDividendTotalBySymbol().catch(() => new Map<string, number>());
+
     const finalHoldings = symbols.map(sym => {
         const h = engine.holdings.get(sym)!;
         const currentPrice = priceMap.get(sym) || 0;
@@ -322,7 +326,8 @@ async function getHistoricalPortfolioHoldingsInternal() {
         const safeCostOfHeld = Math.abs(h.qty) < 0.01 ? 0 : h.invested;
 
         const unrealizedPnl = safeCurrentVal - safeCostOfHeld;
-        const totalPnl = h.realizedPnl + unrealizedPnl;
+        const dividends = dividendMap.get(sym) || 0;
+        const totalPnl = h.realizedPnl + unrealizedPnl + dividends;
 
         return {
             symbol: sym,
@@ -332,7 +337,8 @@ async function getHistoricalPortfolioHoldingsInternal() {
             invested: safeCostOfHeld,
             realizedPnl: h.realizedPnl,
             unrealizedPnl: unrealizedPnl,
-            totalPnl: totalPnl
+            totalPnl: totalPnl,
+            dividends: dividends
         };
     });
 

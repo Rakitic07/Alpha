@@ -13,7 +13,7 @@ interface ExitsTableProps {
   privacyMode?: boolean;
 }
 
-type SortKey = 'sellDate' | 'symbol' | 'quantity' | 'buyDate' | 'changePercent' | 'gainLoss' | 'timeHeld' | 'marketCapCategory' | 'dividends';
+type SortKey = 'sellDate' | 'symbol' | 'quantity' | 'buyDate' | 'changePercent' | 'gainLoss' | 'timeHeld' | 'marketCapCategory';
 type SortDirection = 'asc' | 'desc';
 type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro';
 
@@ -24,8 +24,6 @@ const StatsSummary = ({ exits, privacyMode = false }: { exits: ExitRecord[]; pri
     const winRate = totalExits > 0 ? (wins / totalExits) * 100 : 0;
     const totalPnL = exits.reduce((sum, e) => sum + e.gainLoss, 0);
     const avgReturn = totalExits > 0 ? exits.reduce((sum, e) => sum + e.changePercent, 0) / totalExits : 0;
-    const totalDividends = exits.reduce((sum, e) => sum + (e.dividends ?? 0), 0);
-    const hasDividends = totalDividends > 0;
     const MASK = '••••';
 
     return (
@@ -52,14 +50,6 @@ const StatsSummary = ({ exits, privacyMode = false }: { exits: ExitRecord[]; pri
                     {avgReturn > 0 ? '+' : ''}{avgReturn.toFixed(2)}%
                 </div>
             </div>
-            {hasDividends && (
-                <div className="bg-teal-500/10 rounded-lg px-4 py-2 border border-teal-500/20 backdrop-blur-md flex flex-col justify-center min-w-[100px]">
-                    <div className="text-teal-400 text-[10px] uppercase font-semibold">Dividends</div>
-                    <div className="text-lg font-bold leading-tight text-teal-300">
-                        {privacyMode ? MASK : formatCurrency(totalDividends, 0, 0)}
-                    </div>
-                </div>
-            )}
         </>
     );
 };
@@ -192,14 +182,13 @@ export default function ExitsTable({ exits, privacyMode = false }: ExitsTablePro
             <th className="md:px-6 px-4 py-4 font-semibold tracking-wider text-right">Sell Avg</th>
             <Th id="changePercent" label="Change" align="right" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
             <Th id="gainLoss" label="P/L" align="right" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
-            <Th id="dividends" label="Dividends" align="right" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
             <Th id="timeHeld" label="Days" align="right" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
           </tr>
         </thead>
         <tbody className="">
           {sortedExits.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
+              <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
                 No exits recorded yet.
               </td>
             </tr>
@@ -232,11 +221,6 @@ export default function ExitsTable({ exits, privacyMode = false }: ExitsTablePro
                 </td>
                 <td className={`md:px-6 px-4 py-4 text-right font-mono font-medium ${exit.gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {privacyMode ? '••••' : formatNumber(exit.gainLoss, 2, 2)}
-                </td>
-                <td className="md:px-6 px-4 py-4 text-right font-mono font-medium text-teal-400">
-                  {!exit.dividends ? <span className="text-gray-700">—</span> : (
-                    privacyMode ? '••••' : formatCurrency(exit.dividends, 0, 0)
-                  )}
                 </td>
                 <td className="md:px-6 px-4 py-4 text-right text-gray-400 font-mono">
                   {exit.timeHeld}d

@@ -6,6 +6,7 @@ import {
     getDividendHistory,
     deleteDividendsByPeriod,
 } from '@/lib/dividends';
+import { revalidateApp } from '@/app/actions';
 
 // ============================================================
 // Upload
@@ -37,6 +38,9 @@ export async function uploadDividendsAction(
 
         const count = await upsertDividends(records);
         const total = records.reduce((s, r) => s + r.amount, 0);
+
+        // Invalidate Next.js cache so the dashboard/portfolio show updated values
+        await revalidateApp();
 
         return {
             success: true,
@@ -71,6 +75,10 @@ export async function deleteDividendPeriodAction(
 ): Promise<{ success: boolean; deleted: number; message: string }> {
     try {
         const deleted = await deleteDividendsByPeriod(fiscalYear, quarter);
+        
+        // Invalidate Next.js cache so the dashboard/portfolio show updated values
+        await revalidateApp();
+
         return {
             success: true,
             deleted,

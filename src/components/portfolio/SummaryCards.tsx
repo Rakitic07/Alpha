@@ -531,7 +531,8 @@ export const PnLSummaryCard = memo(function PnLSummaryCard({
             label: 'Dividends',
             icon: faHandHoldingDollar,
             iconColor: 'text-teal-500',
-            value: null,
+            value: dividends,
+            prefix: '₹',
             valueColor: 'text-teal-400',
         },
     ];
