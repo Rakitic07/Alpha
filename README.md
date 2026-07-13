@@ -32,7 +32,7 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) v20+ and npm
-- A [Neon](https://neon.tech/) account (free tier is sufficient)
+- A [Turso](https://turso.tech/) account (free tier is sufficient)
 - An [Upstox](https://upstox.com/) demat account
 - [Android Studio](https://developer.android.com/studio) *(Optional: only needed if building the Android app)*
 
@@ -52,28 +52,23 @@ That's it! No OAuth app, no redirect URLs, no daily token refresh needed.
 
 ---
 
-### Step 2: Create a Neon Postgres Database
+### Step 2: Create a Turso Database
 
-1. Sign up at [neon.tech](https://neon.tech/) (or connect via Vercel integration)
-2. Create a new project (e.g., `alpha-portfolio`)
-3. Go to your project's **Dashboard → Connection Details**
-4. Copy the **connection string** — it looks like:
-   ```
-   postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-   ```
+1. Sign up at [turso.tech](https://turso.tech/) and download the Turso CLI or use the web dashboard.
+2. Create a new database (e.g., `alpha-portfolio`).
+3. Get your **Database URL** (looks like `libsql://your-db-name.turso.io`) and **Auth Token**.
 
 <details>
-<summary>💰 Neon Free Tier Limits</summary>
+<summary>💰 Turso Free Tier Limits</summary>
 
 | Feature | Free Tier |
 |---------|-----------|
-| Storage | 0.5 GB |
-| Projects | 10 |
-| Compute | 100 CU-hours/month (0.25 CU) |
-| Row Writes | Unlimited |
+| Storage | **5 GB** |
+| Databases | Up to 100 |
+| Row Reads | 500 million/month |
+| Row Writes | 10 million/month |
 
-**Is 100 CU-hours/month enough?**  
-Yes — easily. At 0.25 CU, that's 400 hours of active compute. Our workload (daily pipeline cron ~2 min/day + web queries) uses roughly 3–4 CU-hours/month — about 4% of the limit. The compute auto-suspends when idle (5 min timeout), so you're only billed for actual active time.
+Turso provides an extremely generous free tier with **5 GB of storage** (10× more than Neon), and it doesn't auto-suspend compute, completely eliminating cold-start delays!
 
 </details>
 
@@ -94,8 +89,9 @@ cp .env.example .env
 Edit `.env.local` with your values:
 
 ```bash
-# Database (Neon Postgres)
-DATABASE_URL=postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+# Database (Turso LibSQL/SQLite)
+DATABASE_URL=libsql://your-database.turso.io
+TURSO_AUTH_TOKEN=your-auth-token
 
 # Upstox Analytics Token
 UPSTOX_ANALYTICS_TOKEN=your-analytics-token
@@ -121,19 +117,15 @@ npm run db:setup
 ```
 
 > [!IMPORTANT]
-> **Database Initialization**: You MUST have `DATABASE_URL` set in `.env.local` before running this. The command creates all tables in your Neon database from the Prisma schema. If you see a "relation does not exist" error in the app later, this step was skipped or failed.
+> **Database Initialization**: You MUST have `DATABASE_URL` and `TURSO_AUTH_TOKEN` set in `.env.local` before running this. The setup command applies the SQLite-compatible schemas to your database. If you see a "no such table" error in the app later, this step was skipped or failed.
 
 <details>
-<summary>Troubleshooting: Common Neon connection issues</summary>
+<summary>Troubleshooting: Common Turso connection issues</summary>
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `ECONNRESET` or `ConnectionClosed (P1017)` | Neon compute auto-suspends after 5 min of inactivity. First connection after idle may fail. | Simply retry the command — the second attempt succeeds once compute wakes up. |
-| `DeprecationWarning: sslmode=require` | The `pg` driver deprecated `sslmode=require`. | Use `sslmode=verify-full` in your connection string. The app handles this automatically. |
-| `no such table` / `relation does not exist` | Schema not pushed to Neon. | Run `npx prisma db push` to create tables. |
-| `Can't reach database server` | Wrong connection string or Neon project paused. | Verify `DATABASE_URL` in `.env.local` matches your Neon dashboard. Check that your Neon project is active. |
-
-**Tip**: If running local scripts (backfills, etc.) behind a corporate proxy, you may need `NODE_TLS_REJECT_UNAUTHORIZED=0` as a prefix to bypass SSL inspection.
+| `no such table` | Schema not applied to Turso. | Run `npx tsx scripts/apply-turso-schema.ts` to apply migration SQLs. |
+| `Can't reach database server` | Wrong connection string or Turso database paused. | Verify `DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env.local`. |
 
 </details>
 
@@ -192,7 +184,8 @@ git push -u origin main
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `DATABASE_URL` | `postgresql://user:pass@host.neon.tech/dbname?sslmode=require` | Neon connection string |
+| `DATABASE_URL` | `libsql://your-database.turso.io` | Turso database connection URL (or `https://...`) |
+| `TURSO_AUTH_TOKEN` | `your-auth-token` | Turso database authentication token |
 | `UPSTOX_ANALYTICS_TOKEN` | Your analytics token | From Developer Apps → Analytics tab. Mark as **Sensitive** |
 | `CRON_SECRET` | A random string | Required for cron endpoint auth |
 
@@ -379,7 +372,7 @@ Holdings held < 14 days are **LOCKED** (min hold protection, displayed in yellow
 ### Tech Stack
 
 - **Framework**: Next.js 16 (App Router, Turbopack)
-- **Database**: Neon Postgres (serverless PostgreSQL)
+- **Database**: Turso (libSQL/SQLite)
 - **ORM**: Prisma
 - **Market Data**: Upstox API (REST + WebSocket)
 - **Styling**: TailwindCSS + Material UI
@@ -523,7 +516,8 @@ If you want to auto-sync orders from Zerodha Kite:
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | Neon Postgres connection string (`postgresql://...?sslmode=require`) |
+| `DATABASE_URL` | Turso database connection URL (`libsql://your-db.turso.io`) |
+| `TURSO_AUTH_TOKEN` | Turso database authentication token |
 | `UPSTOX_ANALYTICS_TOKEN` | Long-lived (1-year) read-only token. Generate at Developer Apps → Analytics tab. |
 
 ### Optional — Personalization
@@ -560,11 +554,9 @@ Only needed if you want to auto-import orders from Zerodha Kite. Not required fo
 
 | Problem | Solution |
 |---------|----------|
-| `relation "..." does not exist` | Run `npm run db:setup` (or `npx prisma db push`) to create tables |
-| `ECONNRESET` on first script run | Neon compute was asleep — retry the command once |
+| `no such table` | Run `npx tsx scripts/apply-turso-schema.ts` to create tables |
 | Screener shows 0 stocks | Run the one-time backfill scripts (see [Screener Setup](#one-time-setup-first-deploy)) |
 | Stale data after cron runs | Check that `CRON_SECRET` matches between Vercel env and cron-job.org URLs |
-| WebSocket disconnects | Auto-reconnect handles this; refresh page if data appears frozen |
 | `prisma generate` errors | Run `npm install` first, then `npx prisma generate` |
 
 ### Known Limitations
@@ -572,7 +564,6 @@ Only needed if you want to auto-import orders from Zerodha Kite. Not required fo
 2. **Corporate Actions** — Must be manually entered (no API auto-detection for splits/bonuses)
 3. **Real-time WebSocket** — May disconnect during market hours; auto-reconnect handles this
 4. **AMFI Data** — PDF upload is manual; AMFI releases classification data twice per year
-5. **Neon Cold Start** — First DB connection after 5 min idle may fail with ECONNRESET (auto-suspend). Retry succeeds.
 
 ---
 
