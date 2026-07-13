@@ -10,6 +10,8 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 > [!NOTE]
 > This project has been tested with **Upstox** (for real-time market data, historical prices, and authentication) and **Zerodha Kite** (for order import only). If you use a different broker, you can still use the app by importing trades via Excel, but real-time data and order sync features may require code changes to support your broker's API.
 
+---
+
 ## ✨ Features
 
 - **Real-time Dashboard** — Live portfolio P&L with WebSocket price streaming from Upstox
@@ -29,34 +31,77 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 
 ## 🚀 Getting Started
 
-### Prerequisites
+This section walks you through setting up Alpha from scratch. Follow the steps in order.
 
-- [Node.js](https://nodejs.org/) v20+ and npm
-- A [Turso](https://turso.tech/) account (free tier is sufficient)
-- An [Upstox](https://upstox.com/) demat account
-- [Android Studio](https://developer.android.com/studio) *(Optional: only needed if building the Android app)*
+### ✅ Pre-flight Checklist
+
+Before you begin, make sure you have:
+
+- [ ] **Node.js v20+** installed — check with `node -v` ([download here](https://nodejs.org/))
+- [ ] An **Upstox demat account** — needed for market data
+- [ ] A **Turso account** — for the database ([sign up free](https://turso.tech/))
+- [ ] A **Vercel account** — if you plan to deploy ([vercel.com](https://vercel.com/))
+
+> [!TIP]
+> You can run the app entirely locally without Vercel. Vercel is only needed for cloud deployment.
 
 ---
 
-### Step 1: Get an Upstox Analytics Token
+### Step 1 — Get Your Upstox Analytics Token
+
+The app uses Upstox for real-time prices, historical data, and WebSocket streaming. All of this requires a single long-lived token.
 
 1. Go to [developer.upstox.com](https://developer.upstox.com/) and sign in with your Upstox credentials
 2. Navigate to the **Analytics** tab on your Developer Apps page
 3. Click **"Generate Token"** and confirm
-4. Copy the token — you'll add it to `.env.local` in Step 3
-
-That's it! No OAuth app, no redirect URLs, no daily token refresh needed.
+4. **Copy the token** — you will need it in Step 4
 
 > [!TIP]
-> The Analytics Token provides read-only access to all market data APIs (quotes, historical data, WebSocket streaming) with 1-year validity. Since this app only reads market data and doesn't place orders, the Analytics Token is all you need. See [Upstox docs](https://upstox.com/developer/api-documentation/analytics-token/) for details.
+> The Analytics Token is read-only with 1-year validity. No OAuth app, no redirect URLs, and no daily token refresh. See [Upstox docs](https://upstox.com/developer/api-documentation/analytics-token/) for details.
 
 ---
 
-### Step 2: Create a Turso Database
+### Step 2 — Create a Turso Database
 
-1. Sign up at [turso.tech](https://turso.tech/) and download the Turso CLI or use the web dashboard.
-2. Create a new database (e.g., `alpha-portfolio`).
-3. Get your **Database URL** (looks like `libsql://your-db-name.turso.io`) and **Auth Token**.
+Turso stores all your portfolio data, snapshots, and screener history. There are two ways to set it up — pick whichever suits you.
+
+#### Option A — Vercel Marketplace *(recommended if deploying to Vercel)*
+
+This is the easiest route. Vercel provisions a Turso database and injects the credentials automatically.
+
+1. Go to your Vercel project → **Storage** tab → **Connect Database**
+2. Choose **Turso** from the marketplace
+3. Click **Create & Connect** — Vercel creates the database and injects `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` into your project's environment automatically
+4. That's it. No manual credential copying needed.
+
+> [!TIP]
+> The app accepts both `DATABASE_URL` and `TURSO_DATABASE_URL`, so the Vercel integration works without any extra configuration.
+
+#### Option B — Manual setup *(CLI or Turso dashboard)*
+
+1. Sign up at [turso.tech](https://turso.tech/)
+
+2. **Install the Turso CLI**:
+   ```bash
+   curl -sSfL https://get.tur.so/install.sh | bash
+   turso auth login
+   ```
+   Alternatively, use the web dashboard at [app.turso.tech](https://app.turso.tech/)
+
+3. **Create a new database**:
+   ```bash
+   turso db create alpha-portfolio
+   ```
+
+4. **Get your connection credentials**:
+   ```bash
+   # Database URL (looks like libsql://alpha-portfolio-<user>.turso.io)
+   turso db show alpha-portfolio --url
+
+   # Auth token
+   turso db tokens create alpha-portfolio
+   ```
+   Copy both values and add them to `.env.local` in Step 4 as `DATABASE_URL` and `TURSO_AUTH_TOKEN`.
 
 <details>
 <summary>💰 Turso Free Tier Limits</summary>
@@ -68,35 +113,47 @@ That's it! No OAuth app, no redirect URLs, no daily token refresh needed.
 | Row Reads | 500 million/month |
 | Row Writes | 10 million/month |
 
-Turso provides an extremely generous free tier with **5 GB of storage** (10× more than Neon), and it doesn't auto-suspend compute, completely eliminating cold-start delays!
+Turso's free tier is extremely generous with **5 GB of storage** and no auto-suspend — zero cold-start delays!
 
 </details>
 
 ---
 
-### Step 3: Clone & Configure
+### Step 3 — Clone the Repository
 
 ```bash
-# Clone the repository
+# Clone the project
 git clone https://github.com/<your-username>/Alpha.git
 cd Alpha
+```
 
-# Copy environment templates
+---
+
+### Step 4 — Configure Environment Variables
+
+Copy the example files and fill in your values:
+
+```bash
 cp .env.local.example .env.local
 cp .env.example .env
 ```
 
-Edit `.env.local` with your values:
+Open `.env.local` in your editor and fill in the three required values:
 
 ```bash
-# Database (Turso LibSQL/SQLite)
+# REQUIRED
 DATABASE_URL=libsql://your-database.turso.io
 TURSO_AUTH_TOKEN=your-auth-token
-
-# Upstox Analytics Token
 UPSTOX_ANALYTICS_TOKEN=your-analytics-token
 
-# Zerodha Kite Connect (Optional - for order sync)
+# OPTIONAL — your name shown in the UI
+# APP_USER_NAME=YourName
+# NEXT_PUBLIC_APP_USER_NAME=YourName
+
+# OPTIONAL — secret to protect cron endpoints (recommended for production)
+# CRON_SECRET=any-random-string-you-choose
+
+# OPTIONAL — Zerodha Kite (only if you want auto order sync)
 # ZERODHA_USER_ID=your-user-id
 # ZERODHA_PASSWORD=your-password
 # ZERODHA_TOTP_SECRET=your-totp-secret
@@ -104,69 +161,98 @@ UPSTOX_ANALYTICS_TOKEN=your-analytics-token
 # ZERODHA_API_SECRET=your-kite-api-secret
 ```
 
+> [!IMPORTANT]
+> The three `REQUIRED` values must be set before proceeding. The app will not start correctly without them.
+
 ---
 
-### Step 4: Install & Initialize
+### Step 5 — Install Dependencies & Initialize the Database
 
 ```bash
-# Install dependencies
+# Install Node.js dependencies
 npm install
 
-# Push database schema to Neon (creates all tables)
-npm run db:setup
+# Apply the database schema to Turso (creates all tables)
+npx tsx scripts/apply-turso-schema.ts
 ```
 
 > [!IMPORTANT]
-> **Database Initialization**: You MUST have `DATABASE_URL` and `TURSO_AUTH_TOKEN` set in `.env.local` before running this. The setup command applies the SQLite-compatible schemas to your database. If you see a "no such table" error in the app later, this step was skipped or failed.
+> You **must** run the schema setup before starting the app. If you skip this, you will see `no such table` errors. If this command fails, double-check `DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env.local`.
 
 <details>
-<summary>Troubleshooting: Common Turso connection issues</summary>
+<summary>🔧 Troubleshooting: Common Turso connection errors</summary>
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `no such table` | Schema not applied to Turso. | Run `npx tsx scripts/apply-turso-schema.ts` to apply migration SQLs. |
-| `Can't reach database server` | Wrong connection string or Turso database paused. | Verify `DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env.local`. |
+| `no such table` | Schema was never applied | Run `npx tsx scripts/apply-turso-schema.ts` |
+| `Can't reach database server` | Wrong URL or token | Re-verify `DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env.local` |
+| `LIBSQL_CLIENT_ERROR` | Malformed connection string | Ensure URL starts with `libsql://` (not `https://`) |
 
 </details>
 
 ---
 
-### Step 5: Run Locally
+### Step 6 — Run the App Locally
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-The app picks up the Analytics Token from `.env.local` automatically — no login needed.
+Open [http://localhost:3000](http://localhost:3000) in your browser. The app picks up your Analytics Token from `.env.local` automatically — no login needed.
 
 ---
 
-### Step 6: Import Your Trades
+### Step 7 — Import Your Trades
 
-Go to the **Trades** page (`/trades`) and upload an Excel file with your trade history. The expected format:
+Go to the **Trades** page (`/trades`) and upload an Excel file with your trade history.
 
-| Column | Description |
-|--------|-------------|
-| Date | Trade date (DD-MM-YYYY or YYYY-MM-DD) |
-| Symbol | NSE trading symbol (e.g., RELIANCE, TCS) |
-| Type | BUY or SELL |
-| Quantity | Number of shares |
-| Price | Price per share |
+**Expected column format:**
 
-After import, the app will automatically:
-- Process all transactions chronologically
-- Fetch historical prices from Upstox API
-- Calculate daily NAV using Time-Weighted Return (TWR)
-- Generate daily, weekly, and monthly snapshots
-- Compare against benchmark indices
+| Column | Description | Example |
+|--------|-------------|---------|
+| Date | Trade date | `15-01-2024` or `2024-01-15` |
+| Symbol | NSE trading symbol | `RELIANCE`, `TCS` |
+| Type | Direction | `BUY` or `SELL` |
+| Quantity | Number of shares | `10` |
+| Price | Price per share (₹) | `2800.50` |
+
+After import, the app automatically:
+- Processes all transactions chronologically
+- Fetches historical closing prices from Upstox API
+- Calculates daily NAV using Time-Weighted Return (TWR)
+- Generates daily, weekly, and monthly snapshots
+- Compares performance against benchmark indices
+
+---
+
+### Step 8 — (Optional) Set Up the Momentum Screener
+
+The screener requires a one-time backfill of historical price data (~30–45 minutes total). Only do this if you want to use the Screener feature.
+
+> [!IMPORTANT]
+> Run these scripts in order. Each step depends on the previous.
+
+```bash
+# 1. Backfill ~18 months of daily candles for all NSE stocks (~30 min)
+npx tsx scripts/seed-screener-prices.ts
+
+# 2. Seed all-time highs from monthly candles since 2000 (~7 min)
+npx tsx scripts/seed-ath.ts
+
+# 3. Score and rank all stocks (first run)
+npx tsx scripts/run-pipeline.ts
+
+# 4. Backfill 50 days of ranking history (~5 min)
+npx tsx src/scripts/backfill-rank-history.ts
+```
+
+After the backfill, the daily cron job keeps everything up to date automatically.
 
 ---
 
 ## ☁️ Deploy to Vercel
 
-### Step 1: Push to GitHub
+### Step 1 — Push to GitHub
 
 ```bash
 git init
@@ -176,31 +262,31 @@ git remote add origin https://github.com/<your-username>/Alpha.git
 git push -u origin main
 ```
 
-### Step 2: Import to Vercel
+### Step 2 — Import to Vercel
 
 1. Go to [vercel.com](https://vercel.com/) and sign in
 2. Click **"New Project"** → Import your GitHub repository
-3. In **Environment Variables**, add:
+3. In **Environment Variables**, add the following:
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `DATABASE_URL` | `libsql://your-database.turso.io` | Turso database connection URL (or `https://...`) |
-| `TURSO_AUTH_TOKEN` | `your-auth-token` | Turso database authentication token |
-| `UPSTOX_ANALYTICS_TOKEN` | Your analytics token | From Developer Apps → Analytics tab. Mark as **Sensitive** |
-| `CRON_SECRET` | A random string | Required for cron endpoint auth |
+| `DATABASE_URL` | `libsql://your-database.turso.io` | Turso database URL |
+| `TURSO_AUTH_TOKEN` | `your-auth-token` | Mark as **Sensitive** |
+| `UPSTOX_ANALYTICS_TOKEN` | Your analytics token | Mark as **Sensitive** |
+| `CRON_SECRET` | Any random string | Required for cron endpoint authentication |
 
 > [!TIP]
-> If you are using the optional **Zerodha Order Sync**, you should also add the `ZERODHA_*` variables listed in the [Environment Variables Reference](#zerodha-kite-integration) below.
+> If you are using the optional **Zerodha Order Sync**, also add the `ZERODHA_*` variables from the [Environment Variables Reference](#-environment-variables-reference) below.
 
 4. Click **Deploy**
 
-### Step 3: Set Up Cron Jobs
+### Step 3 — Set Up Cron Jobs
 
 The app uses external cron jobs to automate daily tasks. Use [cron-job.org](https://cron-job.org/) (free tier is sufficient).
 
 #### How to set up on cron-job.org
 
-1. Sign up at [cron-job.org](https://cron-job.org/) (free account)
+1. Sign up at [cron-job.org](https://cron-job.org/)
 2. Click **"Create cronjob"**
 3. For each job below, fill in:
    - **Title**: A descriptive name (e.g., "Alpha - Daily Snapshot")
@@ -208,27 +294,28 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
    - **Schedule**: Use the "Custom" option and paste the cron expression
    - **Time zone**: Set to **UTC** for all jobs
    - **Request method**: **GET**
-   - **Notifications**: Enable "on failure" to get alerted if a job fails
+   - **Notifications**: Enable "on failure"
 4. Click **"Create"** and repeat for each endpoint
 
 > [!IMPORTANT]
-> All cron endpoints require authentication via `CRON_SECRET`. Append `?secret=YOUR_CRON_SECRET` to each URL, or set the `Authorization: Bearer YOUR_CRON_SECRET` header. Without this, endpoints return 401 in production.
+> All cron endpoints require authentication. Append `?secret=YOUR_CRON_SECRET` to each URL. This must match the `CRON_SECRET` set in your Vercel environment variables.
 
 #### Cron Jobs to Configure
 
 | # | Title | Endpoint | Schedule (UTC) | IST | What it does |
 |---|-------|----------|----------------|-----|--------------|
-| 1 | Intraday P/L | `/api/cron/intraday-pnl` | `* 4-10 * * 1-5` | Every min (9:30am-4:00pm) | Records P/L every minute to power the Intraday chart. |
-| 2 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon-Fri | End-of-day portfolio value, NAV, drawdown. |
-| 3 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR). |
-| 4 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats. |
-| 5 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE automatically. |
-| 6 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Scrapes latest stock-to-sector mappings. |
-| 7 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Weekly check for new market cap classifications. |
-| 8 | Momentum Screener | `/api/cron/momentum-screener` | `0 11 * * 1-5` | 4:30 PM Mon-Fri | Fetches candles, scores all stocks, updates rankings. |
+| 1 | Intraday P/L | `/api/cron/intraday-pnl` | `* 4-10 * * 1-5` | Every min, 9:30am–4:00pm | Records P&L every minute for the Intraday chart |
+| 2 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon–Fri | End-of-day portfolio value, NAV, drawdown |
+| 3 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR) |
+| 4 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats |
+| 5 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE |
+| 6 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Updates stock-to-sector mappings |
+| 7 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Checks for new market cap classifications |
+| 8 | Momentum Screener | `/api/cron/momentum-screener` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | Scores and ranks all stocks |
+| 9 | Daily Email Report | `/api/cron/daily-report` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | *(Optional)* Sends portfolio + screener summary email via Resend. Requires `RESEND_API_KEY` and `REPORT_EMAIL_TO`. |
 
 > [!TIP]
-> After setting up all 6 jobs, you should see them listed in your cron-job.org dashboard. You can manually trigger any job by clicking "Run now" to test it.
+> After creating all jobs, click **"Run now"** in cron-job.org to manually trigger any job and verify it's working.
 
 ---
 
@@ -242,7 +329,7 @@ Set `UPSTOX_ANALYTICS_TOKEN` in `.env.local`. The Analytics Token is a long-live
 
 ### Data Lock
 
-Set a date to protect all historical snapshot data before that date from being modified or recalculated. Useful once you've verified your historical data is correct.
+Set a date to protect all historical snapshot data before that date from being modified or recalculated. Useful once you have verified your historical data is correct.
 
 ### Recompute Snapshots
 
@@ -256,7 +343,7 @@ Fetches the latest stock-to-sector mappings (scrapes from Zerodha). This data po
 
 ## 📊 AMFI Market Cap Classification
 
-The app classifies your holdings into Large Cap, Mid Cap, Small Cap, and Micro Cap using official AMFI (Association of Mutual Funds in India) data.
+The app classifies your holdings into Large Cap, Mid Cap, Small Cap, and Micro Cap using official AMFI data.
 
 ### How to Upload AMFI Data
 
@@ -303,7 +390,7 @@ Go to **Settings** → **Corporate Actions** to manage stock splits, bonuses, an
 Click the **eye icon** in the live dashboard header to toggle privacy mode:
 - **On**: All monetary values (portfolio value, P&L, stock values) are masked with `****` on desktop
 - **Off**: All values are visible
-- **Mobile**: Values are always shown regardless of privacy setting (since you're on your personal device)
+- **Mobile**: Values are always shown regardless of privacy setting (since you are on your personal device)
 - The setting persists across sessions via `localStorage`
 
 ---
@@ -336,31 +423,24 @@ Composite Score = avgSharpe = mean(Sharpe_12m, Sharpe_6m, Sharpe_3m)
 | Circuit band | ≥ 15% (excludes 2%/5% circuit stocks) |
 | History | ≥ 269 trading days of data (252 + 21 skip days) |
 
-### One-Time Setup (first deploy)
+### Exit & Warning Signals
 
-```bash
-# 1. Backfill ~18 months of daily candles (~2000 stocks, ~30 mins)
-npx tsx scripts/seed-screener-prices.ts
+Portfolio holdings are evaluated daily against the momentum screener criteria to generate either a **Red (Exit)** or **Yellow (Warning)** signal:
 
-# 2. Seed all-time highs from monthly candles since 2000 (~7 mins)
-npx tsx scripts/seed-ath.ts
+#### 🔴 Red (Exit Signal)
+Indicates an immediate recommendation to sell. Triggered if any of the following apply:
+- **Major Filter Breach**: Close is below 200 DMA **AND** $> 25\%$ below ATH (`athProximity < 0.75`) simultaneously.
+- **Major Rank Drop**: The stock's rank drops $> 60$.
+- **Fell Out of Universe**: The stock is unranked for reasons other than being in the BE category.
 
-# 3. Run the screener pipeline once to score and rank all stocks
-npx tsx scripts/run-pipeline.ts
+#### 🟡 Yellow (Warning Signal)
+Indicates a warning condition. The stock is not in a Red state, but matches any of the following:
+- **Below 50 DMA**: Close is below the 50-day simple moving average.
+- **Moderate Rank Drop**: The stock's rank is between 51 and 60.
+- **BE Category**: The stock is unranked specifically because it belongs to the "BE category" (Trade-to-Trade).
 
-# 4. Backfill 50 days of ranking history (~5 mins)
-npx tsx src/scripts/backfill-rank-history.ts
-```
-
-After backfill, the daily cron (`/api/cron/momentum-screener`, weekdays 4:30 PM IST) keeps everything up to date incrementally.
-
-### Exit Signals
-
-Portfolio holdings get an exit signal when:
-- **Rank > 50** or **unranked** (fell out of screener filters), OR
-- **Below 200 DMA** AND **> 25% from ATH** simultaneously
-
-Holdings held < 14 days are **LOCKED** (min hold protection, displayed in yellow).
+#### 🔒 Min Hold Protection (Lock)
+- Holdings held for **$< 14$ days** are **LOCKED** (minimum hold protection, displayed with a yellow lock icon in the UI). Exit and Warning signals are suppressed/ignored during this lock window to prevent premature exits.
 
 ---
 
@@ -396,15 +476,14 @@ Holdings held < 14 days are **LOCKED** (min hold protection, displayed in yellow
 │  │ Service │ │ Service │ │ Engine  │ │ Service │ │ Service │     │
 │  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘     │
 ├───────┼──────────┼──────────┼──────────┼──────────┼─────────────────┤
-│       │          │          │          │          │                  │
 │  ┌────▼────┐ ┌───▼───┐ ┌───▼───┐ ┌───▼───┐ ┌───▼───┐             │
 │  │ Upstox  │ │ AMFI  │ │Prisma │ │ Excel │ │Zerodha│             │
 │  │   API   │ │ Files │ │  ORM  │ │ Parse │ │ Scrape│             │
 │  └─────────┘ └───────┘ └───┬───┘ └───────┘ └───────┘             │
 ├──────────────────────────────┼──────────────────────────────────────┤
 │                        ┌─────▼─────┐                                │
-│                        │   Neon    │                                │
-│                        │ Postgres  │                                │
+│                        │   Turso   │                                │
+│                        │  libSQL   │                                │
 │                        └───────────┘                                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -491,75 +570,200 @@ Portfolio history is built through simulation:
 
 ## 🔧 Optional: Zerodha Kite Integration
 
-If you want to auto-sync orders from Zerodha Kite:
+Auto-syncs today's executed orders from Zerodha Kite into the app every weekday at 3:40 PM IST.
 
 > [!NOTE]
 > Auto-sync only imports the **current day's executed orders** — it does not import historical trades. For your existing trade history, use the Excel import on the Trades page.
 
-1. Create a Kite Connect app at [kite.trade](https://kite.trade/)
-2. Add Zerodha credentials to your `.env.local`:
-   ```bash
-   ZERODHA_USER_ID=your-user-id
-   ZERODHA_PASSWORD=your-password
-   ZERODHA_TOTP_SECRET=your-totp-secret
-   ZERODHA_API_KEY=your-kite-api-key
-   ZERODHA_API_SECRET=your-kite-api-secret
-   ```
-3. Set up a GitHub Action for daily sync (see `.github/workflows/sync-orders.yml`)
-4. Add the same secrets to your GitHub repository **Settings → Secrets**
+### How the sync flow works
+
+Because Zerodha's Kite login requires Puppeteer (a headless browser), it cannot run inside Vercel Serverless Functions. The flow is:
+
+```
+Vercel Cron (3:30 PM IST) → /api/cron/sync-orders
+                                    │
+                                    │  dispatches workflow via GitHub API
+                                    ▼
+                        GitHub Actions (sync-orders.yml)
+                                    │
+                                    │  Puppeteer logs into Kite, fetches orders
+                                    ▼
+                        Writes to Turso DB → triggers Vercel cache revalidation
+```
+
+### Setup Steps
+
+**Step 1 — Create a Kite Connect app**
+1. Go to [kite.trade](https://kite.trade/) → **My Apps** → **Create App**
+2. Copy the **API Key** and **API Secret**
+
+**Step 2 — Add credentials to `.env.local`** (for local testing):
+```bash
+ZERODHA_USER_ID=your-zerodha-client-id
+ZERODHA_PASSWORD=your-zerodha-password
+ZERODHA_TOTP_SECRET=your-totp-secret        # The raw TOTP secret, NOT the 6-digit code
+ZERODHA_API_KEY=your-kite-api-key
+ZERODHA_API_SECRET=your-kite-api-secret
+```
+
+> [!TIP]
+> To get your `ZERODHA_TOTP_SECRET`: when setting up 2FA in Zerodha, choose "authenticator app" and look for the option to reveal/copy the raw secret key (instead of scanning the QR code).
+
+**Step 3 — Add GitHub Repository Secrets**
+
+Go to your GitHub repo → **Settings → Secrets and variables → Actions → New repository secret** and add:
+
+| Secret | Value |
+|--------|-------|
+| `DATABASE_URL` | Your Turso `libsql://` URL |
+| `TURSO_AUTH_TOKEN` | Your Turso auth token |
+| `ZERODHA_USER_ID` | Your Zerodha client ID |
+| `ZERODHA_PASSWORD` | Your Zerodha account password |
+| `ZERODHA_TOTP_SECRET` | Raw TOTP secret (not the 6-digit code) |
+| `ZERODHA_API_KEY` | From kite.trade developer console |
+| `ZERODHA_API_SECRET` | From kite.trade developer console |
+| `NEXT_APP_URL` | Your Vercel deployment URL e.g. `https://your-app.vercel.app` — used to trigger cache revalidation after sync |
+
+**Step 4 — Add Vercel environment variables** (so the app can dispatch the workflow):
+
+| Variable | Value |
+|----------|-------|
+| `GITHUB_PAT` | A GitHub Personal Access Token with the `workflow` scope |
+
+> [!TIP]
+> Create a PAT at GitHub → **Settings → Developer settings → Personal access tokens (classic)** → select `workflow` scope.
+
+**Step 5 — (Optional) Test locally**:
+```bash
+npx tsx src/scripts/zerodha-cron.ts
+```
+
+---
+
+## 📧 Optional: Daily Email Report
+
+Sends a daily end-of-day portfolio summary email after market close, including:
+- Portfolio value, day P&L, XIRR
+- Top movers and current holdings
+- Screener entry and exit signals
+- *(Optional)* AI-generated narrative summary via Groq
+
+### Setup
+
+**Step 1 — Get a Resend API key**
+
+Sign up at [resend.com](https://resend.com) (free tier: 100 emails/day). Copy your API key.
+
+**Step 2 — Add env variables** (`.env.local` + Vercel):
+
+```bash
+RESEND_API_KEY=re_your-resend-api-key
+REPORT_EMAIL_TO=you@example.com
+
+# Optional: use your own verified sender domain
+# REPORT_EMAIL_FROM=portfolio@yourdomain.com
+
+# Optional: AI summary via Groq (https://groq.com)
+# GROQ_API_KEY=your-groq-api-key
+# GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+**Step 3 — Add a cron job** on [cron-job.org](https://cron-job.org):
+
+| Field | Value |
+|-------|-------|
+| URL | `https://your-app.vercel.app/api/cron/daily-report?secret=YOUR_CRON_SECRET` |
+| Schedule | `0 11 * * 1-5` |
+| Time zone | UTC (= 4:30 PM IST) |
+
+> [!TIP]
+> Append `?force=true` to the URL to send a test email even on weekends or holidays.
 
 ---
 
 ## 🔑 Environment Variables Reference
 
-### Required (Core)
+### Required — Core App
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Turso database connection URL (`libsql://your-db.turso.io`) |
-| `TURSO_AUTH_TOKEN` | Turso database authentication token |
-| `UPSTOX_ANALYTICS_TOKEN` | Long-lived (1-year) read-only token. Generate at Developer Apps → Analytics tab. |
+| Variable | Where to set | Description |
+|----------|-------------|-------------|
+| `DATABASE_URL` | `.env.local` + Vercel | Turso database URL — must start with `libsql://`. Use this when setting up manually. |
+| `TURSO_DATABASE_URL` | Vercel only | Injected automatically by the **Vercel Marketplace Turso integration**. The app accepts this as a fallback for `DATABASE_URL` — no manual setup needed if using Option A. |
+| `TURSO_AUTH_TOKEN` | `.env.local` + Vercel | Turso authentication token. Injected automatically by the Vercel integration, or copy it from the CLI/dashboard for manual setup. |
+| `UPSTOX_ANALYTICS_TOKEN` | `.env.local` + Vercel | Long-lived (1-year) read-only token from Developer Apps → Analytics tab |
+
+### Strongly Recommended
+
+| Variable | Where to set | Description |
+|----------|-------------|-------------|
+| `CRON_SECRET` | `.env.local` + Vercel | Secures all `/api/cron/*`, `/api/recompute`, and `/api/revalidate` endpoints. Pass as `?secret=` query param or `Authorization: Bearer` header. Without it, any request is accepted. |
 
 ### Optional — Personalization
 
-| Variable | Used For | Description |
-|----------|----------|-------------|
-| `APP_USER_NAME` | UI greeting (server) | Display name shown in the app (default: "User") |
-| `NEXT_PUBLIC_APP_USER_NAME` | UI greeting (client) | Same as above, for client-side components |
+| Variable | Where to set | Description |
+|----------|-------------|-------------|
+| `APP_USER_NAME` | `.env.local` + Vercel | Your name shown in server-rendered UI components. Defaults to `"User"`. |
+| `NEXT_PUBLIC_APP_USER_NAME` | `.env.local` + Vercel | Same as above, but exposed to client-side React components. Must have the `NEXT_PUBLIC_` prefix. |
+| `NEXT_PUBLIC_APP_VERSION` | `.env.local` + Vercel | Cache buster for React Query's persisted client-side cache. Defaults to `"v1"`. Increment this to invalidate stale cached data on clients. |
+| `DATA_LOCK_DATE` | `.env.local` + Vercel | Hard-code a data lock date (format: `YYYY-MM-DD`) as an env-level fallback. Normally managed via the Settings UI (stored in DB). |
+| `USE_UPSTOX` | `.env.local` | Set to `"false"` to disable all Upstox API calls. Useful for offline development and testing. Defaults to `true`. |
 
-### Optional — Cron Job Security
+### Optional — Zerodha Order Sync (`.env.local` + Vercel)
 
-| Variable | Used For | Description |
-|----------|----------|-------------|
-| `CRON_SECRET` | Securing cron/admin endpoints | Prevents unauthorized access to `/api/cron/*`, `/api/recompute`, `/api/revalidate` endpoints. Pass as `?secret=` query param or `Authorization: Bearer` header. |
+| Variable | Description |
+|----------|-------------|
+| `ZERODHA_USER_ID` | Your Zerodha client ID |
+| `ZERODHA_PASSWORD` | Your Zerodha account password |
+| `ZERODHA_TOTP_SECRET` | Raw TOTP secret for automated 2FA (not the 6-digit code) |
+| `ZERODHA_API_KEY` | Kite Connect API key from kite.trade |
+| `ZERODHA_API_SECRET` | Kite Connect API secret from kite.trade |
+| `GITHUB_PAT` | GitHub Personal Access Token with `workflow` scope. Required for the Vercel app to dispatch the sync GitHub Action. |
+| `GITHUB_REPO_OWNER` | Your GitHub username. Only needed if **not** deployed on Vercel (Vercel auto-injects `VERCEL_GIT_REPO_OWNER`). |
+| `GITHUB_REPO_NAME` | Your repository name. Only needed if **not** deployed on Vercel (Vercel auto-injects `VERCEL_GIT_REPO_SLUG`). |
 
-### Optional — Zerodha Order Sync
+### Optional — Daily Email Report (`.env.local` + Vercel)
 
-Only needed if you want to auto-import orders from Zerodha Kite. Not required for core functionality.
+Required only if you set up the `/api/cron/daily-report` cron job.
 
-| Variable | Used For | Description |
-|----------|----------|-------------|
-| `ZERODHA_USER_ID` | Kite login | Your Zerodha client ID |
-| `ZERODHA_PASSWORD` | Kite login | Your Zerodha password |
-| `ZERODHA_TOTP_SECRET` | Kite 2FA | TOTP secret for automated login |
-| `ZERODHA_API_KEY` | Kite Connect API | API key from kite.trade |
-| `ZERODHA_API_SECRET` | Kite Connect API | API secret from kite.trade |
-| `GITHUB_PAT` | UI-triggered sync | GitHub Personal Access Token to trigger the Zerodha sync workflow from the Settings page |
+| Variable | Description |
+|----------|-------------|
+| `RESEND_API_KEY` | API key from [resend.com](https://resend.com). Required to send emails. |
+| `REPORT_EMAIL_TO` | Recipient email address for the daily report. |
+| `REPORT_EMAIL_FROM` | Sender address. Defaults to `onboarding@resend.dev` (Resend sandbox). Use a verified domain in production. |
+| `GROQ_API_KEY` | *(Optional within this feature)* API key from [groq.com](https://groq.com). If set, the email includes an AI-generated portfolio summary. |
+| `GROQ_MODEL` | *(Optional)* Groq model name. Defaults to `llama-3.3-70b-versatile`. |
+
+### GitHub Actions Repository Secrets
+
+Required in your GitHub repo → **Settings → Secrets and variables → Actions** for the `sync-orders.yml` workflow:
+
+| Secret | Description |
+|--------|-------------|
+| `DATABASE_URL` | Same Turso `libsql://` URL |
+| `TURSO_AUTH_TOKEN` | Same Turso auth token |
+| `ZERODHA_USER_ID` | Zerodha client ID |
+| `ZERODHA_PASSWORD` | Zerodha account password |
+| `ZERODHA_TOTP_SECRET` | Raw TOTP secret |
+| `ZERODHA_API_KEY` | Kite Connect API key |
+| `ZERODHA_API_SECRET` | Kite Connect API secret |
+| `NEXT_APP_URL` | *(Optional)* Your Vercel URL e.g. `https://your-app.vercel.app`. Triggers cache revalidation after a successful sync. |
 
 ---
 
-## ❓ Known Limitations & Troubleshooting
+## ❓ Troubleshooting & Known Limitations
 
 ### Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
 | `no such table` | Run `npx tsx scripts/apply-turso-schema.ts` to create tables |
-| Screener shows 0 stocks | Run the one-time backfill scripts (see [Screener Setup](#one-time-setup-first-deploy)) |
+| Screener shows 0 stocks | Run the one-time backfill scripts (see [Screener Setup](#step-8--optional-set-up-the-momentum-screener)) |
 | Stale data after cron runs | Check that `CRON_SECRET` matches between Vercel env and cron-job.org URLs |
 | `prisma generate` errors | Run `npm install` first, then `npx prisma generate` |
+| `LIBSQL_CLIENT_ERROR` | Ensure `DATABASE_URL` starts with `libsql://` (not `https://`) |
 
 ### Known Limitations
+
 1. **Index History** — NIFTY500 MOMENTUM 50 historical data before Sep 30, 2024 requires CSV backfill
 2. **Corporate Actions** — Must be manually entered (no API auto-detection for splits/bonuses)
 3. **Real-time WebSocket** — May disconnect during market hours; auto-reconnect handles this
@@ -569,7 +773,7 @@ Only needed if you want to auto-import orders from Zerodha Kite. Not required fo
 
 ## 📱 Android App Setup
 
-This project uses [Capacitor](https://capacitorjs.com/) to wrap the web app into a native Android application. 
+This project uses [Capacitor](https://capacitorjs.com/) to wrap the web app into a native Android application.
 
 ### Prerequisites for Android
 - [Android Studio](https://developer.android.com/studio) installed and configured
@@ -584,7 +788,6 @@ This project uses [Capacitor](https://capacitorjs.com/) to wrap the web app into
    ```
 
 2. **Sync and Open in Android Studio**
-   Run the following command to sync the web assets to the Android project and automatically open Android Studio:
    ```bash
    npm run android:build
    ```

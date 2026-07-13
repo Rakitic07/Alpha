@@ -23,12 +23,15 @@ export function chunkArray<T>(array: T[], chunkSize: number = 500): T[][] {
 export const SQLITE_IN_CLAUSE_LIMIT = 500;
 
 function createPrismaClient(): PrismaClient {
-  const dbUrl = process.env.DATABASE_URL;
+  // DATABASE_URL is the canonical name used throughout the app.
+  // TURSO_DATABASE_URL is the variable name injected by the Vercel Marketplace
+  // Turso integration, so we fall back to it automatically.
+  const dbUrl = process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL;
 
   if (!dbUrl) {
     throw new Error(
-      'Missing database credentials. Please set DATABASE_URL in your .env.local file.\n' +
-      'Example: DATABASE_URL="libsql://your-database.turso.io?authToken=your-auth-token"'
+      'Missing database credentials. Please set DATABASE_URL (or TURSO_DATABASE_URL) in your .env.local file.\n' +
+      'Example: DATABASE_URL="libsql://your-database.turso.io"'
     );
   }
 

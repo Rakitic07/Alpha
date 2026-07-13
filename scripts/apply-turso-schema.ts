@@ -15,11 +15,13 @@ if (fs.existsSync(envLocalPath)) {
 }
 config();
 
-const TURSO_URL = process.env.DATABASE_URL;
+// DATABASE_URL is the canonical name. TURSO_DATABASE_URL is injected automatically
+// by the Vercel Marketplace Turso integration — both are accepted.
+const TURSO_URL = process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL;
 const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
 if (!TURSO_URL || !TURSO_URL.startsWith('libsql')) {
-  console.error('❌ DATABASE_URL must point to a libsql:// Turso database');
+  console.error('❌ DATABASE_URL (or TURSO_DATABASE_URL) must point to a libsql:// Turso database');
   process.exit(1);
 }
 

@@ -1,0 +1,54 @@
+---
+description: Database patterns for Turso/libSQL via Prisma
+globs: ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts"]
+---
+
+# Database Rules (Turso / libSQL via Prisma)
+
+## Always
+- Import `{ prisma }` from `@/lib/db` for all database access in app code
+- Use `chunkArray(ids, 500)` when building large IN queries (SQLite limit)
+- Use `prisma.$transaction([...])` for multi-table writes that must be atomic
+
+## Never
+- Use `@libsql/client` directly in `src/` (only in `scripts/`)
+- Use `prisma db push` for production — use `npx tsx scripts/apply-turso-schema.ts`
+- Use Postgres-specific features: `jsonb`, `uuid_generate_v4()`, `ON CONFLICT DO UPDATE` with named constraints
+- Store `DateTime` without a timezone anchor — always use ISO 8601 UTC
+
+## SQLite-specific patterns
+
+```typescript
+// ✅ Chunked IN query
+import { prisma, chunkArray } from '@/lib/db';
+const chunks = chunkArray(symbols, 500);
+const results = await Promise.all(
+  chunks.map(chunk => prisma.stockHistory.findMany({
+    where: { symbol: { in: chunk } }
+  }))
+);
+const all = results.flat();
+
+// ✅ Upsert (SQLite compatible)
+await prisma.appConfig.upsert({
+  where: { key: 'DATA_LOCK_DATE' },
+  update: { value: dateStr },
+  create: { key: 'DATA_LOCK_DATE', value: dateStr },
+});
+
+// ✅ JSON fields (stored as String in SQLite)
+// schema: sectorAllocation String? // JSON: SectorAllocation[]
+const snapshot = await prisma.weeklyPortfolioSnapshot.findFirst(...);
+const sectors = JSON.parse(snapshot.sectorAllocation ?? '[]');
+```
+
+## Schema migration workflow
+```bash
+# 1. Edit prisma/schema.prisma
+# 2. Generate migration SQL
+npx prisma migrate dev --name describe_your_change
+# 3. Apply to Turso (runs all pending migration.sql files)
+npx tsx scripts/apply-turso-schema.ts
+# 4. Regenerate Prisma client
+npx prisma generate
+```

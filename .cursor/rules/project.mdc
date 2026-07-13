@@ -1,0 +1,44 @@
+---
+description: Alpha Portfolio Tracker — core project rules
+alwaysApply: true
+---
+
+# Alpha Portfolio Tracker — Cursor Rules
+
+## Stack
+- Next.js 16 App Router · Turso (libSQL/SQLite) · Prisma 7 · Upstox API · TailwindCSS v4 · MUI v6
+
+## Non-negotiable rules
+
+1. **Database access**: Always `import { prisma } from '@/lib/db'`. Never raw SQL or direct libsql client in app code.
+2. **Server-only**: DB access, API calls, and secrets in Server Actions (`'use server'`) or API routes only. Never in client components.
+3. **IST dates**: Use helpers from `src/lib/tz.ts` for all market date logic. Never use `new Date()` raw for market-sensitive code.
+4. **Lint**: Run `npm run lint` and fix all issues before finishing.
+5. **Debug target**: Use the production Turso DB (`DATABASE_URL` in `.env.local`). `prisma/dev.db` is dummy data only.
+6. **No Postgres**: Project uses Turso/SQLite. Never use Postgres syntax or PrismaPg.
+7. **SQLite IN limit**: Max 500 items in IN clauses. Import `SQLITE_IN_CLAUSE_LIMIT` and `chunkArray` from `@/lib/db`.
+
+## Schema changes
+```bash
+npx prisma migrate dev --name <name>
+npx tsx scripts/apply-turso-schema.ts  # push to Turso
+npx prisma generate
+```
+
+## New cron endpoint checklist
+- [ ] `export const dynamic = 'force-dynamic'`
+- [ ] Call `verifyCronSecret(request)` from `@/lib/cron-auth` at top of handler
+- [ ] Add to cron table in README.md
+- [ ] Add to cron-job.org
+
+## Key file locations
+| What | Where |
+|------|-------|
+| DB singleton | `src/lib/db.ts` |
+| All Server Actions | `src/app/actions/` |
+| Cron auth | `src/lib/cron-auth.ts` |
+| Screener pipeline | `src/lib/screener/pipeline.ts` |
+| Portfolio recalc | `src/lib/finance/recalculation.ts` |
+| Trade import | `src/lib/import-service.ts` |
+| Upstox client | `src/lib/upstox-client.ts` |
+| IST date utils | `src/lib/tz.ts`, `src/lib/screener/dates.ts` |
