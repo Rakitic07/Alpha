@@ -95,27 +95,6 @@ async function main() {
         const { getAuthenticatedKiteClient, fetchExecutedOrders, validateKiteConfig } = await import('../lib/kite-client');
         const { ingestOrdersWithDeduplication } = await import('../lib/import-service');
 
-        // Wake the Neon serverless compute via the neon() HTTP endpoint before
-        // the pg TCP pool dials it. This runs right before the first Prisma
-        // query so the compute is still hot by the time queries land — firing
-        // it earlier races against Neon's scale-to-zero during Kite login.
-        async function warmupDb(maxAttempts = 4, delayMs = 5000): Promise<void> {
-            const { neon } = await import('@neondatabase/serverless');
-            const dbUrl = process.env.DATABASE_URL!;
-            const sql = neon(dbUrl);
-            for (let i = 0; i < maxAttempts; i++) {
-                try {
-                    await sql`SELECT 1`;
-                    console.log(`[DB] HTTP warmup succeeded (attempt ${i + 1}).`);
-                    return;
-                } catch (err: unknown) {
-                    if (i === maxAttempts - 1) throw err;
-                    const errMsg = err instanceof Error ? err.message : String(err);
-                    console.warn(`[DB] Warmup attempt ${i + 1} failed: ${errMsg}. Retrying in ${delayMs / 1000}s...`);
-                    await new Promise(resolve => setTimeout(resolve, delayMs));
-                }
-            }
-        }
 
         // 1. Validate Configuration
         const configCheck = validateKiteConfig();
@@ -147,8 +126,7 @@ async function main() {
             orderTimestamp: o.orderTimestamp
         }));
 
-        // 5. Ingest with Deduplication (warm Neon immediately before first query)
-        await warmupDb();
+        // 5. Ingest with Deduplication
         console.log('Processing import...');
         const result = await ingestOrdersWithDeduplication(
             orders,

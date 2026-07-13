@@ -1,8 +1,6 @@
 import 'server-only';
 import { PrismaClient } from '@prisma/client';
-import { PrismaNeon } from '@prisma/adapter-neon';
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import ws from 'ws';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { dbLogger } from '@/lib/logger';
 
 const globalForPrisma = global as unknown as { prisma_v2: PrismaClient };
@@ -30,33 +28,23 @@ function createPrismaClient(): PrismaClient {
   if (!dbUrl) {
     throw new Error(
       'Missing database credentials. Please set DATABASE_URL in your .env.local file.\n' +
-      'Example: DATABASE_URL="postgresql://user:pass@host.neon.tech/dbname?sslmode=require"'
+      'Example: DATABASE_URL="libsql://your-database.turso.io?authToken=your-auth-token"'
     );
   }
 
-  dbLogger.info('Connected to Neon Postgres via WebSocket adapter');
-
-  // Clean connection string (strip channel_binding and normalise sslmode to verify-full)
-  let safeDbUrl = dbUrl;
-  try {
-    const urlObj = new URL(dbUrl);
-    urlObj.searchParams.delete('channel_binding');
-    urlObj.searchParams.set('sslmode', 'verify-full');
-    safeDbUrl = urlObj.toString();
-  } catch (e) {
-    // Ignore URL parse error, fallback to raw url
+  // Convert libsql:// to https:// to force HTTP transport, which is required
+  // because Vercel Serverless Functions do not support persistent WebSockets (wss://).
+  // This trim/replace is robust against leading whitespaces, surrounding quotes, and case sensitivity.
+  let cleanUrl = dbUrl.trim().replace(/^["']|["']$/g, '');
+  if (/^libsql:\/\//i.test(cleanUrl)) {
+    cleanUrl = cleanUrl.replace(/^libsql:\/\//i, 'https://');
   }
 
-  // Setup WebSocket constructor for Neon serverless driver
-  class CustomWebSocket extends ws {
-    constructor(address: any, protocols: any, options: any) {
-      super(address, protocols, { ...options, rejectUnauthorized: false });
-    }
-  }
-  neonConfig.webSocketConstructor = CustomWebSocket;
+  dbLogger.info('Connected to Turso/SQLite via HTTP libSQL adapter');
 
-  const adapter = new PrismaNeon({
-    connectionString: safeDbUrl,
+  const adapter = new PrismaLibSql({
+    url: cleanUrl,
+    authToken: process.env.TURSO_AUTH_TOKEN,
   });
   return new PrismaClient({ adapter });
 }

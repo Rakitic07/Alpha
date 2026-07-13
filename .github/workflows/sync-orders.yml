@@ -30,6 +30,7 @@ jobs:
       env:
         # Database must match src/lib/db.ts expectation
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
         
         # Zerodha Credentials
         ZERODHA_USER_ID: ${{ secrets.ZERODHA_USER_ID }}
