@@ -579,8 +579,8 @@ export async function getDataFreshness(): Promise<{
 
   // Count distinct dates using raw SQL for efficiency
   const [priceDatesResult, rankDatesResult] = await Promise.all([
-    prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(DISTINCT date)::int as count FROM "ScreenerPrice"`,
-    prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(DISTINCT date)::int as count FROM "RankingHistory"`,
+    prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(DISTINCT date) as count FROM "ScreenerPrice"`,
+    prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(DISTINCT date) as count FROM "RankingHistory"`,
   ]);
   const totalPriceDates = priceDatesResult[0]?.count ?? 0;
   const totalRankDates = rankDatesResult[0]?.count ?? 0;

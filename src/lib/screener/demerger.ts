@@ -112,16 +112,14 @@ export async function adjustDemergerPrices(
 
   // Adjust all pre-exDate OHLC (volume NOT adjusted — share count unchanged in demerger)
   // Use raw SQL for bulk update efficiency
-  await prisma.$executeRawUnsafe(
-    `UPDATE "ScreenerPrice"
-     SET "open" = "open" * $1,
-         "high" = "high" * $2,
-         "low"  = "low"  * $3,
-         "close"= "close"* $4
-     WHERE "symbol" = $5 AND "date" < $6`,
-    ratio, ratio, ratio, ratio,
-    symbol, exDate,
-  );
+  await prisma.$executeRaw`
+    UPDATE "ScreenerPrice"
+    SET "open" = "open" * ${ratio},
+        "high" = "high" * ${ratio},
+        "low"  = "low"  * ${ratio},
+        "close"= "close"* ${ratio}
+    WHERE "symbol" = ${symbol} AND "date" < ${exDate}
+  `;
 
   // Adjust StockATH
   const athRow = await prisma.stockATH.findUnique({ where: { symbol } });
@@ -144,11 +142,10 @@ export async function adjustDemergerPrices(
   }
 
   // Record for idempotency
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "ScreenerDemerger" ("symbol", "exDate", "ratio", "appliedAt")
-     VALUES ($1, $2, $3, NOW())`,
-    symbol, exDate, ratio,
-  );
+  await prisma.$executeRaw`
+    INSERT INTO "ScreenerDemerger" ("symbol", "exDate", "ratio", "appliedAt")
+    VALUES (${symbol}, ${exDate}, ${ratio}, CURRENT_TIMESTAMP)
+  `;
 
   return { ratio };
 }
@@ -190,9 +187,9 @@ export async function detectAndAdjustDemergers(
   dmLogger.info(`Found ${demergers.length} demergers from NSE, checking against universe...`);
 
   // Load already-applied demergers (raw SQL — table created outside Prisma generate)
-  const existingAdj = await prisma.$queryRawUnsafe<Array<{ symbol: string; exDate: string }>>(
-    `SELECT "symbol", "exDate" FROM "ScreenerDemerger"`,
-  );
+  const existingAdj = await prisma.$queryRaw<Array<{ symbol: string; exDate: string }>>`
+    SELECT "symbol", "exDate" FROM "ScreenerDemerger"
+  `;
   const appliedSet = new Set(existingAdj.map(e => `${e.symbol}:${e.exDate}`));
 
   for (const action of demergers) {

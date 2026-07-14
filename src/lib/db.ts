@@ -11,7 +11,7 @@ const globalForPrisma = global as unknown as { prisma_v2: PrismaClient };
  * useful for bulk inserts (createMany) and to keep individual queries
  * from becoming too large.
  */
-export function chunkArray<T>(array: T[], chunkSize: number = 500): T[][] {
+export function chunkArray<T>(array: T[], chunkSize: number = 50): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < array.length; i += chunkSize) {
     chunks.push(array.slice(i, i + chunkSize));
@@ -20,7 +20,8 @@ export function chunkArray<T>(array: T[], chunkSize: number = 500): T[][] {
 }
 
 // Keep the old name exported as an alias for backward compat in imports
-export const SQLITE_IN_CLAUSE_LIMIT = 500;
+// SQLite maximum expression tree depth is 100, which restricts IN clause elements.
+export const SQLITE_IN_CLAUSE_LIMIT = 50;
 
 function createPrismaClient(): PrismaClient {
   // DATABASE_URL is the canonical name used throughout the app.
