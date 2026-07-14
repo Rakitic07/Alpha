@@ -90,10 +90,14 @@ export async function recalculatePortfolioHistoryInternal(
         today = startOfDay(subDays(new Date(), 1));
     }
 
-    // Effective Recalculation Date
-    // If no fromDate (full recalc), this is startDate.
-    // If fromDate is provided, we only write to DB from this date, but we SIMULATE from startDate.
-    const effectiveFromDate = fromDate ? startOfDay(fromDate) : startDate;
+    const SNAPSHOT_START_DATE = process.env.SNAPSHOT_START_DATE
+      ? new Date(process.env.SNAPSHOT_START_DATE + 'T00:00:00.000Z')
+      : new Date('2026-01-01T00:00:00.000Z');
+
+    let effectiveFromDate = fromDate ? startOfDay(fromDate) : startDate;
+    if (effectiveFromDate < SNAPSHOT_START_DATE) {
+        effectiveFromDate = SNAPSHOT_START_DATE;
+    }
 
     const requestCache: RequestCache = new Map();
 
@@ -351,6 +355,17 @@ export async function recalculatePortfolioHistoryInternal(
         financeLogger.info(`[Data Lock] Protecting snapshots on or before ${dataLockDate.toISOString().split('T')[0]}`);
     }
     onProgress?.("Simulating Portfolio...", 30);
+    // Clean up snapshots older than the start date
+    await prisma.dailyPortfolioSnapshot.deleteMany({
+        where: { date: { lt: SNAPSHOT_START_DATE } }
+    });
+    await prisma.weeklyPortfolioSnapshot.deleteMany({
+        where: { date: { lt: SNAPSHOT_START_DATE } }
+    });
+    await prisma.monthlyPortfolioSnapshot.deleteMany({
+        where: { date: { lt: SNAPSHOT_START_DATE } }
+    });
+
     await prisma.dailyPortfolioSnapshot.deleteMany({
         where: { date: { gte: deleteFromDate } }
     });
