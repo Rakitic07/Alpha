@@ -272,20 +272,31 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   type Candle = { close: number; high: number; volume: number };
 
   // Only load prices for scoreable stocks — cuts query size ~50%
-  const priceWhere: { date: { gte: string; lte: string }; symbol?: { in: string[] } } = {
-    date: { gte: priceFromDate, lte: today },
-  };
-  // If scoreable set is smaller than total, filter by symbol
-  if (scoreableInsts.length < tradeableFiltered.length * 0.8) {
-    // Chunk symbol list for the IN clause (Turso HTTP handles large lists fine)
-    priceWhere.symbol = { in: scoreableSymbols };
-  }
+  let allPrices: Array<{ symbol: string; close: number; high: number; volume: number }> = [];
 
-  const allPrices = await prisma.screenerPrice.findMany({
-    where: priceWhere,
-    orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
-    select: { symbol: true, close: true, high: true, volume: true },
-  });
+  if (scoreableInsts.length < tradeableFiltered.length * 0.8) {
+    // Chunk symbol list for the IN clause (to avoid SQLite's 999 prepared statement parameter limit)
+    const symbolChunks = chunkArray(scoreableSymbols, 500);
+    const results = await Promise.all(
+      symbolChunks.map(chunk =>
+        prisma.screenerPrice.findMany({
+          where: {
+            date: { gte: priceFromDate, lte: today },
+            symbol: { in: chunk },
+          },
+          orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
+          select: { symbol: true, close: true, high: true, volume: true },
+        })
+      )
+    );
+    allPrices = results.flat();
+  } else {
+    allPrices = await prisma.screenerPrice.findMany({
+      where: { date: { gte: priceFromDate, lte: today } },
+      orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
+      select: { symbol: true, close: true, high: true, volume: true },
+    });
+  }
   const pricesBySymbol = new Map<string, Candle[]>();
   for (const p of allPrices) {
     let arr = pricesBySymbol.get(p.symbol);
