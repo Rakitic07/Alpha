@@ -68,7 +68,7 @@ saveRankingHistory()← append to RankingHistory (50-day rolling window)
 A portfolio holding is evaluated daily against three potential signal conditions:
 
 - **`byRank`**: Stock is unranked OR its rank is $> 50$.
-- **`byFilter`**: Close is below 200 DMA **AND** close is $> 25\%$ below ATH (`athProximity < 0.75`).
+- **`byFilter`**: Close is below 200 DMA **OR** close is $> 25\%$ below ATH (`athProximity < 0.75`).
 - **`by50Dma`**: Close is below the 50-day Simple Moving Average (50 DMA).
 
 ### 🔴 Red (Exit Signal)

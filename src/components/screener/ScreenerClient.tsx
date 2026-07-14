@@ -568,7 +568,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                               exit.isUnranked
                                 ? (exit.unrankedReason ? `① ${exit.unrankedReason}` : '① Dropped from screener universe')
                                 : exit.byRank ? `① Rank > 50` : '',
-                              exit.byFilter ? '② Below 200 DMA & outside 25% of ATH' : '',
+                              exit.byFilter ? '② Below 200 DMA or outside 25% of ATH' : '',
                               exit.by50Dma ? '③ Below 50 DMA' : '',
                               exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
                             ].filter(Boolean).join('\n')}

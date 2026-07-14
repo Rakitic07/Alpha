@@ -35,7 +35,7 @@ export interface ScreenerRow {
   unrankedReason?: string;
   exitSignal?: {
     byRank: boolean;    // rank > 50
-    byFilter: boolean;  // below 200 DMA AND athProximity < 0.75
+    byFilter: boolean;  // below 200 DMA OR athProximity < 0.75
     by50Dma: boolean;   // below 50 DMA
     protected: boolean; // last BUY within 14 days (min hold rule)
     isUnranked: boolean; // not in screener universe (e.g. BE category)
@@ -373,7 +373,7 @@ export async function getScreenerData(
       const isUnranked = row.isUnranked === true;
       const isBE = isUnranked && (row.unrankedReason?.includes('BE category') ?? false);
       const byRank   = isUnranked || row.rank > 50;
-      const byFilter = !row.dmaSwatches.above200 && row.athProximity < 0.75;
+      const byFilter = !row.dmaSwatches.above200 || row.athProximity < 0.75;
       const by50Dma = !row.dmaSwatches.above50;
       if (!byRank && !byFilter && !by50Dma) continue;
       const ageDays     = holdingAgeDays.get(row.symbol) ?? 9999;
