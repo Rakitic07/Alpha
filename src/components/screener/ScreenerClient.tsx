@@ -194,6 +194,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
   const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio'>('portfolio');
   const [hidePortfolio, setHidePortfolio] = useState(true);
+  const [signalFilter, setSignalFilter] = useState<'hold' | 'warning' | 'exit' | null>(null);
   const [loading, setLoading] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -252,6 +253,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
   const handleTabChange = useCallback(async (tab: 'all' | 'prefiltered' | 'portfolio') => {
     setActiveTab(tab);
+    setSignalFilter(null);
     setLoading(true);
     try {
       const data = await getScreenerData(tab);
@@ -321,7 +323,30 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     if (activeTab === 'prefiltered' && hidePortfolio) {
       filtered = filtered.filter(r => !r.inPortfolio);
     }
+
+    if (activeTab === 'portfolio' && signalFilter) {
+      filtered = filtered.filter(r => {
+        const sig = r.exitSignal?.signalType;
+        if (signalFilter === 'hold') {
+          return !r.exitSignal;
+        } else if (signalFilter === 'warning') {
+          return r.exitSignal?.signalType === 'yellow';
+        } else if (signalFilter === 'exit') {
+          return r.exitSignal?.signalType === 'red';
+        }
+        return true;
+      });
+    }
+
     return filtered.sort((a, b) => {
+      // Pin active exit stocks (red signal, not protected) to the end of the table on the portfolio tab
+      if (activeTab === 'portfolio') {
+        const aIsExit = a.exitSignal?.signalType === 'red' && !a.exitSignal?.protected;
+        const bIsExit = b.exitSignal?.signalType === 'red' && !b.exitSignal?.protected;
+        if (aIsExit && !bIsExit) return 1;
+        if (!aIsExit && bIsExit) return -1;
+      }
+
       // For rank sort: unranked stocks (rank=9999, e.g. BE) are placed
       // by their compositeScore relative to ranked stocks so they appear
       // at their natural score position rather than pinned to the bottom.
@@ -356,7 +381,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [rows, sortField, sortDir, activeTab, hidePortfolio]);
+  }, [rows, sortField, sortDir, activeTab, hidePortfolio, signalFilter]);
 
   const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered' || activeTab === 'portfolio';
 
@@ -433,6 +458,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         filteredCount={rows.length}
         hidePortfolio={hidePortfolio}
         onHidePortfolioChange={setHidePortfolio}
+        signalFilter={signalFilter}
+        onSignalFilterChange={setSignalFilter}
       />
 
       {/* Table */}

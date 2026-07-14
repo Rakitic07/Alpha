@@ -10,6 +10,8 @@ interface StatsBarProps {
   filteredCount: number;
   hidePortfolio: boolean;
   onHidePortfolioChange: (val: boolean) => void;
+  signalFilter: 'hold' | 'warning' | 'exit' | null;
+  onSignalFilterChange: (val: 'hold' | 'warning' | 'exit' | null) => void;
 }
 
 export default memo(function StatsBar({
@@ -19,6 +21,8 @@ export default memo(function StatsBar({
   filteredCount,
   hidePortfolio,
   onHidePortfolioChange,
+  signalFilter,
+  onSignalFilterChange,
 }: StatsBarProps) {
   const { total, allTotal, portfolioCount, rankedPortfolioCount, rankBuckets, mcapBreakdown } = stats;
   const totalMcap = mcapBreakdown.large + mcapBreakdown.mid + mcapBreakdown.small + mcapBreakdown.micro;
@@ -28,6 +32,14 @@ export default memo(function StatsBar({
     { key: 'prefiltered' as const, label: 'Pre-filtered', count: total },
     { key: 'portfolio' as const,   label: 'Portfolio',    count: portfolioCount },
   ];
+
+  const handleStatClick = (type: 'hold' | 'warning' | 'exit') => {
+    if (signalFilter === type) {
+      onSignalFilterChange(null);
+    } else {
+      onSignalFilterChange(type);
+    }
+  };
 
   return (
     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full md:h-12">
@@ -68,10 +80,28 @@ export default memo(function StatsBar({
         {activeTab === 'portfolio' && (
           <div className="flex items-center gap-4 text-[11px]">
             {/* Portfolio rank buckets */}
-            <div className="flex items-center gap-4 bg-slate-800/30 border border-white/5 rounded-lg px-4 py-1.5">
-              <StatPill label="HOLD" value={rankBuckets.hold} color="text-emerald-400" />
-              <StatPill label="WARN" value={rankBuckets.warning} color="text-yellow-400" />
-              <StatPill label="EXIT" value={rankBuckets.exit} color="text-red-400" />
+            <div className="flex items-center gap-2 bg-slate-800/30 border border-white/5 rounded-lg p-1">
+              <StatPill
+                label="HOLD"
+                value={rankBuckets.hold}
+                color="text-emerald-400"
+                isActive={signalFilter === 'hold'}
+                onClick={() => handleStatClick('hold')}
+              />
+              <StatPill
+                label="WARN"
+                value={rankBuckets.warning}
+                color="text-yellow-400"
+                isActive={signalFilter === 'warning'}
+                onClick={() => handleStatClick('warning')}
+              />
+              <StatPill
+                label="EXIT"
+                value={rankBuckets.exit}
+                color="text-red-400"
+                isActive={signalFilter === 'exit'}
+                onClick={() => handleStatClick('exit')}
+              />
             </div>
 
             {/* Market cap breakdown */}
@@ -88,12 +118,31 @@ export default memo(function StatsBar({
   );
 });
 
-function StatPill({ label, value, color }: { label: string; value: number; color: string }) {
+function StatPill({
+  label,
+  value,
+  color,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-md transition-all cursor-pointer border border-transparent select-none outline-none ${
+        isActive
+          ? 'bg-slate-700/60 border-white/10 shadow-inner scale-[1.03]'
+          : 'hover:bg-slate-800/60 hover:border-white/5'
+      }`}
+    >
       <span className="text-gray-500 font-medium uppercase tracking-wider" style={{ fontSize: '9px' }}>{label}</span>
       <span className={`text-xl font-black tabular-nums leading-none ${color}`}>{value}</span>
-    </div>
+    </button>
   );
 }
 
