@@ -374,7 +374,16 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       switch (sortField) {
         case 'symbol': cmp = a.symbol.localeCompare(b.symbol); break;
         case 'mcap':   cmp = a.marketCapCr - b.marketCapCr; break;
-        case 'dd':     cmp = a.athProximity - b.athProximity; break;
+        case 'dd': {
+          if (activeTab === 'portfolio') {
+            const aDd = a.drawdownSinceEntry ?? 0;
+            const bDd = b.drawdownSinceEntry ?? 0;
+            cmp = aDd - bDd;
+          } else {
+            cmp = a.athProximity - b.athProximity;
+          }
+          break;
+        }
         case 'score':      cmp = a.compositeScore - b.compositeScore; break;
         case 'rankChange': cmp = (a.rankChange ?? 0) - (b.rankChange ?? 0); break;
         default:           cmp = a.rank - b.rank;
@@ -679,24 +688,28 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       </div>
                     </td>
 
-                    {/* DD — drawdown from ATH */}
+                    {/* DD — drawdown */}
                     <td className="px-1 py-3 text-center">
                       {row.currentPrice > 0 ? (() => {
-                        const dd = -((1 - row.athProximity) * 100);
-                        const cls = dd >= -5 ? 'text-emerald-400' : dd >= -15 ? 'text-yellow-400' : dd >= -30 ? 'text-orange-400' : 'text-red-400';
+                        const athDd = -((1 - row.athProximity) * 100);
                         
-                        const showEntryDd = activeTab === 'portfolio' && row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null;
+                        const isPortfolioTab = activeTab === 'portfolio';
+                        const hasEntryDd = isPortfolioTab && row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null;
                         const entryDd = row.drawdownSinceEntry ?? 0;
-                        const isSame = showEntryDd && Math.abs(dd - entryDd) < 0.05;
+                        const isSame = hasEntryDd && Math.abs(athDd - entryDd) < 0.05;
+
+                        // Primary value is drawdown since entry on portfolio tab, else ATH drawdown
+                        const primaryDd = hasEntryDd ? entryDd : athDd;
+                        const cls = primaryDd >= -5 ? 'text-emerald-400' : primaryDd >= -15 ? 'text-yellow-400' : primaryDd >= -30 ? 'text-orange-400' : 'text-red-400';
 
                         return (
-                          <div className="flex flex-col items-center">
+                          <div className="flex flex-col items-center gap-0.5">
                             <span className={`font-mono text-xs font-semibold tabular-nums ${cls}`}>
-                              {dd.toFixed(1)}%
+                              {primaryDd.toFixed(1)}%
                             </span>
-                            {showEntryDd && !isSame && (
-                              <span className="font-mono text-[10px] text-zinc-500 tabular-nums leading-tight" title="Drawdown since portfolio entry">
-                                {entryDd.toFixed(1)}%
+                            {hasEntryDd && !isSame && (
+                              <span className="font-mono text-[10px] text-zinc-500 tabular-nums leading-none mt-0.5" title="Drawdown from All-Time High">
+                                ({athDd.toFixed(1)}%)
                               </span>
                             )}
                           </div>
