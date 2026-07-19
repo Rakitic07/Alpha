@@ -527,16 +527,18 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     ? 'rgb(239,68,68)'
                     : isWarning
                       ? 'rgb(234,179,8)'
-                      : row.isUnranked || isProtected
-                        ? 'rgb(63,63,70)'
-                        : getRankAccent(row.rank, row.inPortfolio, activeTab === 'prefiltered');
+                      : isProtected
+                        ? 'rgb(234,179,8)'
+                        : row.isUnranked
+                          ? 'rgb(63,63,70)'
+                          : getRankAccent(row.rank, row.inPortfolio, activeTab === 'prefiltered');
 
                 const rowBg = isAllTab
                   ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
                   : 'bg-zinc-950 hover:bg-zinc-800/40'
-                  : isExitCandidate           ? 'bg-rose-950/30 hover:bg-rose-950/40'
-                  : isWarning                 ? 'bg-yellow-950/20 hover:bg-yellow-950/30'
-                  : isProtected               ? 'bg-zinc-950 hover:bg-zinc-800/60'
+                  : isExitCandidate           ? 'bg-red-500/[0.08] hover:bg-red-500/[0.13]'
+                  : isWarning                 ? 'bg-amber-500/[0.06] hover:bg-amber-500/[0.11]'
+                  : isProtected               ? 'bg-amber-500/[0.03] hover:bg-amber-500/[0.08]'
                   : row.isUnranked            ? 'bg-zinc-950'
                   : row.inPortfolio && activeTab !== 'portfolio' ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
                   : 'bg-zinc-950 hover:bg-zinc-800/60';
@@ -553,7 +555,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     className={`transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg}`}
                   >
                     {/* Rank — left accent bar */}
-                    <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 4px 0 0 ${accentColor}` }}>
+                    <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 5px 0 0 ${accentColor}` }}>
                       {row.isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
                       ) : (
@@ -582,14 +584,22 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     {/* Stock info */}
                     <td className="flex flex-col px-3 py-3 gap-1.5">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-bold text-base text-white truncate leading-none">{row.symbol}</span>
+                        <span className={`font-bold text-base truncate leading-none ${
+                          isExitCandidate
+                            ? 'text-red-300'
+                            : isWarning
+                              ? 'text-amber-300'
+                              : isProtected
+                                ? 'text-amber-100/90'
+                                : 'text-white'
+                        }`}>{row.symbol}</span>
                         {/* Exit / Warning signal badges */}
                         {exit && activeTab === 'portfolio' && (exit.protected || exit.signalType === 'red') && (
                           <span
-                            className={`text-[9px] px-1 h-3.5 rounded leading-none shrink-0 flex items-center font-bold border tracking-wide ${
+                            className={`text-[9px] px-1.5 h-4.5 rounded border leading-none shrink-0 flex items-center font-extrabold tracking-wider ${
                               exit.protected
-                                ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-red-500/20 text-red-300 border-red-500/40'
                             }`}
                             title={[
                               exit.isUnranked
