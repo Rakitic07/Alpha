@@ -684,7 +684,23 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       {row.currentPrice > 0 ? (() => {
                         const dd = -((1 - row.athProximity) * 100);
                         const cls = dd >= -5 ? 'text-emerald-400' : dd >= -15 ? 'text-yellow-400' : dd >= -30 ? 'text-orange-400' : 'text-red-400';
-                        return <span className={`font-mono text-xs font-semibold tabular-nums ${cls}`}>{dd.toFixed(1)}%</span>;
+                        
+                        const showEntryDd = activeTab === 'portfolio' && row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null;
+                        const entryDd = row.drawdownSinceEntry ?? 0;
+                        const isSame = showEntryDd && Math.abs(dd - entryDd) < 0.05;
+
+                        return (
+                          <div className="flex flex-col items-center">
+                            <span className={`font-mono text-xs font-semibold tabular-nums ${cls}`}>
+                              {dd.toFixed(1)}%
+                            </span>
+                            {showEntryDd && !isSame && (
+                              <span className="font-mono text-[10px] text-zinc-500 tabular-nums leading-tight" title="Drawdown since portfolio entry">
+                                {entryDd.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                        );
                       })() : (
                         <span className="text-zinc-700 text-xs">—</span>
                       )}

@@ -49,6 +49,7 @@ export interface ScreenerRow {
     stage: string;
     desc: string;
   };
+  drawdownSinceEntry?: number | null;
 }
 
 export interface ScreenerStats {
@@ -110,6 +111,7 @@ export async function getScreenerData(
     // Fail-safe, keep empty map
   }
 
+  let peakSinceEntryMap = new Map<string, number>();
   let portfolioSymbols: Set<string>;
   let portfolioNames: Map<string, string>;
   let holdingQty = new Map<string, number>();
@@ -121,17 +123,63 @@ export async function getScreenerData(
     portfolioNames = new Map(holdings.map(h => [h.symbol, h.symbol]));
     holdingQty = new Map(holdings.map(h => [h.symbol, h.qty]));
 
-    // Weighted-average holding age (same as portfolio page)
+    // Weighted-average holding age and earliest entry date of active holdings
     const now = Date.now();
+    const earliestDateMap = new Map<string, Date>();
     for (const [sym, batches] of engine.inventory.entries()) {
       let totalQty = 0, weightedDays = 0;
-      for (const b of batches) {
-        if (b.qty <= 0) continue;
+      const validBatches = batches.filter(b => b.qty > 0);
+      for (const b of validBatches) {
         const days = (now - b.date.getTime()) / 86_400_000;
         weightedDays += days * b.qty;
         totalQty += b.qty;
       }
       if (totalQty > 0) holdingAgeDays.set(sym, Math.round(weightedDays / totalQty));
+
+      if (validBatches.length > 0) {
+        const earliest = new Date(Math.min(...validBatches.map(b => b.date.getTime())));
+        earliestDateMap.set(sym, earliest);
+      }
+    }
+
+    if (portfolioSymbols.size > 0 && earliestDateMap.size > 0) {
+      try {
+        const symList = Array.from(portfolioSymbols);
+        const minDateOfAll = new Date(Math.min(...Array.from(earliestDateMap.values()).map(d => d.getTime())));
+        const minDateStr = minDateOfAll.toISOString().split('T')[0];
+
+        const priceHistories = await prisma.screenerPrice.findMany({
+          where: {
+            symbol: { in: symList },
+            date: { gte: minDateStr }
+          },
+          select: { symbol: true, date: true, close: true, high: true }
+        });
+
+        const pricesBySymbol = new Map<string, { date: string; close: number; high: number }[]>();
+        for (const p of priceHistories) {
+          if (!pricesBySymbol.has(p.symbol)) pricesBySymbol.set(p.symbol, []);
+          pricesBySymbol.get(p.symbol)!.push(p);
+        }
+
+        for (const [sym, earliestDate] of earliestDateMap.entries()) {
+          const hist = pricesBySymbol.get(sym) || [];
+          const startOfEarliest = new Date(earliestDate);
+          startOfEarliest.setHours(0, 0, 0, 0);
+
+          const afterEntry = hist.filter(h => {
+            const d = new Date(h.date + 'T00:00:00');
+            return d >= startOfEarliest;
+          });
+          
+          if (afterEntry.length > 0) {
+            const maxHigh = Math.max(...afterEntry.map(h => h.high));
+            peakSinceEntryMap.set(sym, maxHigh);
+          }
+        }
+      } catch (err) {
+        // Fail-safe
+      }
     }
   } catch {
     portfolioSymbols = new Set();
@@ -170,6 +218,14 @@ export async function getScreenerData(
 
     const asm = asmMap.get(s.symbol);
 
+    const peak = peakSinceEntryMap.get(s.symbol);
+    const currentPrice = s.currentPrice;
+    let drawdownSinceEntry: number | null = null;
+    if (peak && currentPrice > 0) {
+      const entryPeak = Math.max(peak, currentPrice);
+      drawdownSinceEntry = -((1 - (currentPrice / entryPeak)) * 100);
+    }
+
     return {
       rank: s.rank,
       symbol: s.symbol,
@@ -196,6 +252,7 @@ export async function getScreenerData(
       inPortfolio,
       isPreFiltered: filteredSymbols.size > 0 ? filteredSymbols.has(s.symbol) : undefined,
       asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
+      drawdownSinceEntry,
     };
   });
 
@@ -332,6 +389,13 @@ export async function getScreenerData(
 
         const asm = asmMap.get(sym);
 
+        const peak = peakSinceEntryMap.get(sym);
+        let drawdownSinceEntry: number | null = null;
+        if (peak && price > 0) {
+          const entryPeak = Math.max(peak, price);
+          drawdownSinceEntry = -((1 - (price / entryPeak)) * 100);
+        }
+
         allRows.push({
           rank: 9999,
           symbol: sym,
@@ -359,6 +423,7 @@ export async function getScreenerData(
           isUnranked: true,
           unrankedReason,
           asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
+          drawdownSinceEntry,
         });
       }
     }
