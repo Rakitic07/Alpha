@@ -3,6 +3,18 @@ export interface BenchmarkIndex {
   changePercent: number;
 }
 
+export interface MultiPeriodReturn {
+  portfolio: number | null;
+  nifty50:   number | null;
+  n500Mom50: number | null;
+}
+
+export interface MultiPeriodPerformance {
+  oneWeek:  MultiPeriodReturn;
+  oneMonth: MultiPeriodReturn;
+  ytd:      MultiPeriodReturn;
+}
+
 export interface PortfolioSection {
   dayGainPercent: number;
   totalPnlPercent: number;
@@ -11,6 +23,7 @@ export interface PortfolioSection {
   topGainer: { symbol: string; changePercent: number } | null;
   topLoser:  { symbol: string; changePercent: number } | null;
   benchmarks: BenchmarkIndex[];
+  multiPeriod?: MultiPeriodPerformance | null;
 }
 
 export interface PortfolioHolding {

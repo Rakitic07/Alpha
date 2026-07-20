@@ -16,7 +16,10 @@ Structure your response into the following visual sections:
 Include a clean Markdown Table comparing:
 | Metric | Portfolio | Nifty 50 | Nifty 500 Mom 50 | Alpha vs Nifty |
 |---|---|---|---|---|
-Discuss the portfolio's performance relative to benchmarks, total PnL context (+32.62%), top contributor, and top drag. Mention sector rotation and market breadth (advances/declines).
+Discuss:
+1. Today's performance relative to benchmarks, total PnL (+32.62%), top contributor, and top drag.
+2. A dedicated 2-3 sentence analysis on **multi-period performance trends**: compare how the portfolio is doing **YTD**, **last 1 month (1M)**, and **last 1 week (1W)** relative to **Nifty 50** and **Nifty 500 Momentum 50** (cite exact % returns from the data).
+3. Sector rotation and market breadth (advances/declines).
 
 ### 🚨 Risk & Signal Analysis
 Include a Markdown Table listing all Exit (🔴) and Warning (🟡) stocks:
@@ -90,6 +93,11 @@ function buildSummaryInput(data: ReportData): string {
       topLoser:        p.topLoser  ? `${p.topLoser.symbol} (${p.topLoser.changePercent.toFixed(2)}%)`  : 'N/A',
       benchmarks:      p.benchmarks.reduce((acc, b) => ({ ...acc, [b.name]: `${b.changePercent >= 0 ? '+' : ''}${b.changePercent.toFixed(2)}%` }), {} as Record<string, string>),
       nifty500Mom50:   mom50 ? `${mom50.changePercent >= 0 ? '+' : ''}${mom50.changePercent.toFixed(2)}%` : 'N/A',
+      multiPeriodPerformance: p.multiPeriod ? {
+        "1Week":  `Portfolio: ${p.multiPeriod.oneWeek.portfolio != null ? (p.multiPeriod.oneWeek.portfolio >= 0 ? '+' : '') + p.multiPeriod.oneWeek.portfolio.toFixed(2) + '%' : 'N/A'} | Nifty50: ${p.multiPeriod.oneWeek.nifty50 != null ? (p.multiPeriod.oneWeek.nifty50 >= 0 ? '+' : '') + p.multiPeriod.oneWeek.nifty50.toFixed(2) + '%' : 'N/A'} | N500Mom50: ${p.multiPeriod.oneWeek.n500Mom50 != null ? (p.multiPeriod.oneWeek.n500Mom50 >= 0 ? '+' : '') + p.multiPeriod.oneWeek.n500Mom50.toFixed(2) + '%' : 'N/A'}`,
+        "1Month": `Portfolio: ${p.multiPeriod.oneMonth.portfolio != null ? (p.multiPeriod.oneMonth.portfolio >= 0 ? '+' : '') + p.multiPeriod.oneMonth.portfolio.toFixed(2) + '%' : 'N/A'} | Nifty50: ${p.multiPeriod.oneMonth.nifty50 != null ? (p.multiPeriod.oneMonth.nifty50 >= 0 ? '+' : '') + p.multiPeriod.oneMonth.nifty50.toFixed(2) + '%' : 'N/A'} | N500Mom50: ${p.multiPeriod.oneMonth.n500Mom50 != null ? (p.multiPeriod.oneMonth.n500Mom50 >= 0 ? '+' : '') + p.multiPeriod.oneMonth.n500Mom50.toFixed(2) + '%' : 'N/A'}`,
+        "YTD":    `Portfolio: ${p.multiPeriod.ytd.portfolio != null ? (p.multiPeriod.ytd.portfolio >= 0 ? '+' : '') + p.multiPeriod.ytd.portfolio.toFixed(2) + '%' : 'N/A'} | Nifty50: ${p.multiPeriod.ytd.nifty50 != null ? (p.multiPeriod.ytd.nifty50 >= 0 ? '+' : '') + p.multiPeriod.ytd.nifty50.toFixed(2) + '%' : 'N/A'} | N500Mom50: ${p.multiPeriod.ytd.n500Mom50 != null ? (p.multiPeriod.ytd.n500Mom50 >= 0 ? '+' : '') + p.multiPeriod.ytd.n500Mom50.toFixed(2) + '%' : 'N/A'}`,
+      } : 'N/A',
     };
   }
 

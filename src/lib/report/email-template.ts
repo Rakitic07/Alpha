@@ -228,6 +228,39 @@ function renderPortfolio(p: ReportData['portfolio']): string {
       ${p.topLoser  ? statRow('Worst today', `${p.topLoser.symbol} &nbsp;${gain(p.topLoser.changePercent)}`) : ''}
     </table>
 
+    ${p.multiPeriod ? `${divider()}
+    ${sectionLabel('Multi-Period Performance')}
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:4px;">
+      <thead>
+        <tr style="border-bottom:1px solid ${C.border};">
+          <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:left;">Period</th>
+          <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:right;">Portfolio</th>
+          <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:right;">Nifty 50</th>
+          <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:right;">N500 Mom50</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:6px 0;font-size:12px;color:${C.textDim};">1-Week</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.oneWeek.portfolio != null ? gain(p.multiPeriod.oneWeek.portfolio) : '-'}</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.oneWeek.nifty50 != null ? gain(p.multiPeriod.oneWeek.nifty50) : '-'}</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.oneWeek.n500Mom50 != null ? gain(p.multiPeriod.oneWeek.n500Mom50) : '-'}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:12px;color:${C.textDim};">1-Month</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.oneMonth.portfolio != null ? gain(p.multiPeriod.oneMonth.portfolio) : '-'}</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.oneMonth.nifty50 != null ? gain(p.multiPeriod.oneMonth.nifty50) : '-'}</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.oneMonth.n500Mom50 != null ? gain(p.multiPeriod.oneMonth.n500Mom50) : '-'}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:12px;color:${C.textDim};">YTD</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.ytd.portfolio != null ? gain(p.multiPeriod.ytd.portfolio) : '-'}</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.ytd.nifty50 != null ? gain(p.multiPeriod.ytd.nifty50) : '-'}</td>
+          <td style="padding:6px 0;font-size:12px;text-align:right;">${p.multiPeriod.ytd.n500Mom50 != null ? gain(p.multiPeriod.ytd.n500Mom50) : '-'}</td>
+        </tr>
+      </tbody>
+    </table>` : ''}
+
     ${bRows.length ? `${divider()}
     ${sectionLabel('Benchmarks')}
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">

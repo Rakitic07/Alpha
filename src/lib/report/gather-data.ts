@@ -33,6 +33,62 @@ function signalReason(opts: {
   return parts.join(', ') || 'signal triggered';
 }
 
+async function gatherMultiPeriodPerformance(): Promise<PortfolioSection['multiPeriod']> {
+  try {
+    const snapshots = await prisma.dailyPortfolioSnapshot.findMany({
+      orderBy: { date: 'desc' },
+      take: 365,
+    });
+
+    if (snapshots.length === 0) return null;
+
+    const latest = snapshots[0];
+    const todayStr = latest.date.toISOString().split('T')[0];
+    const dLatest = new Date(todayStr);
+
+    const findSnapshotOnOrBefore = (targetDateStr: string) => {
+      return snapshots.find((s) => s.date.toISOString().split('T')[0] <= targetDateStr);
+    };
+
+    const d1W = new Date(dLatest);
+    d1W.setDate(d1W.getDate() - 7);
+    const snap1W = findSnapshotOnOrBefore(d1W.toISOString().split('T')[0]);
+
+    const d1M = new Date(dLatest);
+    d1M.setDate(d1M.getDate() - 30);
+    const snap1M = findSnapshotOnOrBefore(d1M.toISOString().split('T')[0]);
+
+    const year = dLatest.getFullYear();
+    const snapYTD = findSnapshotOnOrBefore(`${year}-01-01`);
+
+    const calcReturn = (curr: number | null, prev: number | null) => {
+      if (curr == null || prev == null || prev === 0) return null;
+      return ((curr / prev) - 1) * 100;
+    };
+
+    return {
+      oneWeek: {
+        portfolio: snap1W ? calcReturn(latest.portfolioNAV, snap1W.portfolioNAV) : null,
+        nifty50:   snap1W ? calcReturn(latest.niftyNAV, snap1W.niftyNAV) : null,
+        n500Mom50: snap1W ? calcReturn(latest.nifty500Momentum50NAV, snap1W.nifty500Momentum50NAV) : null,
+      },
+      oneMonth: {
+        portfolio: snap1M ? calcReturn(latest.portfolioNAV, snap1M.portfolioNAV) : null,
+        nifty50:   snap1M ? calcReturn(latest.niftyNAV, snap1M.niftyNAV) : null,
+        n500Mom50: snap1M ? calcReturn(latest.nifty500Momentum50NAV, snap1M.nifty500Momentum50NAV) : null,
+      },
+      ytd: {
+        portfolio: snapYTD ? calcReturn(latest.portfolioNAV, snapYTD.portfolioNAV) : null,
+        nifty50:   snapYTD ? calcReturn(latest.niftyNAV, snapYTD.niftyNAV) : null,
+        n500Mom50: snapYTD ? calcReturn(latest.nifty500Momentum50NAV, snapYTD.nifty500Momentum50NAV) : null,
+      },
+    };
+  } catch (err) {
+    reportLogger.warn('Multi-period performance calculation failed:', (err as Error).message);
+    return null;
+  }
+}
+
 async function gatherPortfolioSection(
   liveData: Awaited<ReturnType<typeof getLiveDashboardData>>,
   holdWarnExitCounts: { hold: number; warning: number; exit: number },
@@ -48,6 +104,8 @@ async function gatherPortfolioSection(
     ? { symbol: sorted[sorted.length - 1].symbol, changePercent: sorted[sorted.length - 1].dayChangePercent }
     : null;
 
+  const multiPeriod = await gatherMultiPeriodPerformance();
+
   return {
     dayGainPercent: liveData.dayGainPercent,
     totalPnlPercent: liveData.totalPnlPercent,
@@ -59,6 +117,7 @@ async function gatherPortfolioSection(
       name: i.name,
       changePercent: i.percentChange,
     })),
+    multiPeriod,
   };
 }
 
