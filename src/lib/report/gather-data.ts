@@ -6,36 +6,56 @@ import { logger } from '@/lib/logger';
 import type {
   ReportData,
   PortfolioSection,
+  PortfolioHolding,
   MarketSection,
   ExitCandidate,
+  WarnCandidate,
   EntryCandidate,
 } from './types';
 
 const reportLogger = logger.scope('ReportData');
 
-async function gatherPortfolioSection(): Promise<PortfolioSection> {
-  const data = await getLiveDashboardData();
+// Derive a human-readable reason string for a signal
+function signalReason(opts: {
+  byFilter: boolean;
+  by50Dma: boolean;
+  byRank: boolean;
+  isBE: boolean;
+  isUnranked: boolean;
+  rank: number | null;
+}): string {
+  const parts: string[] = [];
+  if (opts.byFilter)                parts.push('below 200 DMA / far from ATH');
+  if (opts.by50Dma && !opts.byFilter) parts.push('below 50 DMA');
+  if (opts.isBE)                    parts.push('moved to BE category');
+  if (opts.isUnranked && !opts.isBE) parts.push('dropped out of screener universe');
+  if (opts.byRank && opts.rank != null && !opts.isUnranked) parts.push(`rank ${opts.rank} (above cut-off)`);
+  return parts.join(', ') || 'signal triggered';
+}
 
-  const sorted = [...data.allHoldings].sort(
-    (a, b) => b.dayChangePercent - a.dayChangePercent
+async function gatherPortfolioSection(
+  liveData: Awaited<ReturnType<typeof getLiveDashboardData>>,
+  holdWarnExitCounts: { hold: number; warning: number; exit: number },
+): Promise<PortfolioSection> {
+  const sorted = [...liveData.allHoldings].sort(
+    (a, b) => b.dayChangePercent - a.dayChangePercent,
   );
 
   const topGainer = sorted[0]
     ? { symbol: sorted[0].symbol, changePercent: sorted[0].dayChangePercent }
     : null;
   const topLoser = sorted[sorted.length - 1]
-    ? {
-        symbol: sorted[sorted.length - 1].symbol,
-        changePercent: sorted[sorted.length - 1].dayChangePercent,
-      }
+    ? { symbol: sorted[sorted.length - 1].symbol, changePercent: sorted[sorted.length - 1].dayChangePercent }
     : null;
 
   return {
-    dayGainPercent: data.dayGainPercent,
-    holdingsCount: data.allHoldings.length,
+    dayGainPercent: liveData.dayGainPercent,
+    totalPnlPercent: liveData.totalPnlPercent,
+    holdingsCount: liveData.allHoldings.length,
+    holdWarnExitCounts,
     topGainer,
     topLoser,
-    benchmarks: data.indices.map((i) => ({
+    benchmarks: liveData.indices.map((i) => ({
       name: i.name,
       changePercent: i.percentChange,
     })),
@@ -49,31 +69,18 @@ async function gatherMarketSection(): Promise<MarketSection> {
     fetchMarketOverview('NIFTY 50'),
   ]);
 
-  // Top/bottom 3 sectors
   const sectorals = indexSummaries.summaries
     .filter((s) => s.category === 'sectoral')
     .sort((a, b) => b.changePercent - a.changePercent);
 
-  const topSectors = sectorals.slice(0, 3).map((s) => ({
-    name: s.name,
-    shortName: s.shortName,
-    changePercent: s.changePercent,
-  }));
-  const bottomSectors = sectorals.slice(-3).reverse().map((s) => ({
-    name: s.name,
-    shortName: s.shortName,
-    changePercent: s.changePercent,
-  }));
+  const topSectors    = sectorals.slice(0, 3).map((s) => ({ name: s.name, shortName: s.shortName, changePercent: s.changePercent }));
+  const bottomSectors = sectorals.slice(-3).reverse().map((s) => ({ name: s.name, shortName: s.shortName, changePercent: s.changePercent }));
 
   const topGainers = (totalMarketData?.topGainers ?? []).slice(0, 5).map((c) => ({
-    symbol: c.symbol,
-    changePercent: c.changePercent,
-    lastPrice: c.lastPrice,
+    symbol: c.symbol, changePercent: c.changePercent, lastPrice: c.lastPrice,
   }));
   const topLosers = (totalMarketData?.topLosers ?? []).slice(0, 5).map((c) => ({
-    symbol: c.symbol,
-    changePercent: c.changePercent,
-    lastPrice: c.lastPrice,
+    symbol: c.symbol, changePercent: c.changePercent, lastPrice: c.lastPrice,
   }));
 
   return {
@@ -81,46 +88,17 @@ async function gatherMarketSection(): Promise<MarketSection> {
     bottomSectors,
     topGainers,
     topLosers,
-    totalMarket: totalMarketData
-      ? {
-          advancing: totalMarketData.advancing,
-          declining: totalMarketData.declining,
-          unchanged: totalMarketData.unchanged,
-        }
-      : null,
-    nifty50: nifty50Data
-      ? {
-          advancing: nifty50Data.advancing,
-          declining: nifty50Data.declining,
-          unchanged: nifty50Data.unchanged,
-        }
-      : null,
+    totalMarket: totalMarketData ? { advancing: totalMarketData.advancing, declining: totalMarketData.declining, unchanged: totalMarketData.unchanged } : null,
+    nifty50:     nifty50Data     ? { advancing: nifty50Data.advancing,     declining: nifty50Data.declining,     unchanged: nifty50Data.unchanged }     : null,
   };
 }
 
-async function gatherExitCandidates(): Promise<ExitCandidate[]> {
-  const { rows } = await getScreenerData('portfolio');
-  return rows
-    .filter((r) => r.exitSignal)
-    .map((r) => ({
-      symbol: r.symbol,
-      rank: r.isUnranked ? null : r.rank,
-      isUnranked: r.isUnranked === true,
-      byRank: r.exitSignal!.byRank,
-      byFilter: r.exitSignal!.byFilter,
-      protected: r.exitSignal!.protected,
-    }));
-}
-
-async function gatherEntryCandidates(
-  portfolioSymbols: Set<string>
-): Promise<EntryCandidate[]> {
+async function gatherEntryCandidates(portfolioSymbols: Set<string>): Promise<EntryCandidate[]> {
   const top30 = await prisma.momentumScore.findMany({
     where: { isActive: true, rankType: 'filtered', rank: { lte: 30 } },
     orderBy: { rank: 'asc' },
   });
 
-  // Get two most recent dates from RankingHistory to detect new entrants
   const recentDates = await prisma.rankingHistory.findMany({
     where: { rankType: 'filtered' },
     select: { date: true },
@@ -155,45 +133,125 @@ export async function gatherReportData(date: string): Promise<ReportData> {
   const errors: string[] = [];
 
   let portfolio: ReportData['portfolio'] = null;
-  let market: ReportData['market'] = null;
-  let exits: ExitCandidate[] = [];
-  let entries: EntryCandidate[] = [];
-  let portfolioSymbols = new Set<string>();
+  let holdings: PortfolioHolding[]       = [];
+  let market:   ReportData['market']     = null;
+  let exits:    ExitCandidate[]          = [];
+  let warnings: WarnCandidate[]          = [];
+  let entries:  EntryCandidate[]         = [];
+  let portfolioSymbols                   = new Set<string>();
+
+  // Shared live data — reused by both portfolio section and holdings list
+  // 20s timeout: Upstox live quotes can stall when market is closed
+  let liveData: Awaited<ReturnType<typeof getLiveDashboardData>> | null = null;
+  try {
+    const liveTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Live data timed out after 20s')), 20_000),
+    );
+    liveData = await Promise.race([getLiveDashboardData(), liveTimeout]);
+  } catch (err) {
+    reportLogger.error('Live dashboard data failed:', err);
+    errors.push(`LiveData: ${(err as Error).message}`);
+  }
 
   await Promise.all([
+    // Market section with timeout — fetchMarketOverview is slow (750+ Upstox constituent quotes)
     (async () => {
       try {
-        portfolio = await gatherPortfolioSection();
-      } catch (err) {
-        reportLogger.error('Portfolio section failed:', err);
-        errors.push(`Portfolio: ${(err as Error).message}`);
-      }
-    })(),
-    (async () => {
-      try {
-        market = await gatherMarketSection();
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Market section timed out after 30s')), 30_000),
+        );
+        market = await Promise.race([gatherMarketSection(), timeout]);
       } catch (err) {
         reportLogger.error('Market section failed:', err);
         errors.push(`Market: ${(err as Error).message}`);
       }
     })(),
+
+    // Screener data — exits, warnings, per-holding signals (25s timeout)
     (async () => {
       try {
-        const { rows } = await getScreenerData('portfolio');
+        const screenerTimeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Screener data timed out after 25s')), 25_000),
+        );
+        const { rows, stats } = await Promise.race([getScreenerData('portfolio'), screenerTimeout]);
         portfolioSymbols = new Set(rows.filter((r) => r.inPortfolio).map((r) => r.symbol));
+
+        // Build a quick lookup: symbol → liveData row for day% and totalPnl%
+        const liveMap = new Map(
+          (liveData?.allHoldings ?? []).map((h) => [h.symbol, h]),
+        );
+
+        // Per-holding rich detail (portfolio only, ordered by day change desc)
+        holdings = rows
+          .filter((r) => r.inPortfolio)
+          .sort((a, b) => {
+            const da = liveMap.get(a.symbol)?.dayChangePercent ?? 0;
+            const db = liveMap.get(b.symbol)?.dayChangePercent ?? 0;
+            return db - da;
+          })
+          .map((r) => {
+            const live  = liveMap.get(r.symbol);
+            const sig   = r.exitSignal;
+            let signal: PortfolioHolding['signal'] = 'hold';
+            if (sig?.signalType === 'red')    signal = 'exit';
+            if (sig?.signalType === 'yellow') signal = 'warning';
+
+            return {
+              symbol:            r.symbol,
+              dayChangePercent:  live?.dayChangePercent ?? 0,
+              totalPnlPercent:   live?.totalPnlPercent  ?? 0,
+              rank:              r.isUnranked ? null : r.rank,
+              signal,
+              signalReason: sig
+                ? signalReason({
+                    byFilter:   sig.byFilter,
+                    by50Dma:    sig.by50Dma,
+                    byRank:     sig.byRank,
+                    isBE:       sig.isBE,
+                    isUnranked: sig.isUnranked,
+                    rank:       r.isUnranked ? null : r.rank,
+                  })
+                : undefined,
+              drawdownSinceEntry: r.drawdownSinceEntry ?? null,
+              asmInfo: r.asmInfo
+                ? { type: r.asmInfo.type, stage: r.asmInfo.stage }
+                : undefined,
+            } satisfies PortfolioHolding;
+          });
+
+        // Exit candidates (red signals)
         exits = rows
-          .filter((r) => r.exitSignal)
+          .filter((r) => r.exitSignal?.signalType === 'red')
           .map((r) => ({
-            symbol: r.symbol,
-            rank: r.isUnranked ? null : r.rank,
+            symbol:     r.symbol,
+            rank:       r.isUnranked ? null : r.rank,
             isUnranked: r.isUnranked === true,
-            byRank: r.exitSignal!.byRank,
-            byFilter: r.exitSignal!.byFilter,
+            byRank:     r.exitSignal!.byRank,
+            byFilter:   r.exitSignal!.byFilter,
+            by50Dma:    r.exitSignal!.by50Dma,
+            isBE:       r.exitSignal!.isBE,
+            protected:  r.exitSignal!.protected,
+          }));
+
+        // Warning candidates (yellow signals)
+        warnings = rows
+          .filter((r) => r.exitSignal?.signalType === 'yellow')
+          .map((r) => ({
+            symbol:    r.symbol,
+            rank:      r.isUnranked ? null : r.rank,
+            by50Dma:   r.exitSignal!.by50Dma,
+            byRank:    r.exitSignal!.byRank,
+            isBE:      r.exitSignal!.isBE,
             protected: r.exitSignal!.protected,
           }));
+
+        // Build portfolio section using live data + signal counts
+        if (liveData) {
+          portfolio = await gatherPortfolioSection(liveData, stats.rankBuckets);
+        }
       } catch (err) {
         reportLogger.error('Screener/exits section failed:', err);
-        errors.push(`Exits: ${(err as Error).message}`);
+        errors.push(`Screener: ${(err as Error).message}`);
       }
     })(),
   ]);
@@ -205,5 +263,5 @@ export async function gatherReportData(date: string): Promise<ReportData> {
     errors.push(`Entries: ${(err as Error).message}`);
   }
 
-  return { date, portfolio, market, exits, entries, aiSummary: null, errors };
+  return { date, portfolio, holdings, market, exits, warnings, entries, aiSummary: null, errors };
 }

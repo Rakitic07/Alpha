@@ -111,7 +111,7 @@ export async function getScreenerData(
     // Fail-safe, keep empty map
   }
 
-  let peakSinceEntryMap = new Map<string, number>();
+  const peakSinceEntryMap = new Map<string, number>();
   let portfolioSymbols: Set<string>;
   let portfolioNames: Map<string, string>;
   let holdingQty = new Map<string, number>();

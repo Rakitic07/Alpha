@@ -1,4 +1,4 @@
-import type { ReportData, SectorPerf, TopMover, ExitCandidate, EntryCandidate } from './types';
+import type { ReportData, SectorPerf, TopMover, ExitCandidate, WarnCandidate, EntryCandidate } from './types';
 
 // ── Formatters ───────────────────────────────────────────────────────────────
 
@@ -225,11 +225,13 @@ function renderExits(exits: ExitCandidate[]): string {
   }
 
   const rows = exits.map((e) => {
-    const reason = e.isUnranked
-      ? 'Unranked'
-      : e.byRank
-      ? `Rank ${e.rank}`
-      : 'Below 200 DMA';
+    const reasons: string[] = [];
+    if (e.byFilter)                        reasons.push('Below 200 DMA / far from ATH');
+    if (e.by50Dma && !e.byFilter)          reasons.push('Below 50 DMA');
+    if (e.isBE)                            reasons.push('Moved to BE');
+    if (e.isUnranked && !e.isBE)           reasons.push('Dropped universe');
+    if (e.byRank && e.rank != null && !e.isUnranked) reasons.push(`Rank ${e.rank}`);
+    const reason = reasons.join(' · ') || 'Signal triggered';
     const status = e.protected
       ? pill('Protected', '#78350f', C.amber)
       : pill('Exit', '#7f1d1d', C.red);
@@ -251,6 +253,40 @@ function renderExits(exits: ExitCandidate[]): string {
       ${rows}
     </table>
   `);
+}
+
+// ── Section: Warning Signals ─────────────────────────────────────────────────
+
+function renderWarnings(warnings: WarnCandidate[]): string {
+  if (warnings.length === 0) return '';
+
+  const rows = warnings.map((w) => {
+    const reasons: string[] = [];
+    if (w.by50Dma) reasons.push('Below 50 DMA');
+    if (w.isBE)    reasons.push('Moved to BE');
+    if (w.byRank && w.rank != null) reasons.push(`Rank ${w.rank}`);
+    const reason = reasons.join(' · ') || 'Warning triggered';
+    const status = w.protected
+      ? pill('Protected', '#78350f', C.amber)
+      : pill('Watch', '#713f12', C.amber);
+    return `<tr>
+      <td style="padding:8px 0;font-size:13px;font-weight:600;color:${C.text};">${w.symbol}</td>
+      <td style="padding:8px 0;font-size:12px;color:${C.muted};text-align:center;">${reason}</td>
+      <td style="padding:8px 0;text-align:right;">${status}</td>
+    </tr>`;
+  }).join('');
+
+  return card(`
+    ${sectionLabel(`Warning Signals — ${warnings.length} stock${warnings.length > 1 ? 's' : ''}`)}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:left;">Symbol</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:center;">Reason</th>
+        <th style="font-size:10px;font-weight:600;color:${C.muted};text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;text-align:right;">Status</th>
+      </tr>
+      ${rows}
+    </table>
+  `, `border-color:#78350f30;`);
 }
 
 // ── Section: Entry Candidates ────────────────────────────────────────────────
@@ -362,6 +398,7 @@ export function buildReportEmail(data: ReportData): { subject: string; html: str
           <tr><td>${renderPortfolio(data.portfolio)}</td></tr>
           <tr><td>${renderMarket(data.market)}</td></tr>
           <tr><td>${renderExits(data.exits)}</td></tr>
+          <tr><td>${renderWarnings(data.warnings)}</td></tr>
           <tr><td>${renderEntries(data.entries)}</td></tr>
 
           <!-- Footer -->
