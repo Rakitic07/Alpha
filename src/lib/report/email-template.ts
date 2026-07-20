@@ -55,13 +55,133 @@ function statRow(label: string, value: string): string {
   </tr>`;
 }
 
+// ── Markdown Parser for Email ────────────────────────────────────────────────
+
+function markdownToEmailHtml(markdown: string): string {
+  if (!markdown) return '';
+
+  const lines = markdown.split('\n');
+  const htmlBlocks: string[] = [];
+
+  let inTable = false;
+  let tableHeader: string[] = [];
+  let tableRows: string[][] = [];
+
+  let inList = false;
+  let listItems: string[] = [];
+
+  const formatInline = (text: string): string => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, `<strong style="color:${C.text};font-weight:600;">$1</strong>`)
+      .replace(/\*(.*?)\*/g, `<em>$1</em>`)
+      .replace(/`([^`]+)`/g, `<code style="background:${C.border};color:${C.amber};padding:2px 5px;border-radius:4px;font-size:11px;">$1</code>`);
+  };
+
+  const flushList = () => {
+    if (inList && listItems.length > 0) {
+      htmlBlocks.push(
+        `<ul style="margin:8px 0 12px 0;padding-left:18px;">${listItems
+          .map(item => `<li style="margin:4px 0;font-size:13px;color:${C.textDim};line-height:1.6;">${formatInline(item)}</li>`)
+          .join('')}</ul>`
+      );
+      listItems = [];
+      inList = false;
+    }
+  };
+
+  const flushTable = () => {
+    if (inTable) {
+      let tHtml = `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:14px 0;background:${C.bg};border:1px solid ${C.border};border-radius:6px;overflow:hidden;">`;
+      if (tableHeader.length > 0) {
+        tHtml += `<thead><tr style="background:#1c2128;">${tableHeader
+          .map(h => `<th style="padding:8px 10px;font-size:11px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid ${C.border};text-align:left;">${formatInline(h)}</th>`)
+          .join('')}</tr></thead>`;
+      }
+      tHtml += `<tbody>`;
+      tableRows.forEach(row => {
+        tHtml += `<tr>${row
+          .map(cell => `<td style="padding:8px 10px;font-size:12px;color:${C.textDim};border-bottom:1px solid ${C.border};">${formatInline(cell)}</td>`)
+          .join('')}</tr>`;
+      });
+      tHtml += `</tbody></table>`;
+      htmlBlocks.push(tHtml);
+      tableHeader = [];
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Table row
+    if (line.startsWith('|') && line.endsWith('|')) {
+      flushList();
+      const cells = line.split('|').slice(1, -1).map(c => c.trim());
+      if (cells.every(c => /^:?-+:?$/.test(c))) continue; // skip separator row
+      if (!inTable) {
+        inTable = true;
+        tableHeader = cells;
+      } else {
+        tableRows.push(cells);
+      }
+      continue;
+    } else if (inTable) {
+      flushTable();
+    }
+
+    // Callout quote
+    if (line.startsWith('>')) {
+      flushList();
+      const content = formatInline(line.replace(/^>\s*/, ''));
+      htmlBlocks.push(
+        `<div style="background:#161b22;border-left:3px solid ${C.blue};padding:12px 16px;margin:14px 0;border-radius:0 8px 8px 0;font-size:13px;line-height:1.6;color:${C.text};">${content}</div>`
+      );
+      continue;
+    }
+
+    // Headers
+    if (line.startsWith('###')) {
+      flushList();
+      const title = formatInline(line.replace(/^###\s*/, ''));
+      htmlBlocks.push(`<h3 style="margin:18px 0 8px 0;font-size:14px;font-weight:700;color:${C.text};letter-spacing:0.5px;">${title}</h3>`);
+      continue;
+    }
+    if (line.startsWith('##')) {
+      flushList();
+      const title = formatInline(line.replace(/^##\s*/, ''));
+      htmlBlocks.push(`<h2 style="margin:22px 0 10px 0;font-size:16px;font-weight:700;color:${C.text};border-bottom:1px solid ${C.border};padding-bottom:6px;">${title}</h2>`);
+      continue;
+    }
+
+    // List item
+    if (/^[-*]\s/.test(line)) {
+      inList = true;
+      listItems.push(line.replace(/^[-*]\s+/, ''));
+      continue;
+    } else if (inList) {
+      flushList();
+    }
+
+    // Paragraph
+    if (line.length > 0) {
+      htmlBlocks.push(`<p style="margin:0 0 10px 0;font-size:13.5px;line-height:1.7;color:${C.textDim};">${formatInline(line)}</p>`);
+    }
+  }
+
+  flushList();
+  flushTable();
+
+  return htmlBlocks.join('');
+}
+
 // ── Section: AI Commentary ───────────────────────────────────────────────────
 
 function renderAISummary(summary: string | null): string {
   if (!summary) return '';
   return card(`
-    ${sectionLabel('Market Commentary')}
-    <p style="margin:0;font-size:14px;line-height:1.75;color:${C.textDim};">${summary.replace(/\n\n/g, '</p><p style="margin:12px 0 0 0;font-size:14px;line-height:1.75;color:' + C.textDim + ';">').replace(/\n/g, '<br>')}</p>
+    ${sectionLabel('Executive AI Commentary')}
+    ${markdownToEmailHtml(summary)}
   `);
 }
 
