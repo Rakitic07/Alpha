@@ -261,6 +261,15 @@ function renderPortfolio(p: ReportData['portfolio']): string {
       </tbody>
     </table>` : ''}
 
+    ${p.uniqueStats ? `${divider()}
+    ${sectionLabel('Portfolio Insights')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${statRow('Profitable Holdings', `<span style="color:${C.text};font-weight:600;">${p.uniqueStats.profitableCount} / ${p.uniqueStats.totalHoldingsCount} (${p.uniqueStats.winRatePct.toFixed(0)}% win rate)</span>`)}
+      ${statRow('Near ATH (<10% ATH)', `<span style="color:${C.blue};font-weight:600;">${p.uniqueStats.nearAthCount} holdings</span>`)}
+      ${p.uniqueStats.topOverallWinner ? statRow('Top All-Time Winner', `${p.uniqueStats.topOverallWinner.symbol} &nbsp;${gain(p.uniqueStats.topOverallWinner.totalPnlPercent)}`) : ''}
+      ${p.uniqueStats.topOverallLoser ? statRow('Top All-Time Drag', `${p.uniqueStats.topOverallLoser.symbol} &nbsp;${gain(p.uniqueStats.topOverallLoser.totalPnlPercent)}`) : ''}
+    </table>` : ''}
+
     ${bRows.length ? `${divider()}
     ${sectionLabel('Benchmarks')}
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">

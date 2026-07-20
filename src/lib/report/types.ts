@@ -15,6 +15,18 @@ export interface MultiPeriodPerformance {
   ytd:      MultiPeriodReturn;
 }
 
+export interface UniquePortfolioStats {
+  profitableCount:      number;
+  totalHoldingsCount:   number;
+  winRatePct:          number;
+  advancingTodayCount:  number;
+  decliningTodayCount:  number;
+  nearAthCount:         number; // holdings within 10% of ATH
+  asmSurveillanceCount: number;
+  topOverallWinner:    { symbol: string; totalPnlPercent: number } | null;
+  topOverallLoser:     { symbol: string; totalPnlPercent: number } | null;
+}
+
 export interface PortfolioSection {
   dayGainPercent: number;
   totalPnlPercent: number;
@@ -24,6 +36,7 @@ export interface PortfolioSection {
   topLoser:  { symbol: string; changePercent: number } | null;
   benchmarks: BenchmarkIndex[];
   multiPeriod?: MultiPeriodPerformance | null;
+  uniqueStats?: UniquePortfolioStats | null;
 }
 
 export interface PortfolioHolding {

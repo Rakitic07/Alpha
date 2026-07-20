@@ -19,7 +19,8 @@ Include a clean Markdown Table comparing:
 Discuss:
 1. Today's performance relative to benchmarks, total PnL (+32.62%), top contributor, and top drag.
 2. A dedicated 2-3 sentence analysis on **multi-period performance trends**: compare how the portfolio is doing **YTD**, **last 1 month (1M)**, and **last 1 week (1W)** relative to **Nifty 50** and **Nifty 500 Momentum 50** (cite exact % returns from the data).
-3. Sector rotation and market breadth (advances/declines).
+3. A dedicated 1-2 sentence **Unique Portfolio Stat & Insight**: highlight 1-2 interesting stats from uniquePortfolioInsights (e.g. overall win rate % of profitable holdings, top winner vs loser overall PnL, stocks within 10% of ATH, or ASM surveillance density).
+4. Sector rotation and market breadth (advances/declines).
 
 ### 🚨 Risk & Signal Analysis
 Include a Markdown Table listing all Exit (🔴) and Warning (🟡) stocks:
@@ -97,6 +98,14 @@ function buildSummaryInput(data: ReportData): string {
         "1Week":  `Portfolio: ${p.multiPeriod.oneWeek.portfolio != null ? (p.multiPeriod.oneWeek.portfolio >= 0 ? '+' : '') + p.multiPeriod.oneWeek.portfolio.toFixed(2) + '%' : 'N/A'} | Nifty50: ${p.multiPeriod.oneWeek.nifty50 != null ? (p.multiPeriod.oneWeek.nifty50 >= 0 ? '+' : '') + p.multiPeriod.oneWeek.nifty50.toFixed(2) + '%' : 'N/A'} | N500Mom50: ${p.multiPeriod.oneWeek.n500Mom50 != null ? (p.multiPeriod.oneWeek.n500Mom50 >= 0 ? '+' : '') + p.multiPeriod.oneWeek.n500Mom50.toFixed(2) + '%' : 'N/A'}`,
         "1Month": `Portfolio: ${p.multiPeriod.oneMonth.portfolio != null ? (p.multiPeriod.oneMonth.portfolio >= 0 ? '+' : '') + p.multiPeriod.oneMonth.portfolio.toFixed(2) + '%' : 'N/A'} | Nifty50: ${p.multiPeriod.oneMonth.nifty50 != null ? (p.multiPeriod.oneMonth.nifty50 >= 0 ? '+' : '') + p.multiPeriod.oneMonth.nifty50.toFixed(2) + '%' : 'N/A'} | N500Mom50: ${p.multiPeriod.oneMonth.n500Mom50 != null ? (p.multiPeriod.oneMonth.n500Mom50 >= 0 ? '+' : '') + p.multiPeriod.oneMonth.n500Mom50.toFixed(2) + '%' : 'N/A'}`,
         "YTD":    `Portfolio: ${p.multiPeriod.ytd.portfolio != null ? (p.multiPeriod.ytd.portfolio >= 0 ? '+' : '') + p.multiPeriod.ytd.portfolio.toFixed(2) + '%' : 'N/A'} | Nifty50: ${p.multiPeriod.ytd.nifty50 != null ? (p.multiPeriod.ytd.nifty50 >= 0 ? '+' : '') + p.multiPeriod.ytd.nifty50.toFixed(2) + '%' : 'N/A'} | N500Mom50: ${p.multiPeriod.ytd.n500Mom50 != null ? (p.multiPeriod.ytd.n500Mom50 >= 0 ? '+' : '') + p.multiPeriod.ytd.n500Mom50.toFixed(2) + '%' : 'N/A'}`,
+      } : 'N/A',
+      uniquePortfolioInsights: p.uniqueStats ? {
+        winRate: `${p.uniqueStats.profitableCount} of ${p.uniqueStats.totalHoldingsCount} holdings (${p.uniqueStats.winRatePct.toFixed(1)}%) in overall profit`,
+        todayBreadth: `${p.uniqueStats.advancingTodayCount} advancing vs ${p.uniqueStats.decliningTodayCount} declining today`,
+        stocksNearAth: `${p.uniqueStats.nearAthCount} holdings trading within 10% of All-Time High`,
+        asmSurveillanceCount: `${p.uniqueStats.asmSurveillanceCount} holdings under NSE ASM surveillance`,
+        topOverallWinner: p.uniqueStats.topOverallWinner ? `${p.uniqueStats.topOverallWinner.symbol} (+${p.uniqueStats.topOverallWinner.totalPnlPercent.toFixed(1)}% total PnL)` : 'N/A',
+        topOverallLoser: p.uniqueStats.topOverallLoser ? `${p.uniqueStats.topOverallLoser.symbol} (${p.uniqueStats.topOverallLoser.totalPnlPercent.toFixed(1)}% total PnL)` : 'N/A',
       } : 'N/A',
     };
   }

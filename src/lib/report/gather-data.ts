@@ -106,6 +106,37 @@ async function gatherPortfolioSection(
 
   const multiPeriod = await gatherMultiPeriodPerformance();
 
+  // Compute unique portfolio stats
+  let uniqueStats: PortfolioSection['uniqueStats'] = null;
+  if (liveData.allHoldings.length > 0) {
+    const all = liveData.allHoldings;
+    const totalCount = all.length;
+    const profitableCount = all.filter((h) => h.totalPnlPercent > 0).length;
+    const winRatePct = (profitableCount / totalCount) * 100;
+    const advancingTodayCount = all.filter((h) => h.dayChangePercent > 0).length;
+    const decliningTodayCount = all.filter((h) => h.dayChangePercent < 0).length;
+
+    const pnlSorted = [...all].sort((a, b) => b.totalPnlPercent - a.totalPnlPercent);
+    const topOverallWinner = pnlSorted[0]
+      ? { symbol: pnlSorted[0].symbol, totalPnlPercent: pnlSorted[0].totalPnlPercent }
+      : null;
+    const topOverallLoser = pnlSorted[pnlSorted.length - 1]
+      ? { symbol: pnlSorted[pnlSorted.length - 1].symbol, totalPnlPercent: pnlSorted[pnlSorted.length - 1].totalPnlPercent }
+      : null;
+
+    uniqueStats = {
+      profitableCount,
+      totalHoldingsCount: totalCount,
+      winRatePct,
+      advancingTodayCount,
+      decliningTodayCount,
+      nearAthCount: 0,
+      asmSurveillanceCount: 0,
+      topOverallWinner,
+      topOverallLoser,
+    };
+  }
+
   return {
     dayGainPercent: liveData.dayGainPercent,
     totalPnlPercent: liveData.totalPnlPercent,
@@ -118,6 +149,7 @@ async function gatherPortfolioSection(
       changePercent: i.percentChange,
     })),
     multiPeriod,
+    uniqueStats,
   };
 }
 
@@ -307,6 +339,11 @@ export async function gatherReportData(date: string): Promise<ReportData> {
         // Build portfolio section using live data + signal counts
         if (liveData) {
           portfolio = await gatherPortfolioSection(liveData, stats.rankBuckets);
+          if (portfolio && portfolio.uniqueStats) {
+            const portRows = rows.filter((r) => r.inPortfolio);
+            portfolio.uniqueStats.nearAthCount = portRows.filter((r) => r.athProximity >= 0.90).length;
+            portfolio.uniqueStats.asmSurveillanceCount = portRows.filter((r) => r.asmInfo != null).length;
+          }
         }
       } catch (err) {
         reportLogger.error('Screener/exits section failed:', err);
