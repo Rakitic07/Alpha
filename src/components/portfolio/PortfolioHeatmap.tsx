@@ -19,10 +19,17 @@ interface PortfolioHeatmapProps {
   privacyMode: boolean;
 }
 
-// Neutral: Slate 500 | Max gain: Emerald 600 | Max loss: Red 700
-const COLOR_NEUTRAL = { r: 100, g: 116, b: 139 };
-const COLOR_GAIN    = { r:   5, g: 150, b: 105 };
-const COLOR_LOSS    = { r: 185, g:  28, b:  28 };
+// 3-stop scale per side so mid-range cells are vivid, not washed-out grey
+//   Gain: Slate-500 → Emerald-400 (vivid) → Emerald-700 (deep)
+//   Loss: Slate-500 → Red-400   (vivid) → Red-800    (deep)
+const COLOR_NEUTRAL  = { r: 100, g: 116, b: 139 }; // Slate 500
+const COLOR_GAIN_MID = { r:  52, g: 211, b: 153 }; // Emerald 400 — vivid
+const COLOR_GAIN_MAX = { r:   4, g: 120, b:  87 }; // Emerald 700 — deep
+const COLOR_LOSS_MID = { r: 248, g: 113, b: 113 }; // Red 400 — vivid
+const COLOR_LOSS_MAX = { r: 153, g:  27, b:  27 }; // Red 800 — deep
+
+// Vibrant midpoint at 30 % of range → anything beyond ~1/3 of max looks richly coloured
+const MID_T = 0.3;
 
 function interpolateRGB(
   from: { r: number; g: number; b: number },
@@ -37,11 +44,19 @@ function interpolateRGB(
 }
 
 function getDynamicColor(percent: number, maxAbs: number): string {
-  const t = Math.max(-1, Math.min(1, percent / maxAbs));
-  const { r, g, b } =
-    t >= 0
-      ? interpolateRGB(COLOR_NEUTRAL, COLOR_GAIN, t)
-      : interpolateRGB(COLOR_NEUTRAL, COLOR_LOSS, -t);
+  const t    = Math.max(-1, Math.min(1, percent / maxAbs));
+  const absT = Math.abs(t);
+
+  let from, to, localT;
+  if (t >= 0) {
+    if (t <= MID_T) { from = COLOR_NEUTRAL;  to = COLOR_GAIN_MID; localT = t    / MID_T; }
+    else            { from = COLOR_GAIN_MID; to = COLOR_GAIN_MAX; localT = (t    - MID_T) / (1 - MID_T); }
+  } else {
+    if (absT <= MID_T) { from = COLOR_NEUTRAL;  to = COLOR_LOSS_MID; localT = absT / MID_T; }
+    else               { from = COLOR_LOSS_MID; to = COLOR_LOSS_MAX; localT = (absT - MID_T) / (1 - MID_T); }
+  }
+
+  const { r, g, b } = interpolateRGB(from, to, localT);
   return `rgb(${r},${g},${b})`;
 }
 
@@ -86,10 +101,9 @@ export default function PortfolioHeatmap({ data, isMobile, privacyMode }: Portfo
             const percent = (node.data as { dayChangePercent?: number }).dayChangePercent;
             if (percent === undefined) return null;
             
-            // Use dark text when the cell colour is near-neutral (|t| < 0.45),
-            // white text on saturated green/red cells
+            // White text on all vivid cells; dark text only for near-flat (< 10% of scale)
             const absT = Math.abs(percent / maxAbs);
-            const textColor = absT < 0.45 ? '#0f172a' : '#ffffff';
+            let textColor = absT < 0.10 ? '#0f172a' : '#ffffff';
             const showSymbol = node.width > 28 && node.height > 22;
             const showPercent = node.width > 40 && node.height > 38;
             const maxFs = isMobile ? 8 : 11;
