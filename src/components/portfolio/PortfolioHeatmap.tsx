@@ -19,35 +19,6 @@ interface PortfolioHeatmapProps {
   privacyMode: boolean;
 }
 
-// Fixed threshold → colour mapping (9 buckets per side)
-// Gains: Emerald 100 → 900  |  Losses: Red 100 → 900
-function getFixedColor(percent: number): string {
-  if (percent === 0) return '#475569'; // Slate 600
-
-  if (percent > 0) {
-    if (percent >= 10)   return '#064e3b'; // Emerald 900
-    if (percent >=  7)   return '#065f46'; // Emerald 800
-    if (percent >=  5)   return '#047857'; // Emerald 700
-    if (percent >=  3.5) return '#059669'; // Emerald 600
-    if (percent >=  2.5) return '#10b981'; // Emerald 500
-    if (percent >=  1.5) return '#34d399'; // Emerald 400
-    if (percent >=  0.75) return '#6ee7b7'; // Emerald 300
-    if (percent >=  0.25) return '#a7f3d0'; // Emerald 200
-    return '#d1fae5';                       // Emerald 100
-  }
-
-  // Losses — light pinks for small moves, vivid red only at -3.5%+
-  if (percent <= -10)   return '#7f1d1d'; // Red 900
-  if (percent <=  -7)   return '#991b1b'; // Red 800
-  if (percent <=  -5)   return '#b91c1c'; // Red 700
-  if (percent <=  -3.5) return '#dc2626'; // Red 600
-  if (percent <=  -2.5) return '#ef4444'; // Red 500
-  if (percent <=  -1.5) return '#f87171'; // Red 400
-  if (percent <=  -0.75) return '#fca5a5'; // Red 300
-  if (percent <=  -0.25) return '#fecaca'; // Red 200
-  return '#fee2e2';                        // Red 100
-}
-
 export default function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
     if (!data.allHoldings || data.allHoldings.length === 0) return null;
 
@@ -74,15 +45,32 @@ export default function PortfolioHeatmap({ data, isMobile, privacyMode }: Portfo
             const d = node.data as { dayChangePercent?: number };
             const percent = d.dayChangePercent;
             if (percent === undefined) return 'rgba(0,0,0,0)';
-            return getFixedColor(percent);
+            
+            // Gain colors
+            if (percent >= 10) return '#059669'; // Emerald 600 (Max > 10%)
+            if (percent >= 5) return '#10b981';  // Emerald 500
+            if (percent >= 3) return '#34d399';  // Emerald 400
+            if (percent >= 1.5) return '#6ee7b7'; // Emerald 300
+            if (percent > 0) return '#d1fae5';   // Emerald 100
+            
+            if (percent === 0) return '#64748b'; // Slate 500
+            
+            // Loss colors
+            if (percent > -1.5) return '#fee2e2'; // Red 100
+            if (percent > -3) return '#fca5a5';   // Red 300
+            if (percent > -5) return '#f87171';   // Red 400
+            if (percent > -10) return '#ef4444';  // Red 500
+            return '#b91c1c';                     // Red 700 (Max > 10% loss)
           }}
           nodeOpacity={1}
           nodeComponent={({ node }) => {
             const percent = (node.data as { dayChangePercent?: number }).dayChangePercent;
             if (percent === undefined) return null;
             
-            // Dark text on light buckets (< ±3.5%), white on dark saturated buckets
-            const textColor = (percent > -3.5 && percent < 3.5) ? '#0f172a' : '#ffffff';
+            // Determine text color based on background brightness
+            let textColor = '#ffffff';
+            if (percent > 0 && percent < 5) textColor = '#0f172a'; // Dark text for < 5% gain
+            if (percent < 0 && percent > -5) textColor = '#0f172a'; // Dark text for < 5% loss
             const showSymbol = node.width > 28 && node.height > 22;
             const showPercent = node.width > 40 && node.height > 38;
             const maxFs = isMobile ? 8 : 11;
