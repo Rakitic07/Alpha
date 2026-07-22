@@ -19,6 +19,7 @@ const reportLogger = logger.scope('ReportData');
 function signalReason(opts: {
   byFilter: boolean;
   by50Dma: boolean;
+  byDrawdown: boolean;
   byRank: boolean;
   isBE: boolean;
   isUnranked: boolean;
@@ -27,6 +28,7 @@ function signalReason(opts: {
   const parts: string[] = [];
   if (opts.byFilter)                parts.push('below 200 DMA / far from ATH');
   if (opts.by50Dma && !opts.byFilter) parts.push('below 50 DMA');
+  if (opts.byDrawdown)              parts.push('dropped > 20% since entry');
   if (opts.isBE)                    parts.push('moved to BE category');
   if (opts.isUnranked && !opts.isBE) parts.push('dropped out of screener universe');
   if (opts.byRank && opts.rank != null && !opts.isUnranked) parts.push(`rank ${opts.rank} (above cut-off)`);
@@ -297,6 +299,7 @@ export async function gatherReportData(date: string): Promise<ReportData> {
                 ? signalReason({
                     byFilter:   sig.byFilter,
                     by50Dma:    sig.by50Dma,
+                    byDrawdown: sig.byDrawdown,
                     byRank:     sig.byRank,
                     isBE:       sig.isBE,
                     isUnranked: sig.isUnranked,
@@ -320,6 +323,7 @@ export async function gatherReportData(date: string): Promise<ReportData> {
             byRank:     r.exitSignal!.byRank,
             byFilter:   r.exitSignal!.byFilter,
             by50Dma:    r.exitSignal!.by50Dma,
+            byDrawdown: r.exitSignal!.byDrawdown,
             isBE:       r.exitSignal!.isBE,
             protected:  r.exitSignal!.protected,
           }));
@@ -332,6 +336,7 @@ export async function gatherReportData(date: string): Promise<ReportData> {
             rank:      r.isUnranked ? null : r.rank,
             by50Dma:   r.exitSignal!.by50Dma,
             byRank:    r.exitSignal!.byRank,
+            byDrawdown: r.exitSignal!.byDrawdown,
             isBE:      r.exitSignal!.isBE,
             protected: r.exitSignal!.protected,
           }));

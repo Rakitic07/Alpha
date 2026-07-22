@@ -89,7 +89,7 @@ export default function PortfolioHeatmap({ data, isMobile, privacyMode }: Portfo
             // Use dark text when the cell colour is near-neutral (|t| < 0.45),
             // white text on saturated green/red cells
             const absT = Math.abs(percent / maxAbs);
-            let textColor = absT < 0.45 ? '#0f172a' : '#ffffff';
+            const textColor = absT < 0.45 ? '#0f172a' : '#ffffff';
             const showSymbol = node.width > 28 && node.height > 22;
             const showPercent = node.width > 40 && node.height > 38;
             const maxFs = isMobile ? 8 : 11;

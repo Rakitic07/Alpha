@@ -616,6 +616,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                                 : exit.byRank ? `① Rank > 50` : '',
                               exit.byFilter ? '② Below 200 DMA or outside 25% of ATH' : '',
                               exit.by50Dma ? '③ Below 50 DMA' : '',
+                              exit.byDrawdown ? '④ Dropped > 20% since entry' : '',
                               exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
                             ].filter(Boolean).join('\n')}
                           >
