@@ -36,15 +36,15 @@ function getFixedColor(percent: number): string {
     return '#d1fae5';                       // Emerald 100
   }
 
-  // Losses
-  if (percent <= -10)   return '#450a0a'; // Red 950
-  if (percent <=  -7)   return '#7f1d1d'; // Red 900
-  if (percent <=  -5)   return '#991b1b'; // Red 800
-  if (percent <=  -3.5) return '#b91c1c'; // Red 700
-  if (percent <=  -2.5) return '#dc2626'; // Red 600
-  if (percent <=  -1.5) return '#ef4444'; // Red 500
-  if (percent <=  -0.75) return '#f87171'; // Red 400
-  if (percent <=  -0.25) return '#fca5a5'; // Red 300
+  // Losses — light pinks for small moves, vivid red only at -3.5%+
+  if (percent <= -10)   return '#7f1d1d'; // Red 900
+  if (percent <=  -7)   return '#991b1b'; // Red 800
+  if (percent <=  -5)   return '#b91c1c'; // Red 700
+  if (percent <=  -3.5) return '#dc2626'; // Red 600
+  if (percent <=  -2.5) return '#ef4444'; // Red 500
+  if (percent <=  -1.5) return '#f87171'; // Red 400
+  if (percent <=  -0.75) return '#fca5a5'; // Red 300
+  if (percent <=  -0.25) return '#fecaca'; // Red 200
   return '#fee2e2';                        // Red 100
 }
 
