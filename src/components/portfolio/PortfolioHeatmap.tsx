@@ -19,8 +19,41 @@ interface PortfolioHeatmapProps {
   privacyMode: boolean;
 }
 
+// Neutral: Slate 500 | Max gain: Emerald 600 | Max loss: Red 700
+const COLOR_NEUTRAL = { r: 100, g: 116, b: 139 };
+const COLOR_GAIN    = { r:   5, g: 150, b: 105 };
+const COLOR_LOSS    = { r: 185, g:  28, b:  28 };
+
+function interpolateRGB(
+  from: { r: number; g: number; b: number },
+  to:   { r: number; g: number; b: number },
+  t: number
+) {
+  return {
+    r: Math.round(from.r + t * (to.r - from.r)),
+    g: Math.round(from.g + t * (to.g - from.g)),
+    b: Math.round(from.b + t * (to.b - from.b)),
+  };
+}
+
+function getDynamicColor(percent: number, maxAbs: number): string {
+  const t = Math.max(-1, Math.min(1, percent / maxAbs));
+  const { r, g, b } =
+    t >= 0
+      ? interpolateRGB(COLOR_NEUTRAL, COLOR_GAIN, t)
+      : interpolateRGB(COLOR_NEUTRAL, COLOR_LOSS, -t);
+  return `rgb(${r},${g},${b})`;
+}
+
 export default function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
     if (!data.allHoldings || data.allHoldings.length === 0) return null;
+
+  // Compute symmetric scale cap from the actual session data
+  const allPercents = data.allHoldings.map(h => h.dayChangePercent);
+  const maxGainVal  = Math.max(0, ...allPercents);
+  const maxLossVal  = Math.abs(Math.min(0, ...allPercents));
+  // Both sides share the same cap so 0 % is always exactly mid-point
+  const maxAbs = Math.max(maxGainVal, maxLossVal, 0.01);
 
   return (
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 h-[500px] flex flex-col">
@@ -45,32 +78,18 @@ export default function PortfolioHeatmap({ data, isMobile, privacyMode }: Portfo
             const d = node.data as { dayChangePercent?: number };
             const percent = d.dayChangePercent;
             if (percent === undefined) return 'rgba(0,0,0,0)';
-            
-            // Gain colors
-            if (percent >= 10) return '#059669'; // Emerald 600 (Max > 10%)
-            if (percent >= 5) return '#10b981';  // Emerald 500
-            if (percent >= 3) return '#34d399';  // Emerald 400
-            if (percent >= 1.5) return '#6ee7b7'; // Emerald 300
-            if (percent > 0) return '#d1fae5';   // Emerald 100
-            
-            if (percent === 0) return '#64748b'; // Slate 500
-            
-            // Loss colors
-            if (percent > -1.5) return '#fee2e2'; // Red 100
-            if (percent > -3) return '#fca5a5';   // Red 300
-            if (percent > -5) return '#f87171';   // Red 400
-            if (percent > -10) return '#ef4444';  // Red 500
-            return '#b91c1c';                     // Red 700 (Max > 10% loss)
+            // Dynamic scale: interpolates between slate-grey (0 %) → green/red (±maxAbs)
+            return getDynamicColor(percent, maxAbs);
           }}
           nodeOpacity={1}
           nodeComponent={({ node }) => {
             const percent = (node.data as { dayChangePercent?: number }).dayChangePercent;
             if (percent === undefined) return null;
             
-            // Determine text color based on background brightness
-            let textColor = '#ffffff';
-            if (percent > 0 && percent < 5) textColor = '#0f172a'; // Dark text for < 5% gain
-            if (percent < 0 && percent > -5) textColor = '#0f172a'; // Dark text for < 5% loss
+            // Use dark text when the cell colour is near-neutral (|t| < 0.45),
+            // white text on saturated green/red cells
+            const absT = Math.abs(percent / maxAbs);
+            let textColor = absT < 0.45 ? '#0f172a' : '#ffffff';
             const showSymbol = node.width > 28 && node.height > 22;
             const showPercent = node.width > 40 && node.height > 38;
             const maxFs = isMobile ? 8 : 11;
