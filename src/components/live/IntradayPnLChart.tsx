@@ -33,39 +33,57 @@ const BENCHMARKS = [
 
 type SeriesKey = (typeof BENCHMARKS)[number]['key'];
 
+// Map dataKey → series config for tooltip lookup
+const SERIES_CONFIG: Record<string, { label: string; color: string }> = {
+  percent:        { label: 'Portfolio', color: '#3b82f6' },
+  nifty50Percent: { label: 'Nifty 50', color: '#8b5cf6' },
+  n500m50Percent: { label: 'N500M50',  color: '#10b981' },
+};
+
 function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile }: any) {
   if (!active || !payload || !payload.length) return null;
 
-  // Find portfolio entry first (it carries pnl for masking)
   const portfolioEntry = payload.find((p: any) => p.dataKey === 'percent');
-  const percent = portfolioEntry?.value ?? payload[0].value;
   const pnl = portfolioEntry?.payload?.pnl ?? 0;
-  const isPositive = percent >= 0;
   const showMasked = privacyMode && !isMobile;
 
   return (
-    <div className="bg-slate-800/95 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-2 shadow-xl min-w-[130px]">
-      <p className="text-xs text-gray-400 mb-1.5">{label}</p>
-      {payload.map((entry: any) => {
-        if (entry.value == null) return null;
-        const isPortfolio = entry.dataKey === 'percent';
-        const sign = entry.value >= 0 ? '+' : '';
-        return (
-          <div key={entry.dataKey} className="flex items-center gap-2 mb-0.5">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-            <span className="text-xs font-semibold" style={{ color: entry.color }}>
-              {isPortfolio && showMasked
-                ? `****`
-                : `${sign}${entry.value.toFixed(precision)}%`}
-            </span>
-            {isPortfolio && (
-              <span className="text-[10px] text-gray-400">
-                {showMasked ? '' : `(${entry.value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(pnl))})`}
-              </span>
-            )}
-          </div>
-        );
-      })}
+    <div className="bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-xl px-3.5 py-2.5 shadow-2xl min-w-[150px]">
+      {/* Time header */}
+      <p className="text-[11px] font-medium text-gray-400 mb-2 pb-1.5 border-b border-white/8">{label}</p>
+
+      <div className="flex flex-col gap-1.5">
+        {payload.map((entry: any) => {
+          if (entry.value == null) return null;
+          const cfg = SERIES_CONFIG[entry.dataKey];
+          if (!cfg) return null;
+          const isPortfolio = entry.dataKey === 'percent';
+          const sign = entry.value >= 0 ? '+' : '';
+          const formatted = showMasked && isPortfolio ? '••••' : `${sign}${entry.value.toFixed(precision)}%`;
+
+          return (
+            <div key={entry.dataKey}>
+              <div className="flex items-center justify-between gap-3">
+                {/* Label + dot */}
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.color }} />
+                  <span className="text-[11px] text-gray-400">{cfg.label}</span>
+                </div>
+                {/* Value */}
+                <span className="text-[12px] font-bold tabular-nums" style={{ color: cfg.color }}>
+                  {formatted}
+                </span>
+              </div>
+              {/* ₹ amount on second line for portfolio only */}
+              {isPortfolio && !showMasked && (
+                <p className="text-[10px] text-gray-500 text-right mt-0.5">
+                  {entry.value >= 0 ? '+' : '−'}{formatCurrency(Math.abs(pnl))}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -167,48 +185,9 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
       }`}
     >
       <div className="p-5">
-        {/* Header row: title + toggle pills */}
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        {/* Header */}
+        <div className="mb-4">
           <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Intraday P/L</h3>
-
-          {/* Toggle pills — mirrors EquityCurve legend */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {BENCHMARKS.map(item => {
-              const isHidden = !visible[item.key];
-              const isHovered = hoveredSeries === item.key;
-              const isDimmed = hoveredSeries !== null && !isHovered;
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => toggleSeries(item.key)}
-                  onMouseEnter={() => setHoveredSeries(item.key)}
-                  onMouseLeave={() => setHoveredSeries(null)}
-                  className={`flex items-center gap-1.5 py-0.5 transition-all duration-200 cursor-pointer ${
-                    isHidden ? 'opacity-40 grayscale' : ''
-                  } ${
-                    isHovered
-                      ? 'scale-105 opacity-100'
-                      : isDimmed
-                      ? 'opacity-30 blur-[0.5px]'
-                      : 'opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  {/* Swatch */}
-                  <span
-                    className="w-5 h-1.5 rounded-full shadow-sm flex-shrink-0"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span
-                    className={`text-[11px] font-medium tracking-wide ${
-                      isHidden ? 'text-gray-500 line-through' : 'text-gray-300'
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* Chart */}
@@ -289,6 +268,44 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
               />
             </ComposedChart>
           </ResponsiveContainer>
+        </div>
+
+        {/* Toggle pills — below chart, mirrors EquityCurve legend */}
+        <div className="flex items-center justify-center gap-4 flex-wrap pt-3 mt-1 border-t border-white/5">
+          {BENCHMARKS.map(item => {
+            const isHidden = !visible[item.key];
+            const isHovered = hoveredSeries === item.key;
+            const isDimmed = hoveredSeries !== null && !isHovered;
+            return (
+              <button
+                key={item.key}
+                onClick={() => toggleSeries(item.key)}
+                onMouseEnter={() => setHoveredSeries(item.key)}
+                onMouseLeave={() => setHoveredSeries(null)}
+                className={`flex items-center gap-1.5 py-0.5 transition-all duration-200 cursor-pointer ${
+                  isHidden ? 'opacity-40 grayscale' : ''
+                } ${
+                  isHovered
+                    ? 'scale-105 opacity-100'
+                    : isDimmed
+                    ? 'opacity-30 blur-[0.5px]'
+                    : 'opacity-70 hover:opacity-100'
+                }`}
+              >
+                <span
+                  className="w-5 h-1.5 rounded-full shadow-sm flex-shrink-0"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span
+                  className={`text-[11px] font-medium tracking-wide ${
+                    isHidden ? 'text-gray-500 line-through' : 'text-gray-300'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </motion.div>
