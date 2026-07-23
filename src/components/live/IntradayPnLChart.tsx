@@ -33,47 +33,48 @@ const BENCHMARKS = [
 
 type SeriesKey = (typeof BENCHMARKS)[number]['key'];
 
-// Map dataKey → series config for tooltip lookup
-const SERIES_CONFIG: Record<string, { label: string; color: string }> = {
-  percent:        { label: 'Portfolio', color: '#3b82f6' },
-  nifty50Percent: { label: 'Nifty 50', color: '#8b5cf6' },
-  n500m50Percent: { label: 'N500M50',  color: '#10b981' },
-};
 
-function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile }: any) {
+
+function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile, visible }: any) {
   if (!active || !payload || !payload.length) return null;
-
-  const portfolioEntry = payload.find((p: any) => p.dataKey === 'percent');
 
   const showMasked = privacyMode && !isMobile;
 
+  const payloadMap = new Map();
+  for (const entry of payload) {
+    payloadMap.set(entry.dataKey, entry);
+  }
+
   return (
     <div className="bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-xl px-3.5 py-2.5 shadow-2xl min-w-[150px]">
-      {/* Time header */}
       <p className="text-[11px] font-medium text-gray-400 mb-2 pb-1.5 border-b border-white/8">{label}</p>
-
       <div className="flex flex-col gap-1.5">
-        {payload.map((entry: any) => {
-          if (entry.value == null) return null;
-          const cfg = SERIES_CONFIG[entry.dataKey];
-          if (!cfg) return null;
-          const isPortfolio = entry.dataKey === 'percent';
-          const sign = entry.value >= 0 ? '+' : '';
-          const formatted = showMasked && isPortfolio ? '••••' : `${sign}${entry.value.toFixed(precision)}%`;
-
+        {BENCHMARKS.map(item => {
+          if (visible && !visible[item.key]) return null;
+          const entry = payloadMap.get(item.dataKey);
+          const value = entry?.value ?? null;
+          const isPortfolio = item.key === 'portfolio';
+          let formatted;
+          if (value == null) {
+            formatted = '—';
+          } else if (showMasked && isPortfolio) {
+            formatted = '••••';
+          } else {
+            const sign = value >= 0 ? '+' : '';
+            formatted = `${sign}${value.toFixed(precision)}%`;
+          }
           return (
-            <div key={entry.dataKey}>
-              <div className="flex items-center justify-between gap-3">
-                {/* Label + dot */}
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.color }} />
-                  <span className="text-[11px] text-gray-400">{cfg.label}</span>
-                </div>
-                {/* Value */}
-                <span className="text-[12px] font-bold tabular-nums" style={{ color: cfg.color }}>
-                  {formatted}
-                </span>
+            <div key={item.key} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="text-[11px] text-gray-400">{item.label}</span>
               </div>
+              <span
+                className="text-[12px] font-bold tabular-nums"
+                style={{ color: value == null ? '#6b7280' : item.color }}
+              >
+                {formatted}
+              </span>
             </div>
           );
         })}
@@ -81,6 +82,8 @@ function CustomTooltip({ active, payload, label, precision, privacyMode, isMobil
     </div>
   );
 }
+
+
 
 const IntradayPnLChart = memo(function IntradayPnLChart({
   data,
@@ -218,7 +221,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 tickFormatter={(value) => `${value.toFixed(1)}%`}
               />
               <Tooltip
-                content={<CustomTooltip precision={precision} privacyMode={privacyMode} isMobile={isMobile} />}
+                content={<CustomTooltip precision={precision} privacyMode={privacyMode} isMobile={isMobile} visible={visible} />}
                 cursor={{ stroke: '#4b5563', strokeDasharray: '4 4' }}
               />
               <ReferenceLine y={0} stroke="#4b5563" strokeWidth={1} strokeDasharray="4 4" />
