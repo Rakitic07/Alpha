@@ -487,13 +487,20 @@ export interface IntradayPnLPoint {
   time: Date;
   pnl: number;
   percent: number;
+  nifty50Percent?: number | null;
+  n500m50Percent?: number | null;
 }
 
 /**
  * Save a P/L snapshot to the database.
  * Also cleans up data from previous days.
  */
-export async function saveIntradayPnL(pnl: number, percent: number): Promise<void> {
+export async function saveIntradayPnL(
+  pnl: number,
+  percent: number,
+  nifty50Percent?: number | null,
+  n500m50Percent?: number | null,
+): Promise<void> {
   const now = new Date();
   const todayIST = getTodayIST();
   
@@ -511,7 +518,9 @@ export async function saveIntradayPnL(pnl: number, percent: number): Promise<voi
           timestamp: now,
           date: todayIST,
           pnl,
-          percent
+          percent,
+          nifty50Percent: nifty50Percent ?? null,
+          n500m50Percent: n500m50Percent ?? null,
         }
       }),
     ]);
@@ -552,7 +561,9 @@ export async function getIntradayPnLHistory(): Promise<IntradayPnLPoint[]> {
     return records.map(r => ({
       time: r.timestamp,
       pnl: r.pnl,
-      percent: r.percent
+      percent: r.percent,
+      nifty50Percent: r.nifty50Percent ?? null,
+      n500m50Percent: r.n500m50Percent ?? null,
     }));
   } catch (error: any) {
     const errorMessage = error?.message || '';

@@ -1,10 +1,11 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -23,24 +24,48 @@ interface IntradayPnLChartProps {
   isMobile: boolean;
 }
 
- 
+// Benchmark series config — mirrors EquityCurve legend pattern
+const BENCHMARKS = [
+  { key: 'portfolio', dataKey: 'percent',       label: 'Portfolio',  color: '#3b82f6' },
+  { key: 'nifty50',  dataKey: 'nifty50Percent', label: 'Nifty 50',   color: '#8b5cf6' },
+  { key: 'n500m50',  dataKey: 'n500m50Percent', label: 'N500M50',    color: '#10b981' },
+] as const;
+
+type SeriesKey = (typeof BENCHMARKS)[number]['key'];
+
 function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile }: any) {
   if (!active || !payload || !payload.length) return null;
-  
-  const percent = payload[0].value;
-  const pnl = payload[0]?.payload?.pnl ?? 0;
+
+  // Find portfolio entry first (it carries pnl for masking)
+  const portfolioEntry = payload.find((p: any) => p.dataKey === 'percent');
+  const percent = portfolioEntry?.value ?? payload[0].value;
+  const pnl = portfolioEntry?.payload?.pnl ?? 0;
   const isPositive = percent >= 0;
   const showMasked = privacyMode && !isMobile;
-  
+
   return (
-    <div className="bg-slate-800/95 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
-      <p className={`text-sm font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-        {isPositive ? '+' : ''}{percent.toFixed(precision)}%
-      </p>
-      <p className={`text-xs font-semibold ${isPositive ? 'text-emerald-300/80' : 'text-red-300/80'}`}>
-        {showMasked ? '****' : `${isPositive ? '+' : '-'}${formatCurrency(Math.abs(pnl))}`}
-      </p>
+    <div className="bg-slate-800/95 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-2 shadow-xl min-w-[130px]">
+      <p className="text-xs text-gray-400 mb-1.5">{label}</p>
+      {payload.map((entry: any) => {
+        if (entry.value == null) return null;
+        const isPortfolio = entry.dataKey === 'percent';
+        const sign = entry.value >= 0 ? '+' : '';
+        return (
+          <div key={entry.dataKey} className="flex items-center gap-2 mb-0.5">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+            <span className="text-xs font-semibold" style={{ color: entry.color }}>
+              {isPortfolio && showMasked
+                ? `****`
+                : `${sign}${entry.value.toFixed(precision)}%`}
+            </span>
+            {isPortfolio && (
+              <span className="text-[10px] text-gray-400">
+                {showMasked ? '' : `(${entry.value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(pnl))})`}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -51,15 +76,22 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
   privacyMode,
   isMobile
 }: IntradayPnLChartProps) {
-  // Format data for chart
-  // Format data for chart
+  // Toggle pills state — all on by default
+  const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
+    portfolio: true,
+    nifty50: true,
+    n500m50: true,
+  });
+  const [hoveredSeries, setHoveredSeries] = useState<SeriesKey | null>(null);
+
+  const toggleSeries = (key: SeriesKey) =>
+    setVisible(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Format data for chart — dedup by minute (keep last point per minute)
   const chartData = useMemo(() => {
-    // Dedup by minute (keep last point for each minute)
-    const uniquePoints = new Map();
-    
+    const uniquePoints = new Map<string, PnLHistoryPoint>();
     data.forEach(point => {
       const minute = format(point.time, 'HH:mm');
-      // Always overwrite, so we keep the latest for each minute
       uniquePoints.set(minute, point);
     });
 
@@ -67,53 +99,56 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
       time: format(point.time, 'HH:mm:ss'),
       timeShort: format(point.time, 'HH:mm'),
       pnl: point.pnl,
-      percent: point.percent
+      percent: point.percent,
+      nifty50Percent: point.nifty50Percent ?? null,
+      n500m50Percent: point.n500m50Percent ?? null,
     }));
   }, [data]);
 
-  // Determine if overall is positive (use last data point)
+  // Determine overall direction (use last data point)
   const isPositive = chartData.length > 0 ? chartData[chartData.length - 1].percent >= 0 : true;
-  
-  // Find min and max for Y axis domain and calculate gradient offset
+
+  // Y-axis domain + gradient offsets + precision
   const { minPercent, maxPercent, offsetFill, offsetStroke, precision } = useMemo(() => {
     if (chartData.length === 0) {
       return { minPercent: -1, maxPercent: 1, offsetFill: 0.5, offsetStroke: 0.5, precision: 2 };
     }
 
-    // Calculate domain with padding to ensure zero line isn't clamped to the edge
+    // Collect all visible series values for a unified Y domain
+    const allValues: number[] = [];
+    chartData.forEach(d => {
+      allValues.push(d.percent);
+      if (d.nifty50Percent != null) allValues.push(d.nifty50Percent);
+      if (d.n500m50Percent != null) allValues.push(d.n500m50Percent);
+    });
+
     const percs = chartData.map(d => d.percent);
     const dataMin = Math.min(...percs);
     const dataMax = Math.max(...percs);
     const dataRange = dataMax - dataMin;
     const precision = dataRange < 0.5 ? 3 : dataRange < 2 ? 2 : 1;
-    
-    // Ensure 0 is included in the conceptual range before padding
-    const domainMin = Math.min(dataMin, 0);
-    const domainMax = Math.max(dataMax, 0);
-    
-    // Add 10% padding to the total range
+
+    const domainMin = Math.min(Math.min(...allValues), 0);
+    const domainMax = Math.max(Math.max(...allValues), 0);
+
     const range = Math.abs(domainMax - domainMin);
-    const MIN_PAD_PCT = 0.02; // 2 bps minimum padding
+    const MIN_PAD_PCT = 0.02;
     const padding = Math.max(range * 0.1, MIN_PAD_PCT);
-    
+
     const finalMin = domainMin - padding;
     const finalMax = domainMax + padding;
-    
-    // Calculate offsets relative to specific bounding boxes
-    
-    // Stroke Offset: logic applies to data range [dataMin, dataMax]
+
+    // Gradient offsets relative to portfolio series range only
     const strokeRange = dataMax - dataMin;
     const strokeOffset = strokeRange > 0 ? (dataMax - 0) / strokeRange : (dataMax >= 0 ? 1 : 0);
-    
-    // Fill Offset: logic applies to fill range [finalMin, dataMax] (assuming fill extends to bottom)
-    // Note: Recharts Area typically fills to the axis bottom if baseValue is not set
+
     const fillTop = dataMax;
     const fillBottom = finalMin;
     const fillRange = fillTop - fillBottom;
     const fillOffset = fillRange > 0 ? (fillTop - 0) / fillRange : (fillTop >= 0 ? 1 : 0);
-    
-    return { 
-      minPercent: finalMin, 
+
+    return {
+      minPercent: finalMin,
       maxPercent: finalMax,
       offsetStroke: Math.max(0, Math.min(1, strokeOffset)),
       offsetFill: Math.max(0, Math.min(1, fillOffset)),
@@ -121,74 +156,139 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
     };
   }, [chartData]);
 
-  // Don't render if no data
-  if (chartData.length < 2) {
-    return null;
-  }
+  // Don't render if insufficient data
+  if (chartData.length < 2) return null;
 
   return (
-    <motion.div 
-      variants={itemVariants} 
+    <motion.div
+      variants={itemVariants}
       className={`relative overflow-hidden rounded-2xl border shadow-xl bg-gradient-to-br from-slate-900 via-slate-800/50 to-slate-900 ${
         isPositive ? 'border-emerald-500/20' : 'border-red-500/20'
       }`}
     >
       <div className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Intraday P/L</h3>
+        {/* Header row: title + toggle pills */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Intraday P/L</h3>
+
+          {/* Toggle pills — mirrors EquityCurve legend */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {BENCHMARKS.map(item => {
+              const isHidden = !visible[item.key];
+              const isHovered = hoveredSeries === item.key;
+              const isDimmed = hoveredSeries !== null && !isHovered;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => toggleSeries(item.key)}
+                  onMouseEnter={() => setHoveredSeries(item.key)}
+                  onMouseLeave={() => setHoveredSeries(null)}
+                  className={`flex items-center gap-1.5 py-0.5 transition-all duration-200 cursor-pointer ${
+                    isHidden ? 'opacity-40 grayscale' : ''
+                  } ${
+                    isHovered
+                      ? 'scale-105 opacity-100'
+                      : isDimmed
+                      ? 'opacity-30 blur-[0.5px]'
+                      : 'opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  {/* Swatch */}
+                  <span
+                    className="w-5 h-1.5 rounded-full shadow-sm flex-shrink-0"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span
+                    className={`text-[11px] font-medium tracking-wide ${
+                      isHidden ? 'text-gray-500 line-through' : 'text-gray-300'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
-        
+
+        {/* Chart */}
         <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="splitColorGradient" x1="0" y1="0" x2="0" y2="1">
-                    {/* Green from top to zero line */}
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4}/>
-                    <stop offset={`${offsetFill * 100}%`} stopColor="#10b981" stopOpacity={0.1}/>
-                    {/* Red from zero line to bottom */}
-                    <stop offset={`${offsetFill * 100}%`} stopColor="#ef4444" stopOpacity={0.1}/>
-                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4}/>
-                  </linearGradient>
-                  <linearGradient id="splitColorStroke" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981"/>
-                    <stop offset={`${offsetStroke * 100}%`} stopColor="#10b981"/>
-                    <stop offset={`${offsetStroke * 100}%`} stopColor="#ef4444"/>
-                    <stop offset="100%" stopColor="#ef4444"/>
-                  </linearGradient>
-                </defs>
-                <XAxis 
-                  dataKey="timeShort" 
-                  tick={{ fill: '#6b7280', fontSize: 10 }}
-                  axisLine={{ stroke: '#374151' }}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis 
-                  domain={[minPercent, maxPercent]}
-                  tick={{ fill: '#6b7280', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value) => `${value.toFixed(1)}%`}
-                />
-                <Tooltip 
-                  content={<CustomTooltip precision={precision} privacyMode={privacyMode} isMobile={isMobile} />} 
-                  cursor={{ stroke: '#4b5563', strokeDasharray: '4 4' }}
-                />
-                <ReferenceLine y={0} stroke="#4b5563" strokeWidth={1} strokeDasharray="4 4" />
-                <Area 
-                  type="linear"
-                  dataKey="percent" 
-                  stroke="url(#splitColorStroke)"
-                  strokeWidth={2}
-                  fill="url(#splitColorGradient)"
-                  activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
-                  baseValue={minPercent}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+              <defs>
+                <linearGradient id="splitColorGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset={`${offsetFill * 100}%`} stopColor="#10b981" stopOpacity={0.1} />
+                  <stop offset={`${offsetFill * 100}%`} stopColor="#ef4444" stopOpacity={0.1} />
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+                </linearGradient>
+                <linearGradient id="splitColorStroke" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" />
+                  <stop offset={`${offsetStroke * 100}%`} stopColor="#10b981" />
+                  <stop offset={`${offsetStroke * 100}%`} stopColor="#ef4444" />
+                  <stop offset="100%" stopColor="#ef4444" />
+                </linearGradient>
+              </defs>
+
+              <XAxis
+                dataKey="timeShort"
+                tick={{ fill: '#6b7280', fontSize: 10 }}
+                axisLine={{ stroke: '#374151' }}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                domain={[minPercent, maxPercent]}
+                tick={{ fill: '#6b7280', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => `${value.toFixed(1)}%`}
+              />
+              <Tooltip
+                content={<CustomTooltip precision={precision} privacyMode={privacyMode} isMobile={isMobile} />}
+                cursor={{ stroke: '#4b5563', strokeDasharray: '4 4' }}
+              />
+              <ReferenceLine y={0} stroke="#4b5563" strokeWidth={1} strokeDasharray="4 4" />
+
+              {/* Portfolio area — split-color gradient */}
+              <Area
+                type="linear"
+                dataKey="percent"
+                stroke="url(#splitColorStroke)"
+                strokeWidth={2}
+                fill="url(#splitColorGradient)"
+                activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
+                baseValue={minPercent}
+                hide={!visible.portfolio}
+              />
+
+              {/* Nifty 50 benchmark line */}
+              <Line
+                type="linear"
+                dataKey="nifty50Percent"
+                stroke="#8b5cf6"
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+                dot={false}
+                activeDot={{ r: 3, strokeWidth: 0, fill: '#8b5cf6' }}
+                connectNulls
+                hide={!visible.nifty50}
+              />
+
+              {/* Nifty500 Momentum 50 benchmark line */}
+              <Line
+                type="linear"
+                dataKey="n500m50Percent"
+                stroke="#10b981"
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+                dot={false}
+                activeDot={{ r: 3, strokeWidth: 0, fill: '#10b981' }}
+                connectNulls
+                hide={!visible.n500m50}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </motion.div>

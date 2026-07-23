@@ -150,13 +150,19 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         
         const currentPnl = data.dayGain;
         const currentPercent = data.dayGainPercent;
+
+        // Extract benchmark index % changes to co-store with each snapshot
+        const nifty50Percent = data.indices.find(i => i.name === 'Nifty 50')?.percentChange ?? null;
+        const n500m50Percent = data.indices.find(i => i.name === 'Nifty 500 Momentum 50')?.percentChange ?? null;
         
-        saveIntradayPnL(currentPnl, currentPercent)
+        saveIntradayPnL(currentPnl, currentPercent, nifty50Percent, n500m50Percent)
           .then(() => {
             const newPoint: PnLHistoryPoint = {
               time: new Date(),
               pnl: currentPnl,
-              percent: currentPercent
+              percent: currentPercent,
+              nifty50Percent,
+              n500m50Percent,
             };
             setPnlHistory(prev => [...prev, newPoint]);
           })
@@ -164,6 +170,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [data?.dayGain, data?.dayGainPercent]);
+
 
   // Track if we're in market hours based on actual server-side market status
   // This is updated from the live data response to support special sessions (like Sunday budget)

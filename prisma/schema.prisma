@@ -217,11 +217,13 @@ model AMFIImportHistory {
 // Stores P/L snapshots every 1 minute during market hours
 // Only keeps current day's data, previous days are auto-cleaned
 model IntradayPnL {
-  id        Int      @id @default(autoincrement())
-  timestamp DateTime @default(now())
-  date      DateTime // Date only (for easy filtering/cleanup)
-  pnl       Float    // Absolute P/L value
-  percent   Float    // P/L percentage
+  id              Int      @id @default(autoincrement())
+  timestamp       DateTime @default(now())
+  date            DateTime // Date only (for easy filtering/cleanup)
+  pnl             Float    // Absolute P/L value
+  percent         Float    // P/L percentage
+  nifty50Percent  Float?   // Nifty 50 % change at this snapshot (nullable for backcompat)
+  n500m50Percent  Float?   // Nifty500 Momentum 50 % change at this snapshot (nullable for backcompat)
 
   @@index([date])
 }
