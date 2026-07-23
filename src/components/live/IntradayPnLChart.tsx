@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import { PnLHistoryPoint } from '@/context/LiveDataContext';
-import { formatCurrency } from '@/lib/format';
+
 import type { Variants } from 'framer-motion';
 
 interface IntradayPnLChartProps {
@@ -44,7 +44,7 @@ function CustomTooltip({ active, payload, label, precision, privacyMode, isMobil
   if (!active || !payload || !payload.length) return null;
 
   const portfolioEntry = payload.find((p: any) => p.dataKey === 'percent');
-  const pnl = portfolioEntry?.payload?.pnl ?? 0;
+
   const showMasked = privacyMode && !isMobile;
 
   return (
@@ -74,12 +74,6 @@ function CustomTooltip({ active, payload, label, precision, privacyMode, isMobil
                   {formatted}
                 </span>
               </div>
-              {/* ₹ amount on second line for portfolio only */}
-              {isPortfolio && !showMasked && (
-                <p className="text-[10px] text-gray-500 text-right mt-0.5">
-                  {entry.value >= 0 ? '+' : '−'}{formatCurrency(Math.abs(pnl))}
-                </p>
-              )}
             </div>
           );
         })}
@@ -247,7 +241,6 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 dataKey="nifty50Percent"
                 stroke="#8b5cf6"
                 strokeWidth={1.5}
-                strokeDasharray="5 3"
                 dot={false}
                 activeDot={{ r: 3, strokeWidth: 0, fill: '#8b5cf6' }}
                 connectNulls
@@ -260,7 +253,6 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 dataKey="n500m50Percent"
                 stroke="#10b981"
                 strokeWidth={1.5}
-                strokeDasharray="5 3"
                 dot={false}
                 activeDot={{ r: 3, strokeWidth: 0, fill: '#10b981' }}
                 connectNulls
