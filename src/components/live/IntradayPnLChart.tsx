@@ -35,7 +35,7 @@ type SeriesKey = (typeof BENCHMARKS)[number]['key'];
 
 
 
-function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile, visible }: any) {
+function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile, seriesVisible }: any) {
   if (!active || !payload || !payload.length) return null;
 
   const showMasked = privacyMode && !isMobile;
@@ -50,7 +50,7 @@ function CustomTooltip({ active, payload, label, precision, privacyMode, isMobil
       <p className="text-[11px] font-medium text-gray-400 mb-2 pb-1.5 border-b border-white/8">{label}</p>
       <div className="flex flex-col gap-1.5">
         {BENCHMARKS.map(item => {
-          if (visible && !visible[item.key]) return null;
+          if (seriesVisible && !seriesVisible[item.key]) return null;
           const entry = payloadMap.get(item.dataKey);
           const value = entry?.value ?? null;
           const isPortfolio = item.key === 'portfolio';
@@ -221,7 +221,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 tickFormatter={(value) => `${value.toFixed(1)}%`}
               />
               <Tooltip
-                content={<CustomTooltip precision={precision} privacyMode={privacyMode} isMobile={isMobile} visible={visible} />}
+                content={(props) => <CustomTooltip {...props} precision={precision} privacyMode={privacyMode} isMobile={isMobile} seriesVisible={visible} />}
                 cursor={{ stroke: '#4b5563', strokeDasharray: '4 4' }}
               />
               <ReferenceLine y={0} stroke="#4b5563" strokeWidth={1} strokeDasharray="4 4" />
