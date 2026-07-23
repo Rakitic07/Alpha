@@ -214,7 +214,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 tick={{ fill: '#6b7280', fontSize: 10 }}
                 axisLine={{ stroke: '#374151' }}
                 tickLine={false}
-                interval="preserveStartEnd"
+                interval={Math.max(Math.floor(chartData.length / 6) - 1, 0)}
               />
               <YAxis
                 domain={[minPercent, maxPercent]}
