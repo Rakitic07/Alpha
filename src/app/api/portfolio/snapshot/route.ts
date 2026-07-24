@@ -8,6 +8,8 @@ import { verifyCronSecret } from '@/lib/cron-auth';
 import { apiLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // Allow up to 5 min — recalculation can be slow on large histories
+
 
 export async function GET(request: Request) {
     const authError = verifyCronSecret(request);
