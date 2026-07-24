@@ -61,7 +61,7 @@ function CustomTooltip({ active, payload, label, precision, privacyMode, isMobil
             formatted = '••••';
           } else {
             const sign = value >= 0 ? '+' : '';
-            formatted = `${sign}${value.toFixed(precision)}%`;
+            formatted = `${sign}${value.toFixed(2)}%`;
           }
           return (
             <div key={item.key} className="flex items-center justify-between gap-3">
