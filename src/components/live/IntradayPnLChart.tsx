@@ -35,10 +35,8 @@ type SeriesKey = (typeof BENCHMARKS)[number]['key'];
 
 
 
-function CustomTooltip({ active, payload, label, precision, privacyMode, isMobile, seriesVisible }: any) {
+function CustomTooltip({ active, payload, label, seriesVisible }: any) {
   if (!active || !payload || !payload.length) return null;
-
-  const showMasked = privacyMode && !isMobile;
 
   const payloadMap = new Map();
   for (const entry of payload) {
@@ -53,12 +51,9 @@ function CustomTooltip({ active, payload, label, precision, privacyMode, isMobil
           if (seriesVisible && !seriesVisible[item.key]) return null;
           const entry = payloadMap.get(item.dataKey);
           const value = entry?.value ?? null;
-          const isPortfolio = item.key === 'portfolio';
           let formatted;
           if (value == null) {
             formatted = '—';
-          } else if (showMasked && isPortfolio) {
-            formatted = '••••';
           } else {
             const sign = value >= 0 ? '+' : '';
             formatted = `${sign}${value.toFixed(2)}%`;
@@ -221,7 +216,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 tickFormatter={(value) => `${value.toFixed(1)}%`}
               />
               <Tooltip
-                content={(props) => <CustomTooltip {...props} precision={precision} privacyMode={privacyMode} isMobile={isMobile} seriesVisible={visible} />}
+                content={(props) => <CustomTooltip {...props} seriesVisible={visible} />}
                 cursor={{ stroke: '#4b5563', strokeDasharray: '4 4' }}
               />
               <ReferenceLine y={0} stroke="#4b5563" strokeWidth={1} strokeDasharray="4 4" />
