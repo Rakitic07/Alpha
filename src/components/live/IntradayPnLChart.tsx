@@ -188,7 +188,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
         </div>
 
         {/* Chart */}
-        <div className="h-[300px]">
+        <div className="h-[375px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
               <defs>
