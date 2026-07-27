@@ -231,9 +231,9 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 type="linear"
                 dataKey="percent"
                 stroke="url(#splitColorStroke)"
-                strokeWidth={2}
+                strokeWidth={hoveredSeries === 'portfolio' ? 4 : 3}
                 fill="url(#splitColorGradient)"
-                activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
+                activeDot={{ r: 5, strokeWidth: 0, fill: '#fff' }}
                 baseValue={minPercent}
                 hide={!visible.portfolio}
               />
