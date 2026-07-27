@@ -57,7 +57,7 @@ function CustomTooltip({ active, payload, label, seriesVisible, isPositive }: an
             formatted = `${sign}${value.toFixed(2)}%`;
           }
 
-          let itemColor = item.color;
+          let itemColor: string = item.color;
           if (item.key === 'portfolio') {
             const isValPositive = value != null ? value >= 0 : isPositive;
             itemColor = isValPositive ? '#10b981' : '#ef4444';
