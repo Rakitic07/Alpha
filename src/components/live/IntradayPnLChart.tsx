@@ -231,9 +231,9 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 type="monotone"
                 dataKey="percent"
                 stroke="url(#splitColorStroke)"
-                strokeWidth={hoveredSeries === 'portfolio' ? 3 : 2}
+                strokeWidth={hoveredSeries === 'portfolio' ? 4 : 3}
                 fill="url(#splitColorGradient)"
-                activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
+                activeDot={{ r: 5, strokeWidth: 0, fill: '#fff' }}
                 baseValue={minPercent}
                 hide={!visible.portfolio}
               />
@@ -244,7 +244,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 dataKey="nifty50Percent"
                 stroke="#8b5cf6"
                 strokeWidth={1.5}
-                strokeDasharray="3 3"
+                strokeDasharray="2 2"
                 dot={false}
                 activeDot={{ r: 3, strokeWidth: 0, fill: '#8b5cf6' }}
                 connectNulls
@@ -257,7 +257,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 dataKey="n500m50Percent"
                 stroke="#06b6d4"
                 strokeWidth={1.5}
-                strokeDasharray="3 3"
+                strokeDasharray="2 2"
                 dot={false}
                 activeDot={{ r: 3, strokeWidth: 0, fill: '#06b6d4' }}
                 connectNulls
