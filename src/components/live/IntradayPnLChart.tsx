@@ -26,16 +26,14 @@ interface IntradayPnLChartProps {
 
 // Benchmark series config — mirrors EquityCurve legend pattern
 const BENCHMARKS = [
-  { key: 'portfolio', dataKey: 'percent',       label: 'Portfolio',  color: '#3b82f6' },
+  { key: 'portfolio', dataKey: 'percent',       label: 'Portfolio',  color: '#10b981' },
   { key: 'nifty50',  dataKey: 'nifty50Percent', label: 'Nifty 50',   color: '#8b5cf6' },
-  { key: 'n500m50',  dataKey: 'n500m50Percent', label: 'N500M50',    color: '#10b981' },
+  { key: 'n500m50',  dataKey: 'n500m50Percent', label: 'N500M50',    color: '#06b6d4' },
 ] as const;
 
 type SeriesKey = (typeof BENCHMARKS)[number]['key'];
 
-
-
-function CustomTooltip({ active, payload, label, seriesVisible }: any) {
+function CustomTooltip({ active, payload, label, seriesVisible, isPositive }: any) {
   if (!active || !payload || !payload.length) return null;
 
   const payloadMap = new Map();
@@ -58,15 +56,22 @@ function CustomTooltip({ active, payload, label, seriesVisible }: any) {
             const sign = value >= 0 ? '+' : '';
             formatted = `${sign}${value.toFixed(2)}%`;
           }
+
+          let itemColor = item.color;
+          if (item.key === 'portfolio') {
+            const isValPositive = value != null ? value >= 0 : isPositive;
+            itemColor = isValPositive ? '#10b981' : '#ef4444';
+          }
+
           return (
             <div key={item.key} className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: itemColor }} />
                 <span className="text-[11px] text-gray-400">{item.label}</span>
               </div>
               <span
                 className="text-[12px] font-bold tabular-nums"
-                style={{ color: value == null ? '#6b7280' : item.color }}
+                style={{ color: value == null ? '#6b7280' : itemColor }}
               >
                 {formatted}
               </span>
@@ -216,7 +221,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 tickFormatter={(value) => `${value.toFixed(1)}%`}
               />
               <Tooltip
-                content={(props) => <CustomTooltip {...props} seriesVisible={visible} />}
+                content={(props) => <CustomTooltip {...props} seriesVisible={visible} isPositive={isPositive} />}
                 cursor={{ stroke: '#4b5563', strokeDasharray: '4 4' }}
               />
               <ReferenceLine y={0} stroke="#4b5563" strokeWidth={1} strokeDasharray="4 4" />
@@ -249,10 +254,10 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
               <Line
                 type="linear"
                 dataKey="n500m50Percent"
-                stroke="#10b981"
+                stroke="#06b6d4"
                 strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 3, strokeWidth: 0, fill: '#10b981' }}
+                activeDot={{ r: 3, strokeWidth: 0, fill: '#06b6d4' }}
                 connectNulls
                 hide={!visible.n500m50}
               />
@@ -266,6 +271,8 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
             const isHidden = !visible[item.key];
             const isHovered = hoveredSeries === item.key;
             const isDimmed = hoveredSeries !== null && !isHovered;
+            const itemColor = item.key === 'portfolio' ? (isPositive ? '#10b981' : '#ef4444') : item.color;
+
             return (
               <button
                 key={item.key}
@@ -284,7 +291,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
               >
                 <span
                   className="w-5 h-1.5 rounded-full shadow-sm flex-shrink-0"
-                  style={{ backgroundColor: item.color }}
+                  style={{ backgroundColor: itemColor }}
                 />
                 <span
                   className={`text-[11px] font-medium tracking-wide ${
