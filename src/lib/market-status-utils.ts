@@ -11,7 +11,7 @@ export const isMarketOpen = (): boolean => {
 
   // NSE market hours (sync fallback; authoritative status from Upstox Market Timings API)
   const startMinutes = 9 * 60 + 15;  // 9:15 AM
-  const endMinutes = 15 * 60 + 30;   // 3:30 PM
+  const endMinutes = 15 * 60 + 40;   // 3:40 PM (includes Closing Auction Session)
 
   // Check if it's a weekday (Monday=1 to Friday=5)
   if (day >= 1 && day <= 5) {

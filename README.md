@@ -570,7 +570,7 @@ Portfolio history is built through simulation:
 
 ## 🔧 Optional: Zerodha Kite Integration
 
-Auto-syncs today's executed orders from Zerodha Kite into the app every weekday at 3:40 PM IST.
+Auto-syncs today's executed orders from Zerodha Kite into the app every weekday at 3:45 PM IST (following the 3:40 PM closing auction session).
 
 > [!NOTE]
 > Auto-sync only imports the **current day's executed orders** — it does not import historical trades. For your existing trade history, use the Excel import on the Trades page.
@@ -580,7 +580,7 @@ Auto-syncs today's executed orders from Zerodha Kite into the app every weekday 
 Because Zerodha's Kite login requires Puppeteer (a headless browser), it cannot run inside Vercel Serverless Functions. The flow is:
 
 ```
-Vercel Cron (3:30 PM IST) → /api/cron/sync-orders
+Vercel Cron (3:45 PM IST) → /api/cron/sync-orders
                                     │
                                     │  dispatches workflow via GitHub API
                                     ▼

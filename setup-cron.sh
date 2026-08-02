@@ -17,8 +17,8 @@ echo "Found npx at: $NPX_PATH"
 echo "Project dir:  $PROJECT_DIR"
 
 # 2. Define the Cron Command
-# Runs at 3:40 PM every weekday (Mon-Fri)
-CRON_SCHEDULE="40 15 * * 1-5"
+# Runs at 3:45 PM every weekday (Mon-Fri, after 3:40 PM closing auction)
+CRON_SCHEDULE="45 15 * * 1-5"
 SCRIPT_PATH="src/scripts/zerodha-cron.ts"
 LOG_FILE="/tmp/alpha-zerodha-sync.log"
 
@@ -53,7 +53,7 @@ rm /tmp/cron.bk
 
 echo "------------------------------------------------"
 echo "Success! Cron job configured."
-echo "Schedule: $CRON_SCHEDULE (3:40 PM Mon-Fri)"
+echo "Schedule: $CRON_SCHEDULE (3:45 PM Mon-Fri)"
 echo "Command:  $FULL_COMMAND"
 echo "Logs:     $LOG_FILE"
 echo "------------------------------------------------"

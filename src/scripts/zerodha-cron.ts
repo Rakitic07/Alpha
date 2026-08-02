@@ -7,8 +7,8 @@
  * Usage:
  *   npx tsx src/scripts/zerodha-cron.ts
  * 
- * Cron Example (3:40 PM IST daily on weekdays):
- *   40 15 * * 1-5 cd /path/to/Alpha && npx tsx src/scripts/zerodha-cron.ts
+ * Cron Example (3:45 PM IST daily on weekdays, after 3:40 PM closing auction):
+ *   45 15 * * 1-5 cd /path/to/Alpha && npx tsx src/scripts/zerodha-cron.ts
  */
 
 import dotenv from 'dotenv';

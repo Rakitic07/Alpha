@@ -359,12 +359,12 @@ export async function getMarketStatus(): Promise<MarketStatus> {
         return { isOpen: false, reason: 'Market closed on weekends' };
     }
 
-    // 4. Fallback Static Logic (9:15 - 15:30) - only for weekdays with no timings
+    // 4. Fallback Static Logic (9:15 - 15:40) - only for weekdays with no timings
     const { hour, minute } = istTimeParts(now);
     const totalMinutes = hour * 60 + minute;
 
     const startMinutes = 9 * 60 + 15; // 9:15 AM
-    const endMinutes = 15 * 60 + 30;  // 3:30 PM
+    const endMinutes = 15 * 60 + 40;  // 3:40 PM (includes Closing Auction Session)
 
     if (totalMinutes >= startMinutes && totalMinutes < endMinutes) {
         return { isOpen: true, reason: 'Market is Live (Static Schedule)' };

@@ -253,14 +253,14 @@ export async function isMarketOpen(): Promise<boolean> {
     return hour * 60 + minute;
   };
   const NSE_OPEN_MINUTES = 9 * 60 + 15;
-  const NSE_CLOSE_MINUTES = 15 * 60 + 30;
+  const NSE_CLOSE_MINUTES = 15 * 60 + 40; // 3:40 PM IST (includes Closing Auction Session)
 
   try {
     const timings = await getMarketTimings(dateStr);
     const nseTimings = timings.find((t) => t.exchange === 'NSE');
 
     if (!nseTimings) {
-      // If no timings found, use default NSE hours (9:15 AM - 3:30 PM IST)
+      // If no timings found, use default NSE hours (9:15 AM - 3:40 PM IST)
       const currentMinutes = minutesInIST();
       return currentMinutes >= NSE_OPEN_MINUTES && currentMinutes <= NSE_CLOSE_MINUTES;
     }

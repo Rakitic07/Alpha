@@ -102,7 +102,7 @@ export async function GET(request: Request) {
         if (todayPriceExists) {
             apiLogger.info('DB fallback: Found stock prices for today, treating as trading day');
             const defaultCloseTime = new Date();
-            defaultCloseTime.setHours(10, 0, 0, 0); // 3:30 PM IST = 10:00 UTC
+            defaultCloseTime.setHours(10, 10, 0, 0); // 3:40 PM IST = 10:10 UTC (includes Closing Auction)
             const triggerTime = addMinutes(defaultCloseTime, 15);
 
             if (!isAfter(new Date(), triggerTime)) {

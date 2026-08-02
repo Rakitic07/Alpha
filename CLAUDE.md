@@ -136,7 +136,7 @@ npx tsx src/scripts/zerodha-cron.ts
 ```
 
 ## IST date conventions
-- Market open: 09:15 IST, close: 15:30 IST
+- Market open: 09:15 IST, regular close: 15:30 IST, closing auction: 15:30–15:40 IST (market session close: 15:40 IST)
 - All snapshot dates are stored as UTC midnight of the IST date (`YYYY-MM-DDT00:00:00.000Z`)
 - Use `getISTDateString()` from `src/lib/screener/dates.ts` for YYYY-MM-DD strings
 - The cron schedule `30 10 * * 1-5` = 4:00 PM IST (UTC+5:30)

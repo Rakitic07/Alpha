@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
                 'npx tsx src/scripts/zerodha-cron.ts',
                 '',
                 'Or schedule it with crontab:',
-                '40 15 * * 1-5 cd /path/to/Alpha && npx tsx src/scripts/zerodha-cron.ts'
+                '45 15 * * 1-5 cd /path/to/Alpha && npx tsx src/scripts/zerodha-cron.ts'
             ]
         }, { status: 501 });
     }
