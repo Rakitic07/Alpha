@@ -390,7 +390,8 @@ function renderExits(exits: ExitCandidate[]): string {
     const reasons: string[] = [];
     if (e.byFilter)                        reasons.push('Below 200 DMA / far from ATH');
     if (e.by50Dma && !e.byFilter)          reasons.push('Below 50 DMA');
-    if (e.byDrawdown)                      reasons.push('Dropped > 20% since entry');
+    if (e.byDrawdown)                      reasons.push('Dropped > 25% since entry');
+    else if (e.byDrawdownWarn)             reasons.push('Dropped > 20% since entry');
     if (e.isBE)                            reasons.push('Moved to BE');
     if (e.isUnranked && !e.isBE)           reasons.push('Dropped universe');
     if (e.byRank && e.rank != null && !e.isUnranked) reasons.push(`Rank ${e.rank}`);
@@ -426,7 +427,7 @@ function renderWarnings(warnings: WarnCandidate[]): string {
   const rows = warnings.map((w) => {
     const reasons: string[] = [];
     if (w.by50Dma) reasons.push('Below 50 DMA');
-    if (w.byDrawdown) reasons.push('Dropped > 20% since entry');
+    if (w.byDrawdownWarn) reasons.push('Dropped > 20% since entry');
     if (w.isBE)    reasons.push('Moved to BE');
     if (w.byRank && w.rank != null) reasons.push(`Rank ${w.rank}`);
     const reason = reasons.join(' · ') || 'Warning triggered';

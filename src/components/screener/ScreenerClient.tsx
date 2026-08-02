@@ -657,7 +657,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                               : exit.byRank ? 'Rank > 50' : '',
                             exit.byFilter ? 'Below 200 DMA or outside 25% of ATH' : '',
                             exit.by50Dma ? 'Below 50 DMA' : '',
-                            exit.byDrawdown ? 'Dropped > 20% since entry' : '',
+                            exit.byDrawdown ? 'Dropped > 25% since entry' : '',
                             exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
                             row.asmInfo ? `⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}` : '',
                           ].filter(Boolean) as string[];
@@ -676,7 +676,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             exit.byRank && !exit.isUnranked ? 'Rank 51–60 (watch zone)' : '',
                             exit.isBE ? 'Moved to BE (T+0) settlement category' : '',
                             exit.by50Dma ? 'Below 50 DMA' : '',
-                            exit.byDrawdown ? 'Dropped > 20% since entry' : '',
+                            exit.byDrawdownWarn && !exit.byDrawdown ? 'Dropped > 20% since entry (warn zone)' : '',
                             row.asmInfo ? `⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}` : '',
                           ].filter(Boolean) as string[];
                           return (

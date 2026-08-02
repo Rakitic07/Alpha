@@ -56,7 +56,8 @@ function exitSummary(e: ExitCandidate): string {
   const reasons: string[] = [];
   if (e.byFilter)   reasons.push('below 200 DMA / far from ATH');
   if (e.by50Dma && !e.byFilter) reasons.push('below 50 DMA');
-  if (e.byDrawdown) reasons.push('dropped > 20% since entry');
+  if (e.byDrawdown) reasons.push('dropped > 25% since entry');
+  else if (e.byDrawdownWarn) reasons.push('dropped > 20% since entry');
   if (e.isBE)       reasons.push('moved to BE category');
   if (e.isUnranked && !e.isBE) reasons.push('dropped out of screener universe');
   if (e.byRank && e.rank != null && !e.isUnranked) reasons.push(`rank ${e.rank}`);
@@ -66,7 +67,7 @@ function exitSummary(e: ExitCandidate): string {
 function warnSummary(w: WarnCandidate): string {
   const reasons: string[] = [];
   if (w.by50Dma) reasons.push('below 50 DMA');
-  if (w.byDrawdown) reasons.push('dropped > 20% since entry');
+  if (w.byDrawdownWarn) reasons.push('dropped > 20% since entry');
   if (w.isBE)    reasons.push('moved to BE category');
   if (w.byRank && w.rank != null) reasons.push(`rank ${w.rank} (51–60 band)`);
   return `${w.symbol} [WARNING${w.protected ? ' — PROTECTED' : ''}]: ${reasons.join(', ')}`;

@@ -78,6 +78,7 @@ export interface ExitCandidate {
   byRank:     boolean;
   byFilter:   boolean;
   by50Dma:    boolean;
+  byDrawdownWarn: boolean;
   byDrawdown: boolean;
   isBE:       boolean;
   protected:  boolean;
@@ -88,7 +89,7 @@ export interface WarnCandidate {
   rank:      number | null;
   by50Dma:   boolean;
   byRank:    boolean; // rank 51-60
-  byDrawdown: boolean;
+  byDrawdownWarn: boolean;
   isBE:      boolean;
   protected: boolean;
 }
