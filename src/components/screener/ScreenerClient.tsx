@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import StatsBar from './StatsBar';
@@ -62,7 +63,21 @@ interface BadgeTooltipProps {
 
 function BadgeTooltip({ label, badgeCls, lines, icon }: BadgeTooltipProps) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
+
+  const reposition = useCallback(() => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setPos({ top: r.top - 8, left: r.left });
+  }, []);
+
+  const handleEnter = useCallback(() => {
+    reposition();
+    setOpen(true);
+  }, [reposition]);
+
+  const handleLeave = useCallback(() => setOpen(false), []);
 
   // Close on outside click
   useEffect(() => {
@@ -74,40 +89,63 @@ function BadgeTooltip({ label, badgeCls, lines, icon }: BadgeTooltipProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  const tooltip = open && pos && lines.length > 0 && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className="fixed z-[9999] pointer-events-none"
+          style={{ top: pos.top, left: pos.left, transform: 'translateY(-100%)' }}
+        >
+          <div
+            className="rounded-xl border border-zinc-700/60 bg-zinc-950/95 backdrop-blur-md shadow-2xl overflow-hidden"
+            style={{ minWidth: '200px', maxWidth: '300px', boxShadow: '0 8px 32px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)' }}
+          >
+            {/* Header */}
+            <div className="px-3 py-2 border-b border-zinc-800/80 flex items-center gap-1.5">
+              {icon && <span className="text-zinc-400 flex items-center">{icon}</span>}
+              <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: 'inherit' }}>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold tracking-wider border ${badgeCls}`}>{label}</span>
+              </span>
+            </div>
+            {/* Lines */}
+            <div className="px-3 py-2.5 flex flex-col gap-2">
+              {lines.map((line, i) => {
+                const isAsm = line.startsWith('⚠');
+                const isLock = line.startsWith('🔒');
+                return (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${
+                      isLock ? 'bg-amber-400' : isAsm ? 'bg-orange-400' : 'bg-zinc-500'
+                    }`} />
+                    <span className={`text-[11px] leading-snug ${
+                      isLock ? 'text-amber-300' : isAsm ? 'text-orange-300' : 'text-zinc-300'
+                    }`}>{line}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {/* Arrow */}
+          <div className="ml-3 w-2.5 h-2.5 rotate-45 -mt-1.5 bg-zinc-950 border-b border-r border-zinc-700/60" />
+        </div>,
+        document.body
+      )
+    : null;
+
   return (
     <span
       ref={ref}
       className="relative inline-flex shrink-0"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      onClick={e => { e.stopPropagation(); reposition(); setOpen(v => !v); }}
     >
       <span
-        className={`text-[9px] px-1.5 h-4 rounded border leading-none flex items-center gap-0.5 font-extrabold tracking-wider cursor-default ${badgeCls}`}
+        className={`text-[9px] px-1.5 h-4 rounded border leading-none flex items-center gap-0.5 font-extrabold tracking-wider cursor-pointer ${badgeCls}`}
       >
         {icon}
         {label}
       </span>
-      {open && lines.length > 0 && (
-        <span
-          className="absolute bottom-full left-0 mb-1.5 z-50 w-max max-w-[280px] pointer-events-none"
-          style={{ filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.7))' }}
-        >
-          <span className="block rounded-lg border border-zinc-700/80 bg-zinc-900/95 backdrop-blur-sm px-3 py-2.5 text-left">
-            {lines.map((line, i) => (
-              <span key={i} className="flex items-start gap-1.5 text-[11px] text-zinc-200 leading-snug" style={{ marginTop: i > 0 ? '5px' : 0 }}>
-                <span className="text-zinc-500 shrink-0 mt-px">·</span>
-                <span>{line}</span>
-              </span>
-            ))}
-          </span>
-          {/* Arrow */}
-          <span
-            className="block w-2 h-2 mx-2 rotate-45 -mt-1 bg-zinc-900 border-b border-r border-zinc-700/80"
-            style={{ marginLeft: '8px' }}
-          />
-        </span>
-      )}
+      {tooltip}
     </span>
   );
 }
