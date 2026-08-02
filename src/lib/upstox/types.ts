@@ -85,6 +85,20 @@ export interface MarketTiming {
   end_time: number;
 }
 
+export type CASStatus = 'CTS_CLOSE' | 'CAS_LM_START' | 'CAS_M_STOP' | 'CAS_STOP' | 'NORMAL_CLOSE' | string;
+
+export interface CASEligibleStatus {
+  status: CASStatus;
+  last_updated: number;
+}
+
+export interface UpstoxExchangeStatus {
+  exchange: string;
+  status: 'NORMAL_OPEN' | 'NORMAL_CLOSE' | 'SUNSET' | string;
+  cas_eligible_status?: CASEligibleStatus;
+  last_updated?: number;
+}
+
 // ============================================================================
 // Token Types
 // ============================================================================
@@ -146,6 +160,7 @@ export interface InstrumentData {
   lot_size: number;
   tick_size: number;
   exchange: string;
+  cas_eligible?: boolean;
 }
 
 // ============================================================================

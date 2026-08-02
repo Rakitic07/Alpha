@@ -5,7 +5,7 @@
  */
 
 import { getAccessToken } from './auth';
-import { MarketHoliday, MarketTiming, UpstoxError } from './types';
+import { MarketHoliday, MarketTiming, UpstoxError, UpstoxExchangeStatus } from './types';
 import { istDayOfWeek, istTimeParts, todayISTYmd } from '@/lib/tz';
 
 const BASE_URL = 'https://api.upstox.com/v2';
@@ -271,6 +271,40 @@ export async function isMarketOpen(): Promise<boolean> {
     console.error('[Market Info] Failed to check market status:', error);
     const currentMinutes = minutesInIST();
     return currentMinutes >= NSE_OPEN_MINUTES && currentMinutes <= NSE_CLOSE_MINUTES;
+  }
+}
+
+/**
+ * Get real-time exchange status (including CAS_ELIGIBLE_STATUS) from Upstox
+ * @param exchange Segment identifier (e.g. 'NSE_EQ', 'NSE_FO')
+ */
+export async function getExchangeStatus(exchange: string = 'NSE_EQ'): Promise<UpstoxExchangeStatus | null> {
+  try {
+    const accessToken = await getAccessToken();
+    const url = `${BASE_URL}/market/status/${exchange}`;
+
+    const response = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const json = await response.json();
+
+    if (json.status === 'success' && json.data) {
+      return json.data as UpstoxExchangeStatus;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(`[Market Info] Failed to fetch exchange status for ${exchange}:`, error);
+    return null;
   }
 }
 

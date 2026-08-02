@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { getMarketTimings, MarketTiming, hasValidToken } from '@/lib/upstox-client';
+import { getMarketTimings, getExchangeStatus, MarketTiming, hasValidToken } from '@/lib/upstox-client';
 import { todayISTYmd } from '@/lib/tz';
 
 export interface MarketStatusResult {
@@ -10,6 +10,8 @@ export interface MarketStatusResult {
     timings: MarketTiming[];
     nextOpen?: string;
     lastDataDate: string | null;
+    casStatus?: string;
+    isCAS?: boolean;
 }
 
 export async function checkMarketStatus(date: string): Promise<MarketStatusResult> {
@@ -34,6 +36,22 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
            };
       }
 
+      // Check Exchange Status API for CAS
+      let casStatus: string | undefined;
+      let isCAS = false;
+      try {
+          const exchangeStatus = await getExchangeStatus('NSE_EQ');
+          const casInfo = exchangeStatus?.cas_eligible_status;
+          if (casInfo?.status) {
+              casStatus = casInfo.status;
+              if (['CAS_LM_START', 'CAS_M_STOP', 'CAS_STOP', 'CTS_CLOSE'].includes(casStatus)) {
+                  isCAS = true;
+              }
+          }
+      } catch (e) {
+          console.warn('[Market Status Action] Failed to fetch CAS status:', e);
+      }
+
       // Fetch official timings from Upstox
       const allTimings = await getMarketTimings(date);
 
@@ -46,12 +64,14 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
               isOpen: false,
               status: 'Closed (Holiday/Weekend)',
               timings: [],
-              lastDataDate
+              lastDataDate,
+              casStatus,
+              isCAS
           };
       }
       
       const now = Date.now();
-      const isOpen = nseTimings.some(t => now >= t.start_time && now <= t.end_time);
+      const isOpen = nseTimings.some(t => now >= t.start_time && now <= t.end_time) || isCAS;
 
       // If market traded today and has closed, the effective data date is today
       // (even if today's EOD snapshot hasn't been written to DB yet)
@@ -59,7 +79,7 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
           lastDataDate = todayISTYmd();
       }
 
-      let status = isOpen ? 'Live' : 'Closed';
+      let status = isCAS ? `Closing Auction Session (${casStatus})` : (isOpen ? 'Live' : 'Closed');
       
       // Enhance status message
       if (!isOpen) {
@@ -77,7 +97,9 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
           isOpen,
           status,
           timings: nseTimings,
-          lastDataDate
+          lastDataDate,
+          casStatus,
+          isCAS
       };
 
   } catch (error: any) {

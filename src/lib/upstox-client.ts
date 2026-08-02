@@ -685,6 +685,9 @@ export async function getMarketTimings(date: string): Promise<MarketTiming[]> {
     return [];
 }
 
+export { getExchangeStatus } from './upstox/market-info';
+export type { UpstoxExchangeStatus, CASEligibleStatus, CASStatus } from './upstox/types';
+
 // ============================================================================
 // Legacy Export (for backward compatibility during migration)
 // ============================================================================

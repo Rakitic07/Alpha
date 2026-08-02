@@ -7,7 +7,7 @@
  * Uses both server-side in-memory cache and client-side localStorage.
  */
 
-import { getMarketHolidays, getMarketTimings, hasValidToken, type MarketHoliday, type MarketTiming } from './upstox-client';
+import { getMarketHolidays, getMarketTimings, getExchangeStatus, hasValidToken, type MarketHoliday, type MarketTiming } from './upstox-client';
 import { logger } from '@/lib/logger';
 import { istDateParts, istDayOfWeek, istTimeParts, todayISTYmd } from '@/lib/tz';
 
@@ -248,11 +248,13 @@ export interface MarketStatus {
     nextOpen?: Date;
     closeTime?: Date;
     reason?: string;
+    casStatus?: string;
+    isCAS?: boolean;
 }
 
 /**
  * Get the comprehensive market status for Today
- * Combines Holidays API and Timings API logic
+ * Combines Holidays API, Timings API, and Exchange Status (CAS) logic
  */
 export async function getMarketStatus(): Promise<MarketStatus> {
     const now = new Date();
@@ -266,6 +268,25 @@ export async function getMarketStatus(): Promise<MarketStatus> {
             isOpen: false, 
             reason: holiday ? `Holiday: ${holiday.description}` : 'Trading Holiday' 
         };
+    }
+
+    // 1b. Check Exchange Status API for CAS (Closing Auction Session) state
+    try {
+        const exchangeStatus = await getExchangeStatus('NSE_EQ');
+        const casInfo = exchangeStatus?.cas_eligible_status;
+        if (casInfo?.status) {
+            const casState = casInfo.status;
+            if (['CAS_LM_START', 'CAS_M_STOP', 'CAS_STOP', 'CTS_CLOSE'].includes(casState)) {
+                return {
+                    isOpen: true,
+                    isCAS: true,
+                    casStatus: casState,
+                    reason: `Market in Closing Auction Session (${casState})`
+                };
+            }
+        }
+    } catch (e) {
+        marketLogger.warn('Failed to check exchange status API for CAS', e);
     }
     
     // 2. Check Timings API FIRST before weekend check
