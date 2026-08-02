@@ -51,18 +51,65 @@ function getRankTextColor(rank: number, isPrefiltered: boolean = false): string 
   return 'text-red-400';
 }
 
-function getAsmBadgeCls(stage: string): string {
-  switch (stage) {
-    case '1':
-      return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-    case '2':
-      return 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30';
-    case '3':
-      return 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-    case '4':
-    default:
-      return 'bg-red-500/20 text-red-400 border-red-500/30';
-  }
+// ─── Badge Tooltip ───────────────────────────────────────────────────────────
+
+interface BadgeTooltipProps {
+  label: string;
+  badgeCls: string;
+  lines: string[];
+  icon?: React.ReactNode;
+}
+
+function BadgeTooltip({ label, badgeCls, lines, icon }: BadgeTooltipProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <span
+      ref={ref}
+      className="relative inline-flex shrink-0"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+    >
+      <span
+        className={`text-[9px] px-1.5 h-4 rounded border leading-none flex items-center gap-0.5 font-extrabold tracking-wider cursor-default ${badgeCls}`}
+      >
+        {icon}
+        {label}
+      </span>
+      {open && lines.length > 0 && (
+        <span
+          className="absolute bottom-full left-0 mb-1.5 z-50 w-max max-w-[280px] pointer-events-none"
+          style={{ filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.7))' }}
+        >
+          <span className="block rounded-lg border border-zinc-700/80 bg-zinc-900/95 backdrop-blur-sm px-3 py-2.5 text-left">
+            {lines.map((line, i) => (
+              <span key={i} className="flex items-start gap-1.5 text-[11px] text-zinc-200 leading-snug" style={{ marginTop: i > 0 ? '5px' : 0 }}>
+                <span className="text-zinc-500 shrink-0 mt-px">·</span>
+                <span>{line}</span>
+              </span>
+            ))}
+          </span>
+          {/* Arrow */}
+          <span
+            className="block w-2 h-2 mx-2 rotate-45 -mt-1 bg-zinc-900 border-b border-r border-zinc-700/80"
+            style={{ marginLeft: '8px' }}
+          />
+        </span>
+      )}
+    </span>
+  );
 }
 
 // ─── Price Sparkline ─────────────────────────────────────────────────────────
@@ -602,26 +649,56 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                                 ? 'text-amber-100/90'
                                 : 'text-white'
                         }`}>{row.symbol}</span>
-                        {/* Exit / Warning signal badges */}
-                        {exit && activeTab === 'portfolio' && (exit.protected || exit.signalType === 'red') && (
-                          <span
-                            className={`text-[9px] px-1.5 h-4.5 rounded border leading-none shrink-0 flex items-center font-extrabold tracking-wider ${
-                              exit.protected
+                        {/* Exit / Warning / Caution signal badges */}
+                        {exit && activeTab === 'portfolio' && exit.signalType === 'red' && (() => {
+                          const exitLines = [
+                            exit.isUnranked
+                              ? (exit.unrankedReason ? `Dropped: ${exit.unrankedReason}` : 'Dropped from screener universe')
+                              : exit.byRank ? 'Rank > 50' : '',
+                            exit.byFilter ? 'Below 200 DMA or outside 25% of ATH' : '',
+                            exit.by50Dma ? 'Below 50 DMA' : '',
+                            exit.byDrawdown ? 'Dropped > 20% since entry' : '',
+                            exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
+                            row.asmInfo ? `⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}` : '',
+                          ].filter(Boolean) as string[];
+                          return (
+                            <BadgeTooltip
+                              label={exit.protected ? 'LOCKED' : 'EXIT'}
+                              badgeCls={exit.protected
                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                : 'bg-red-500/20 text-red-300 border-red-500/40'
-                            }`}
-                            title={[
-                              exit.isUnranked
-                                ? (exit.unrankedReason ? `① ${exit.unrankedReason}` : '① Dropped from screener universe')
-                                : exit.byRank ? `① Rank > 50` : '',
-                              exit.byFilter ? '② Below 200 DMA or outside 25% of ATH' : '',
-                              exit.by50Dma ? '③ Below 50 DMA' : '',
-                              exit.byDrawdown ? '④ Dropped > 20% since entry' : '',
-                              exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
-                            ].filter(Boolean).join('\n')}
-                          >
-                            {exit.protected ? 'LOCKED' : 'EXIT'}
-                          </span>
+                                : 'bg-red-500/20 text-red-300 border-red-500/40'}
+                              lines={exitLines}
+                            />
+                          );
+                        })()}
+                        {exit && activeTab === 'portfolio' && exit.signalType === 'yellow' && (() => {
+                          const cautionLines = [
+                            exit.byRank && !exit.isUnranked ? 'Rank 51–60 (watch zone)' : '',
+                            exit.isBE ? 'Moved to BE (T+0) settlement category' : '',
+                            exit.by50Dma ? 'Below 50 DMA' : '',
+                            exit.byDrawdown ? 'Dropped > 20% since entry' : '',
+                            row.asmInfo ? `⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}` : '',
+                          ].filter(Boolean) as string[];
+                          return (
+                            <BadgeTooltip
+                              label="CAUTION"
+                              badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
+                              lines={cautionLines}
+                            />
+                          );
+                        })()}
+                        {/* ASM badge — only shown outside portfolio tab */}
+                        {row.asmInfo && activeTab !== 'portfolio' && (
+                          <BadgeTooltip
+                            label={`ASM ${row.asmInfo.type}-${row.asmInfo.stage}`}
+                            badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            lines={[row.asmInfo.desc]}
+                            icon={
+                              <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                            }
+                          />
                         )}
                         {(() => {
                           const b = MCAP_BADGE[row.marketCapCategory || ''];
@@ -631,17 +708,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             </span>
                           ) : null;
                         })()}
-                        {row.asmInfo && (
-                          <span
-                            className={`text-[9px] px-1.5 h-4 rounded font-bold border shrink-0 flex items-center gap-0.5 ${getAsmBadgeCls(row.asmInfo.stage)}`}
-                            title={row.asmInfo.desc}
-                          >
-                            <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            {row.asmInfo.type}-{row.asmInfo.stage}
-                          </span>
-                        )}
                       </div>
                       <div className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">
                         {row.companyName}
