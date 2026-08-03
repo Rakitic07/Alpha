@@ -1,4 +1,3 @@
-import 'server-only';
 import * as XLSX from 'xlsx';
 import { prisma } from '@/lib/db';
 
@@ -28,21 +27,49 @@ export interface DividendHistoryEntry {
 
 // ============================================================
 // Filename parser — "taxpnl-ZQ1267-2026_2027-Q1-Q2.xlsx"
-//                   "taxpnl-ZQ1267-2026_2027-Q3-Q4.xlsx"
+//                   "taxpnl-ZQ1267-2026-2027.xlsx"
+//                   "tax.xlsx"
 // ============================================================
 
 export function parseDividendFilename(filename: string): {
-    fiscalYear: string;
+    fiscalYear: string | null;
     quarter: string | null;
 } {
-    // Match pattern like 2026_2027 and optional Q1-Q2 / Q3 / Q4 etc.
-    const fyMatch = filename.match(/(\d{4}_\d{4})/);
-    const qMatch = filename.match(/(\d{4}_\d{4})[-_](Q[\d\-Q]+)/i);
+    // Match patterns like 2023_2024 or 2023-2024 (avoid matching client IDs like AB1234)
+    const fyMatch = filename.match(/(20\d{2})[-_](20\d{2})/);
+    const qMatch = filename.match(/(20\d{2})[-_](20\d{2})[-_](Q[\d\-Q]+)/i);
 
-    const fiscalYear = fyMatch ? fyMatch[1] : 'unknown';
-    const quarter = qMatch ? qMatch[2].toUpperCase() : null;
+    const fiscalYear = fyMatch ? `${fyMatch[1]}_${fyMatch[2]}` : null;
+    const quarter = qMatch ? qMatch[3].toUpperCase() : null;
 
     return { fiscalYear, quarter };
+}
+
+/** Compute Indian Financial Year (e.g. "2024_2025") and Quarter (Q1-Q4) from a Date */
+export function getFYAndQuarterFromDate(date: Date): { fiscalYear: string; quarter: string } {
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1; // 1-12
+
+    let fyStart: number;
+    let fyEnd: number;
+    let q: string;
+
+    if (month >= 4) {
+        fyStart = year;
+        fyEnd = year + 1;
+        if (month <= 6) q = 'Q1';
+        else if (month <= 9) q = 'Q2';
+        else q = 'Q3';
+    } else {
+        fyStart = year - 1;
+        fyEnd = year;
+        q = 'Q4';
+    }
+
+    return {
+        fiscalYear: `${fyStart}_${fyEnd}`,
+        quarter: q,
+    };
 }
 
 // ============================================================
@@ -54,75 +81,164 @@ export function parseDividendFilename(filename: string): {
  *  Returns an array of row objects.
  */
 function findDividendRows(wb: XLSX.WorkBook): Record<string, unknown>[] {
-    for (const sheetName of wb.SheetNames) {
-        // First filter: Only look at sheets that have 'dividend' in their name
-        if (!sheetName.toLowerCase().includes('dividend')) {
-            continue;
-        }
-
+    const extractRowsFromSheet = (sheetName: string): Record<string, unknown>[] => {
         const ws = wb.Sheets[sheetName];
-        
-        // Zerodha sheets have metadata headers (Client ID, PAN) at the top,
-        // so we must use raw AoA to find the actual table headers row.
+        if (!ws) return [];
+
         const rawAoA = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
         let headerRowIdx = -1;
         for (let i = 0; i < rawAoA.length; i++) {
-            const row = rawAoA[i] as string[];
+            const row = rawAoA[i] as unknown[];
             const rowStr = row.map(c => String(c).toLowerCase()).join('|');
-            if (rowStr.includes('isin') && (rowStr.includes('amount') || rowStr.includes('dividend'))) {
+            if (
+                rowStr.includes('isin') &&
+                (rowStr.includes('amount') || rowStr.includes('dividend') || rowStr.includes('net') || rowStr.includes('total'))
+            ) {
                 headerRowIdx = i;
                 break;
             }
         }
 
         if (headerRowIdx >= 0) {
-            const headers = (rawAoA[headerRowIdx] as string[]).map(h => String(h).trim());
+            const headers = (rawAoA[headerRowIdx] as unknown[]).map(h => String(h).trim());
             const dataRows: Record<string, unknown>[] = [];
             for (let i = headerRowIdx + 1; i < rawAoA.length; i++) {
                 const cells = rawAoA[i] as unknown[];
-                // Skip empty rows
                 if (cells.every(c => c === '' || c === null || c === undefined)) {
                     continue;
                 }
-                const firstCell = String(cells[0]).toLowerCase();
-                // Skip total or summary footer rows
+                const firstCell = String(cells[0] ?? '').toLowerCase();
                 if (firstCell.includes('total') || firstCell.includes('summary')) {
                     continue;
                 }
                 const obj: Record<string, unknown> = {};
-                headers.forEach((h, idx) => { obj[h] = cells[idx] ?? ''; });
+                headers.forEach((h, idx) => {
+                    if (h) obj[h] = cells[idx] ?? '';
+                });
                 dataRows.push(obj);
             }
-            if (dataRows.length > 0) return dataRows;
+            return dataRows;
         }
+        return [];
+    };
+
+    // Phase 1: Try sheets with 'dividend' or 'div' in name
+    const dividendSheets = wb.SheetNames.filter(
+        s => s.toLowerCase().includes('dividend') || s.toLowerCase().includes('div')
+    );
+
+    for (const sheetName of dividendSheets) {
+        const rows = extractRowsFromSheet(sheetName);
+        if (rows.length > 0) return rows;
     }
+
+    // Phase 2: Fallback to all remaining sheets
+    for (const sheetName of wb.SheetNames) {
+        if (dividendSheets.includes(sheetName)) continue;
+        const rows = extractRowsFromSheet(sheetName);
+        if (rows.length > 0) return rows;
+    }
+
     return [];
 }
 
-/** Attempt to find a column value across multiple possible header spellings */
-function col(row: Record<string, unknown>, ...candidates: string[]): string {
-    for (const c of candidates) {
-        for (const key of Object.keys(row)) {
-            if (key.toLowerCase().includes(c.toLowerCase())) {
+/** Attempt to find a column value across candidate header spellings */
+function col(row: Record<string, unknown>, candidates: string[]): unknown {
+    const keys = Object.keys(row);
+    for (const cand of candidates) {
+        const candLower = cand.toLowerCase();
+        for (const key of keys) {
+            const keyLower = key.toLowerCase().trim();
+            // Skip DPS/per-share keys if candidate is for total amount
+            if (
+                candLower.includes('amount') &&
+                !candLower.includes('dps') &&
+                !candLower.includes('per share') &&
+                (keyLower.includes('dps') || keyLower.includes('per share'))
+            ) {
+                continue;
+            }
+
+            if (keyLower === candLower || keyLower.includes(candLower)) {
                 const v = row[key];
                 if (v !== undefined && v !== null && String(v).trim() !== '') {
-                    return String(v).trim();
+                    return v;
                 }
             }
         }
     }
-    return '';
+    return null;
 }
 
-function parseDate(raw: string): Date | null {
-    if (!raw) return null;
-    // Try DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD
-    const parts = raw.match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-    if (!parts) return null;
-    const [, a, b, c] = parts;
-    // Determine format by position
-    if (a.length === 4) return new Date(`${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`);
-    if (c.length === 4) return new Date(`${c}-${b.padStart(2, '0')}-${a.padStart(2, '0')}`);
+export function parseDate(raw: unknown): Date | null {
+    if (raw === null || raw === undefined || raw === '') return null;
+
+    if (raw instanceof Date) {
+        return isNaN(raw.getTime()) ? null : raw;
+    }
+
+    if (typeof raw === 'number') {
+        if (isNaN(raw) || raw <= 0) return null;
+        try {
+            const parsed = XLSX.SSF.parse_date_code(raw);
+            if (parsed && parsed.y && parsed.m && parsed.d) {
+                return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+            }
+        } catch {
+            return null;
+        }
+        return null;
+    }
+
+    const str = String(raw).trim();
+    if (!str) return null;
+
+    // Handle JS Date string or ISO string (e.g., "Wed May 15 2024..." or "2024-05-15T00:00:00.000Z")
+    if (str.includes('GMT') || str.includes('T') || str.includes('Z')) {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) return d;
+    }
+
+    // Try DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, YYYY/MM/DD, DD-MMM-YYYY (15-May-2024)
+    const parts = str.match(/(\d{1,4})[\/\-\s]+([A-Za-z]{3,9}|\d{1,2})[\/\-\s]+(\d{2,4})/);
+    if (parts) {
+        const [, a, b, c] = parts;
+        let month = -1;
+
+        if (/^\d+$/.test(b)) {
+            month = parseInt(b, 10) - 1;
+        } else {
+            const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const bSub = b.substring(0, 3).toLowerCase();
+            month = months.indexOf(bSub);
+        }
+
+        if (month >= 0 && month <= 11) {
+            let year = -1;
+            let day = -1;
+
+            if (a.length === 4) {
+                year = parseInt(a, 10);
+                day = parseInt(c, 10);
+            } else if (c.length === 4) {
+                year = parseInt(c, 10);
+                day = parseInt(a, 10);
+            } else if (c.length === 2) {
+                year = 2000 + parseInt(c, 10);
+                day = parseInt(a, 10);
+            }
+
+            if (year > 1900 && day >= 1 && day <= 31) {
+                return new Date(Date.UTC(year, month, day));
+            }
+        }
+    }
+
+    const fallbackDate = new Date(str);
+    if (!isNaN(fallbackDate.getTime())) {
+        return fallbackDate;
+    }
+
     return null;
 }
 
@@ -130,7 +246,7 @@ export function parseZerodhaTaxPnLDividends(
     buffer: Buffer,
     filename: string,
 ): ParsedDividend[] {
-    const { fiscalYear, quarter } = parseDividendFilename(filename);
+    const { fiscalYear: filenameFY, quarter: filenameQuarter } = parseDividendFilename(filename);
 
     const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const rows = findDividendRows(wb);
@@ -138,27 +254,46 @@ export function parseZerodhaTaxPnLDividends(
     const results: ParsedDividend[] = [];
 
     for (const row of rows) {
-        const isin = col(row, 'isin');
+        const isinVal = col(row, ['isin code', 'isin']);
+        const isin = isinVal ? String(isinVal).trim() : '';
         if (!isin || isin.length < 10) continue; // skip non-data rows
 
-        const amountStr = col(row, 'amount', 'dividend amount', 'total');
-        const amount = parseFloat(amountStr.replace(/[₹,\s]/g, ''));
+        const amountVal = col(row, [
+            'net amount',
+            'dividend amount',
+            'gross amount',
+            'total amount',
+            'amount (rs.)',
+            'amount(inr)',
+            'amount',
+            'total',
+        ]);
+        if (amountVal === null || amountVal === undefined) continue;
+        const amountStr = String(amountVal).replace(/[₹,\s]/g, '');
+        const amount = parseFloat(amountStr);
         if (isNaN(amount) || amount === 0) continue;
 
-        const exDateRaw = col(row, 'ex date', 'ex-date', 'exdate', 'date');
-        const exDate = parseDate(exDateRaw);
+        const exDateVal = col(row, ['ex date', 'ex-date', 'exdate', 'record date', 'date']);
+        const exDate = parseDate(exDateVal);
         if (!exDate) continue;
 
-        const payDateRaw = col(row, 'pay date', 'payment date', 'paydate');
-        const payDate = parseDate(payDateRaw);
+        const payDateVal = col(row, ['pay date', 'payment date', 'paydate', 'credit date', 'payout date']);
+        const payDate = parseDate(payDateVal);
 
-        const dpsStr = col(row, 'dps', 'dividend per share', 'rate');
-        const dps = dpsStr ? parseFloat(dpsStr.replace(/[₹,\s]/g, '')) || null : null;
+        const dpsVal = col(row, ['dps', 'dividend per share', 'rate', 'div/share']);
+        const dpsStr = dpsVal ? String(dpsVal).replace(/[₹,\s]/g, '') : '';
+        const dps = dpsStr ? parseFloat(dpsStr) || null : null;
 
-        const qtyStr = col(row, 'qty', 'quantity', 'shares', 'units');
-        const quantity = qtyStr ? parseFloat(qtyStr.replace(/[,\s]/g, '')) || null : null;
+        const qtyVal = col(row, ['quantity', 'qty', 'shares', 'units']);
+        const qtyStr = qtyVal ? String(qtyVal).replace(/[,\s]/g, '') : '';
+        const quantity = qtyStr ? parseFloat(qtyStr) || null : null;
 
-        const symbol = col(row, 'symbol', 'scrip', 'stock', 'name') || null;
+        const symbolVal = col(row, ['symbol', 'stock symbol', 'scrip', 'stock', 'company name', 'name', 'instrument']);
+        const symbol = symbolVal ? String(symbolVal).trim() : null;
+
+        const datePeriod = getFYAndQuarterFromDate(exDate);
+        const fiscalYear = filenameFY ?? datePeriod.fiscalYear;
+        const quarter = filenameQuarter ?? datePeriod.quarter;
 
         results.push({
             isin,
