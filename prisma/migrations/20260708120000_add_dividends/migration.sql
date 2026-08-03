@@ -1,19 +1,18 @@
 -- CreateTable
-CREATE TABLE "Dividend" (
-    "id"          SERIAL       NOT NULL,
+CREATE TABLE IF NOT EXISTS "Dividend" (
+    "id"          INTEGER      NOT NULL PRIMARY KEY AUTOINCREMENT,
     "isin"        TEXT         NOT NULL,
     "symbol"      TEXT,
-    "exDate"      TIMESTAMP(3) NOT NULL,
-    "payDate"     TIMESTAMP(3),
-    "amount"      DOUBLE PRECISION NOT NULL,
-    "dps"         DOUBLE PRECISION,
-    "quantity"    DOUBLE PRECISION,
+    "exDate"      DATETIME     NOT NULL,
+    "payDate"     DATETIME,
+    "amount"      REAL         NOT NULL,
+    "dps"         REAL,
+    "quantity"    REAL,
     "fiscalYear"  TEXT         NOT NULL,
     "quarter"     TEXT,
     "source"      TEXT         NOT NULL DEFAULT 'zerodha_taxpnl',
-    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt"   TIMESTAMP(3) NOT NULL,
-    CONSTRAINT "Dividend_pkey" PRIMARY KEY ("id")
+    "createdAt"   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"   DATETIME     NOT NULL
 );
 
 -- CreateIndex (dedup key)
