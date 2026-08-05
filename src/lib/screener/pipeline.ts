@@ -188,6 +188,27 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   const allMcap = await prisma.stockMarketCap.findMany({ select: { symbol: true, marketCap: true } });
   for (const row of allMcap) mcapMap.set(row.symbol, row.marketCap);
 
+  // Fallback: if a stock is missing from StockMarketCap (e.g. bhavcopy had a gap or
+  // the weekly refresh hasn't run yet), use the last known marketCapCr from MomentumScore.
+  // This prevents previously-ranked stocks from being silently dropped just because
+  // their bhavcopy row is temporarily absent.
+  const lastKnownMcap = await prisma.momentumScore.findMany({
+    where: { marketCapCr: { gt: 0 } },
+    select: { symbol: true, marketCapCr: true },
+    orderBy: { computedDate: 'desc' },
+    distinct: ['symbol'],
+  });
+  let mcapFallbackCount = 0;
+  for (const row of lastKnownMcap) {
+    if (!mcapMap.has(row.symbol)) {
+      mcapMap.set(row.symbol, row.marketCapCr);
+      mcapFallbackCount++;
+    }
+  }
+  if (mcapFallbackCount > 0) {
+    pipelineLogger.info(`[${elapsed()}] mcap fallback: ${mcapFallbackCount} symbols rescued from last known MomentumScore`);
+  }
+
   // Pre-filter to stocks that pass mcap + ETF whitelist — no point loading prices for the rest
   const scoreableInsts = tradeableFiltered.filter(i => {
     const mcap = mcapMap.get(i.symbol);
