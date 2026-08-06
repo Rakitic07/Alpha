@@ -389,13 +389,17 @@ export async function getFullQuote(instrumentKeys: string[]): Promise<Map<string
 /**
  * Get OHLC data for multiple instruments using V3 API
  * V3 provides live_ohlc and prev_ohlc with better granularity
- * 
+ *
  * @param instrumentKeys - Array of instrument keys
  * @param interval - OHLC interval: '1d' (daily), 'I1' (1-minute), 'I30' (30-minute)
+ * @param preferPrevOhlc - When true, prefer prev_ohlc (previous session's closed candle)
+ *   over live_ohlc. Pass true during market hours so an incomplete intraday candle is
+ *   never used for scoring. After market close, live_ohlc holds the settled price.
  */
 export async function getOHLC(
-    instrumentKeys: string[], 
-    interval: '1d' | 'I1' | 'I30' = '1d'
+    instrumentKeys: string[],
+    interval: '1d' | 'I1' | 'I30' = '1d',
+    preferPrevOhlc = false,
 ): Promise<Map<string, { open: number; high: number; low: number; close: number; volume?: number }>> {
     const accessToken = await getAccessToken();
     
@@ -434,8 +438,12 @@ export async function getOHLC(
              
             const data = value as any;
             
-            // Prefer live_ohlc, fall back to prev_ohlc
-            const ohlc = data.live_ohlc || data.prev_ohlc;
+            // After close: live_ohlc has today's settled price → prefer it.
+            // During market hours: live_ohlc is an incomplete intraday candle →
+            // prefer prev_ohlc (last session's official close) when preferPrevOhlc=true.
+            const ohlc = preferPrevOhlc
+              ? (data.prev_ohlc || data.live_ohlc)
+              : (data.live_ohlc || data.prev_ohlc);
             
             if (ohlc) {
                 const ohlcData = {

@@ -119,7 +119,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   let candlesFetched = 0;
   let candlesInserted = 0;
   try {
-    const priceResult = await patchTodayPrices(tradeable, today);
+    const priceResult = await patchTodayPrices(tradeable, today, duringMarket);
     candlesFetched = priceResult.patched;
     candlesInserted = priceResult.patched;
     if (priceResult.errors.length > 0) errors.push(...priceResult.errors.slice(0, 10));

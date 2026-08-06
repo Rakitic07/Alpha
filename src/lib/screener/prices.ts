@@ -24,6 +24,7 @@ interface InstrumentInfo {
 export async function patchTodayPrices(
   instruments: InstrumentInfo[],
   forDate: string,
+  duringMarket = false,
 ): Promise<{ patched: number; errors: string[] }> {
   const instrumentKeys = instruments.map(i => i.instrumentKey);
 
@@ -36,7 +37,7 @@ export async function patchTodayPrices(
     // 250ms spacing between batches to stay well within 50 req/s rate limit
     if (i > 0) await new Promise(r => setTimeout(r, 250));
     try {
-      const chunkMap = await getOHLC(chunks[i], '1d');
+      const chunkMap = await getOHLC(chunks[i], '1d', duringMarket);
       for (const [key, val] of chunkMap) ohlcMap.set(key, val);
     } catch (err) {
       batchErrors.push(`OHLC batch ${i + 1}/${chunks.length}: ${(err as Error).message}`);
