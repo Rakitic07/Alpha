@@ -394,7 +394,13 @@ export async function getFullQuote(instrumentKeys: string[]): Promise<Map<string
  * @param interval - OHLC interval: '1d' (daily), 'I1' (1-minute), 'I30' (30-minute)
  * @param preferPrevOhlc - When true, prefer prev_ohlc (previous session's closed candle)
  *   over live_ohlc. Pass true during market hours so an incomplete intraday candle is
- *   never used for scoring. After market close, live_ohlc holds the settled price.
+ *   never used for scoring.
+ *
+ *   When false (after market close): ONLY live_ohlc is used — no prev_ohlc fallback.
+ *   If live_ohlc is absent (Upstox hasn't yet published the EOD candle, ~20 min after
+ *   close), the instrument is omitted from the result map so patchTodayPrices can flag
+ *   it as "missing" and the pipeline can retry it via getHistoricalCandles instead of
+ *   silently storing T-1's price under T's date.
  */
 export async function getOHLC(
     instrumentKeys: string[],
@@ -438,12 +444,16 @@ export async function getOHLC(
              
             const data = value as any;
             
-            // After close: live_ohlc has today's settled price → prefer it.
-            // During market hours: live_ohlc is an incomplete intraday candle →
-            // prefer prev_ohlc (last session's official close) when preferPrevOhlc=true.
+            // During market hours (preferPrevOhlc=true): prev_ohlc is the last settled
+            // close — prefer it over the incomplete intraday candle.
+            // After market close (preferPrevOhlc=false): use ONLY live_ohlc.
+            // Do NOT fall back to prev_ohlc here: that would store T-1's close under
+            // today's date, making borderline stocks (close to their 200 DMA) fail the
+            // filter incorrectly. Absent live_ohlc → omit from result map so the pipeline
+            // can retry via getHistoricalCandles which has the official settled EOD candle.
             const ohlc = preferPrevOhlc
               ? (data.prev_ohlc || data.live_ohlc)
-              : (data.live_ohlc || data.prev_ohlc);
+              : data.live_ohlc;
             
             if (ohlc) {
                 const ohlcData = {

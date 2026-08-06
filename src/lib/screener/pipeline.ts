@@ -118,16 +118,53 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   // ── Step 3: Patch today's prices (batch OHLC) ─────────────────────────────
   let candlesFetched = 0;
   let candlesInserted = 0;
+  let ohlcMissing: typeof tradeable = [];
   try {
     const priceResult = await patchTodayPrices(tradeable, today, duringMarket);
     candlesFetched = priceResult.patched;
     candlesInserted = priceResult.patched;
+    ohlcMissing = priceResult.missing;
     if (priceResult.errors.length > 0) errors.push(...priceResult.errors.slice(0, 10));
   } catch (err) {
     errors.push(`Prices: ${(err as Error).message}`);
     pipelineLogger.error('Price patch failed:', err);
   }
-  pipelineLogger.info(`[${elapsed()}] Prices patched: ${candlesFetched}`);
+  pipelineLogger.info(`[${elapsed()}] Prices patched: ${candlesFetched}; missing live_ohlc: ${ohlcMissing.length}`);
+
+  // ── Step 3a: Historical candle fallback for stocks missing from OHLC batch ─
+  // Root cause of "stocks missing from pre-filtered list after cron":
+  // At exactly 4:00 PM IST (~20 min after closing auction), Upstox's live_ohlc
+  // endpoint hasn't yet published the final EOD candle for some stocks. The
+  // previous code fell back to prev_ohlc (T-1's close), silently storing
+  // yesterday's price as today's — stocks near their 200 DMA would then
+  // fail the filter. The historical candle API uses a separate settled-data
+  // endpoint and is typically ready within a few minutes of market close.
+  // Only run after close: during market hours today's historical candle isn't
+  // available yet, so the missing-OHLC case there is expected and harmless.
+  if (!duringMarket && ohlcMissing.length > 0) {
+    // Scope to scoreableInsts subset — no point fetching for stocks we won't score.
+    // We haven't computed scoreableInsts yet, so filter by instrument type as a proxy:
+    // exclude INDEX instruments (they're already filtered in tradeable).
+    pipelineLogger.info(
+      `[${elapsed()}] ${ohlcMissing.length} stocks had no live_ohlc — retrying via historical candle API (settled EOD data)`,
+    );
+    if (ohlcMissing.length <= 200) {
+      // Only log names for a manageable count to keep logs readable
+      pipelineLogger.info(`Missing symbols: ${ohlcMissing.map(i => i.symbol).join(', ')}`);
+    }
+    try {
+      const fallbackResult = await fetchAndStoreCandles(ohlcMissing, today);
+      pipelineLogger.info(
+        `[${elapsed()}] Historical fallback: inserted ${fallbackResult.inserted} candles for ${fallbackResult.fetched} stocks`,
+      );
+      candlesInserted += fallbackResult.inserted;
+      if (fallbackResult.errors.length > 0) errors.push(...fallbackResult.errors.slice(0, 5));
+    } catch (err) {
+      errors.push(`Historical fallback: ${(err as Error).message}`);
+      pipelineLogger.error('Historical candle fallback failed:', err);
+    }
+  }
+  pipelineLogger.info(`[${elapsed()}] Price step done`);
 
   // Freshness guard: verify prices were actually stored for today.
   // If patchTodayPrices silently failed (key mismatch, market closed, API error),

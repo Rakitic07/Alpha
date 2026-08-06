@@ -25,7 +25,7 @@ export async function patchTodayPrices(
   instruments: InstrumentInfo[],
   forDate: string,
   duringMarket = false,
-): Promise<{ patched: number; errors: string[] }> {
+): Promise<{ patched: number; errors: string[]; missing: InstrumentInfo[] }> {
   const instrumentKeys = instruments.map(i => i.instrumentKey);
 
   // Chunk to 500 per request (Upstox batch limit).
@@ -49,10 +49,14 @@ export async function patchTodayPrices(
     symbol: string; instrumentKey: string; date: string;
     open: number; high: number; low: number; close: number; volume: number;
   }> = [];
+  const missing: InstrumentInfo[] = [];
 
   for (const inst of instruments) {
     const ohlc = ohlcMap.get(inst.instrumentKey);
-    if (!ohlc?.close) continue;
+    if (!ohlc?.close) {
+      missing.push(inst);
+      continue;
+    }
     rows.push({
       symbol: inst.symbol,
       instrumentKey: inst.instrumentKey,
@@ -66,7 +70,7 @@ export async function patchTodayPrices(
   }
 
   if (rows.length === 0) {
-    return { patched: 0, errors: [...batchErrors, 'No OHLC data returned — market may be closed'] };
+    return { patched: 0, errors: [...batchErrors, 'No OHLC data returned — market may be closed'], missing };
   }
 
   // Delete then re-insert today's rows (idempotent)
@@ -79,8 +83,8 @@ export async function patchTodayPrices(
     await prisma.screenerPrice.createMany({ data: chunk });
   }
 
-  priceLogger.info(`Patched ${rows.length} stocks with today's OHLC (${forDate})`);
-  return { patched: rows.length, errors: batchErrors };
+  priceLogger.info(`Patched ${rows.length} stocks with today's OHLC (${forDate}); ${missing.length} had no live_ohlc`);
+  return { patched: rows.length, errors: batchErrors, missing };
 }
 
 /**
