@@ -1,0 +1,18 @@
+name: Momentum Screener Daily Cron
+
+on:
+  schedule:
+    # Run at 10:45 UTC (4:15 PM IST) Monday through Friday (15 min after Closing Auction ends)
+    - cron: '45 10 * * 1-5'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  run-screener:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Momentum Screener Pipeline
+        run: |
+          curl -f -X GET \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            --max-time 320 \
+            "https://alpha-velocity.vercel.app/api/cron/momentum-screener"
