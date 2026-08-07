@@ -118,7 +118,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   // ── Step 3: Patch today's prices (batch OHLC) ─────────────────────────────
   let candlesFetched = 0;
   let candlesInserted = 0;
-  let ohlcMissing: typeof tradeable = [];
+  let ohlcMissing: Array<{ symbol: string; instrumentKey: string }> = [];
   try {
     const priceResult = await patchTodayPrices(tradeable, today, duringMarket);
     candlesFetched = priceResult.patched;
