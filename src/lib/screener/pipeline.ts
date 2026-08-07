@@ -269,7 +269,14 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
           if (quote.lower_circuit_limit > 0) {
             const bandWidth = (quote.upper_circuit_limit - quote.lower_circuit_limit) / quote.lower_circuit_limit;
             const symbol = keyToSymbol.get(quote.instrument_token);
-            if (symbol) circuitMap.set(symbol, bandWidth);
+            // Post-market Upstox API returns ~6.2% (±3%) bounds for normal liquid stocks.
+            // Real 2% circuit = ~4.1%, Real 5% circuit = ~10.5%, 10% circuit = ~22.2%, 20% = ~50%.
+            // Filter out post-market artifacts (5.5% - 7.5% when !duringMarket) so post-market API bounds
+            // do not misclassify liquid stocks as narrow circuit band.
+            const isPostMarketArtifact = !duringMarket && bandWidth >= 0.055 && bandWidth <= 0.075;
+            if (symbol && !isPostMarketArtifact) {
+              circuitMap.set(symbol, bandWidth);
+            }
           }
         }
       }
