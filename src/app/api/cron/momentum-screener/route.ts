@@ -1,7 +1,7 @@
 /**
  * Momentum Screener Daily Cron
  *
- * Schedule: 30 10 * * 1-5 UTC (4:00 PM IST weekdays)
+ * Schedule: 45 10 * * 1-5 UTC (4:15 PM IST weekdays — 15 min after Closing Auction Session ends)
  * Runs the full screener pipeline: fetch candles → compute scores → rank → store.
  * Persists the run result to AppConfig so the Settings page can surface failures.
  */

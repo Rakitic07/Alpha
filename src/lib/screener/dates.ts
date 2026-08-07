@@ -29,12 +29,12 @@ export function todayIST(): string {
   return toDateStr(ist);
 }
 
-/** Returns true if NSE market is currently open (9:15 AM – 3:40 PM IST, including Closing Auction) */
+/** Returns true if NSE market or Closing Auction Session (CAS) is active (9:15 AM – 4:00 PM IST) */
 export function isMarketHours(): boolean {
   const now = new Date();
   const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
   const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
-  return mins >= 9 * 60 + 15 && mins <= 15 * 60 + 40;
+  return mins >= 9 * 60 + 15 && mins <= 16 * 60; // 9:15 AM to 4:00 PM IST (includes Closing Auction Session)
 }
 
 /**
