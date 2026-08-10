@@ -12,11 +12,14 @@ import { LiveDataProvider } from '@/context/LiveDataContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import ConnectionErrorToast from '@/components/ui/ConnectionErrorToast';
 import theme from '@/lib/theme';
+import isPropValid from '@emotion/is-prop-valid';
+import { MotionConfig } from 'framer-motion';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryProvider>
-      <AppRouterCacheProvider>
+      <MotionConfig isValidProp={isPropValid}>
+        <AppRouterCacheProvider>
         <ThemeProvider theme={theme}>
           <LocalizationProvider dateAdapter={AdapterDateFns}>
               <RecomputeProvider>
@@ -34,6 +37,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           </LocalizationProvider>
         </ThemeProvider>
       </AppRouterCacheProvider>
+      </MotionConfig>
     </QueryProvider>
   );
 }
