@@ -1,16 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Paper, Button, Snackbar, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from '@mui/material';
+import { Paper, Button, Snackbar, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Tooltip } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLeaf } from '@fortawesome/free-solid-svg-icons';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import {
     uploadDividendsAction,
     getDividendEntriesAction,
     deleteDividendByIdAction,
+    markDividendTransferredAction,
 } from '@/app/actions/dividends';
 import { formatCurrency } from '@/lib/format';
 
@@ -22,6 +25,7 @@ interface DividendEntry {
     amount: number;
     fiscalYear: string;
     quarter: string | null;
+    transferredBack: boolean;
 }
 
 export default function DividendsCard() {
@@ -71,6 +75,17 @@ export default function DividendsCard() {
         if (result.success) {
             await fetchEntries();
             if (entries.length <= 1) setHistoryModalOpen(false);
+        }
+    };
+
+    const handleToggleTransfer = async (id: number, current: boolean) => {
+        // Optimistic update
+        setEntries(prev => prev.map(e => e.id === id ? { ...e, transferredBack: !current } : e));
+        const result = await markDividendTransferredAction(id, !current);
+        if (!result.success) {
+            // Revert on failure
+            setEntries(prev => prev.map(e => e.id === id ? { ...e, transferredBack: current } : e));
+            setSnackbar({ open: true, message: result.message, severity: 'error' });
         }
     };
 
@@ -144,7 +159,7 @@ export default function DividendsCard() {
                 </div>
             </Paper>
 
-                {/* History Modal */}
+            {/* History Modal */}
             <Dialog
                 open={historyModalOpen}
                 onClose={() => setHistoryModalOpen(false)}
@@ -163,6 +178,7 @@ export default function DividendsCard() {
                 <DialogContent sx={{ p: 0 }}>
                     {/* Table header */}
                     <div className="flex items-center px-3 py-2 bg-slate-800 border-b border-white/10 sticky top-0 z-10">
+                        <div className="w-8"></div>
                         <div className="w-24 text-xs font-semibold text-gray-400">Ex-Date</div>
                         <div className="flex-1 text-xs font-semibold text-gray-400">Symbol / ISIN</div>
                         <div className="w-20 text-xs font-semibold text-gray-400">Period</div>
@@ -170,23 +186,40 @@ export default function DividendsCard() {
                         <div className="w-10"></div>
                     </div>
 
-                    <div className="max-h-[400px] overflow-y-auto">
+                    <div className="max-h-[360px] overflow-y-auto">
                         {entries.length > 0 ? entries.map((row, index) => (
                             <div
                                 key={row.id}
-                                className={`flex items-center px-3 py-2 border-b border-white/5 ${index % 2 === 0 ? 'bg-slate-900/20' : 'bg-slate-900/40'}`}
+                                className={`flex items-center px-3 py-2 border-b border-white/5 transition-colors ${
+                                    row.transferredBack
+                                        ? 'bg-teal-900/20'
+                                        : index % 2 === 0 ? 'bg-slate-900/20' : 'bg-slate-900/40'
+                                }`}
                             >
-                                <div className="w-24 text-xs text-gray-300 font-mono">
+                                {/* Transfer toggle */}
+                                <Tooltip title={row.transferredBack ? 'Mark as pending' : 'Mark as transferred to broker'} placement="right">
+                                    <IconButton
+                                        onClick={() => handleToggleTransfer(row.id, row.transferredBack)}
+                                        size="small"
+                                        sx={{ color: row.transferredBack ? '#2dd4bf' : '#374151', '&:hover': { color: '#2dd4bf' }, p: 0.5, mr: 0.5 }}
+                                    >
+                                        {row.transferredBack
+                                            ? <CheckCircleIcon sx={{ fontSize: 16 }} />
+                                            : <RadioButtonUncheckedIcon sx={{ fontSize: 16 }} />
+                                        }
+                                    </IconButton>
+                                </Tooltip>
+                                <div className={`w-24 text-xs font-mono ${row.transferredBack ? 'text-teal-300' : 'text-gray-300'}`}>
                                     {new Date(row.exDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
                                 </div>
-                                <div className="flex-1 text-sm text-gray-200 font-medium truncate pr-2">
+                                <div className={`flex-1 text-sm font-medium truncate pr-2 ${row.transferredBack ? 'text-teal-200' : 'text-gray-200'}`}>
                                     {row.symbol ?? row.isin}
                                     {row.symbol && <span className="ml-1 text-xs text-gray-500">{row.isin}</span>}
                                 </div>
                                 <div className="w-20 text-xs text-gray-500">
                                     {row.fiscalYear.replace('_', '-')}{row.quarter ? ` ${row.quarter}` : ''}
                                 </div>
-                                <div className="w-24 text-xs text-gray-300 text-right font-semibold">
+                                <div className={`w-24 text-xs text-right font-semibold ${row.transferredBack ? 'text-teal-300' : 'text-gray-300'}`}>
                                     {formatCurrency(row.amount, 0, 0)}
                                 </div>
                                 <IconButton
@@ -203,6 +236,24 @@ export default function DividendsCard() {
                             </div>
                         )}
                     </div>
+
+                    {/* Summary footer */}
+                    {entries.length > 0 && (() => {
+                        const transferred = entries.filter(e => e.transferredBack).reduce((s, e) => s + e.amount, 0);
+                        const pending = entries.filter(e => !e.transferredBack).reduce((s, e) => s + e.amount, 0);
+                        return (
+                            <div className="flex items-center justify-between px-4 py-2 bg-slate-800/80 border-t border-white/10 text-xs">
+                                <span className="text-gray-400">
+                                    <span className="text-teal-400 font-semibold">{formatCurrency(transferred, 0, 0)}</span>
+                                    <span className="ml-1">transferred</span>
+                                </span>
+                                <span className="text-gray-400">
+                                    <span className="text-yellow-400 font-semibold">{formatCurrency(pending, 0, 0)}</span>
+                                    <span className="ml-1">pending transfer</span>
+                                </span>
+                            </div>
+                        );
+                    })()}
                 </DialogContent>
                 <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                     <Button onClick={() => setHistoryModalOpen(false)} sx={{ color: '#94a3b8', textTransform: 'none' }}>

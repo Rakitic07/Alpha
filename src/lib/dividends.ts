@@ -469,6 +469,7 @@ export interface DividendEntry {
     quantity: number | null;
     fiscalYear: string;
     quarter: string | null;
+    transferredBack: boolean;
 }
 
 /** All dividend entries sorted by ex-date descending (for the Settings card table) */
@@ -485,6 +486,7 @@ export async function getDividendEntries(): Promise<DividendEntry[]> {
             quantity: true,
             fiscalYear: true,
             quarter: true,
+            transferredBack: true,
         },
         orderBy: { exDate: 'desc' },
     });
@@ -493,4 +495,12 @@ export async function getDividendEntries(): Promise<DividendEntry[]> {
 /** Delete a single dividend entry by its primary key */
 export async function deleteDividendById(id: number): Promise<void> {
     await prisma.dividend.delete({ where: { id } });
+}
+
+/** Toggle / set the transferred-back status of a single dividend entry */
+export async function setDividendTransferred(id: number, transferred: boolean): Promise<void> {
+    await prisma.dividend.update({
+        where: { id },
+        data: { transferredBack: transferred },
+    });
 }

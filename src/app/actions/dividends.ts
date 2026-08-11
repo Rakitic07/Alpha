@@ -7,6 +7,7 @@ import {
     getDividendEntries,
     deleteDividendsByPeriod,
     deleteDividendById,
+    setDividendTransferred,
     type UpsertDividendsResult,
 } from '@/lib/dividends';
 import { revalidateApp } from '@/app/actions';
@@ -130,3 +131,24 @@ export async function deleteDividendPeriodAction(
         };
     }
 }
+
+// ============================================================
+// Mark transferred back
+// ============================================================
+
+export async function markDividendTransferredAction(
+    id: number,
+    transferred: boolean,
+): Promise<{ success: boolean; message: string }> {
+    try {
+        await setDividendTransferred(id, transferred);
+        return { success: true, message: transferred ? 'Marked as transferred.' : 'Marked as pending.' };
+    } catch (err) {
+        console.error('[markDividendTransferredAction]', err);
+        return {
+            success: false,
+            message: `Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        };
+    }
+}
+
