@@ -935,10 +935,11 @@ export async function recalculatePortfolioHistoryInternal(
         financeLogger.info(`Bulk Inserting ${filteredMonthly.length} monthly snapshots...`);
         onProgress?.("Saving snapshots...", 90);
         // Clear any existing monthly snapshots in the date range we're inserting
-        // This handles entries created by captureMonthlySnapshot() on different dates
+        // This handles entries created by captureMonthlySnapshot() on different dates in the same month
         const minMonthlyDate = filteredMonthly.reduce((min, e) => e.date < min ? e.date : min, filteredMonthly[0].date);
+        const startOfMinMonth = new Date(Date.UTC(minMonthlyDate.getUTCFullYear(), minMonthlyDate.getUTCMonth(), 1));
         await prisma.monthlyPortfolioSnapshot.deleteMany({
-            where: { date: { gte: minMonthlyDate } }
+            where: { date: { gte: startOfMinMonth } }
         });
         await prisma.monthlyPortfolioSnapshot.createMany({ data: filteredMonthly });
     }

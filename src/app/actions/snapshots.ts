@@ -38,7 +38,17 @@ export async function getMonthlySnapshots(): Promise<MonthlyPortfolioSnapshot[]>
         date: 'desc',
       },
     });
-    return snapshots;
+
+    // Deduplicate by year-month (keeping the latest snapshot per calendar month)
+    const map = new Map<string, MonthlyPortfolioSnapshot>();
+    for (const snapshot of snapshots) {
+      const d = new Date(snapshot.date);
+      const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+      if (!map.has(key)) {
+        map.set(key, snapshot);
+      }
+    }
+    return Array.from(map.values());
   } catch (error) {
     console.error('Failed to fetch monthly snapshots:', error);
     return [];
