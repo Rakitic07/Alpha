@@ -504,3 +504,25 @@ export async function setDividendTransferred(id: number, transferred: boolean): 
         data: { transferredBack: transferred },
     });
 }
+
+/**
+ * Sliding-window watermark: mark all entries with exDate ≤ cutoffDate as transferred,
+ * all entries with exDate > cutoffDate as pending.
+ * Pass null to clear the watermark (mark everything as pending).
+ */
+export async function setTransferWatermark(cutoffDate: Date | null): Promise<void> {
+    if (cutoffDate === null) {
+        await prisma.dividend.updateMany({ data: { transferredBack: false } });
+    } else {
+        await prisma.$transaction([
+            prisma.dividend.updateMany({
+                where: { exDate: { lte: cutoffDate } },
+                data: { transferredBack: true },
+            }),
+            prisma.dividend.updateMany({
+                where: { exDate: { gt: cutoffDate } },
+                data: { transferredBack: false },
+            }),
+        ]);
+    }
+}

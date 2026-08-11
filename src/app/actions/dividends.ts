@@ -8,6 +8,7 @@ import {
     deleteDividendsByPeriod,
     deleteDividendById,
     setDividendTransferred,
+    setTransferWatermark,
     type UpsertDividendsResult,
 } from '@/lib/dividends';
 import { revalidateApp } from '@/app/actions';
@@ -133,22 +134,31 @@ export async function deleteDividendPeriodAction(
 }
 
 // ============================================================
-// Mark transferred back
+// Sliding-window watermark: set or clear the transfer boundary
 // ============================================================
 
-export async function markDividendTransferredAction(
-    id: number,
-    transferred: boolean,
+/**
+ * Mark all dividend entries with exDate ≤ cutoffIso as transferred,
+ * all entries with exDate > cutoffIso as pending.
+ * Pass null to clear the watermark entirely.
+ */
+export async function setTransferWatermarkAction(
+    cutoffIso: string | null,
 ): Promise<{ success: boolean; message: string }> {
     try {
-        await setDividendTransferred(id, transferred);
-        return { success: true, message: transferred ? 'Marked as transferred.' : 'Marked as pending.' };
+        const cutoff = cutoffIso ? new Date(cutoffIso) : null;
+        await setTransferWatermark(cutoff);
+        return {
+            success: true,
+            message: cutoff
+                ? `Watermark set to ${cutoff.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}.`
+                : 'Transfer watermark cleared.',
+        };
     } catch (err) {
-        console.error('[markDividendTransferredAction]', err);
+        console.error('[setTransferWatermarkAction]', err);
         return {
             success: false,
             message: `Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
         };
     }
 }
-
