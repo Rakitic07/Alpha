@@ -315,36 +315,82 @@ export function parseZerodhaTaxPnLDividends(
 // DB helpers
 // ============================================================
 
-/** Upsert parsed dividends — dedup on (isin, exDate) */
-export async function upsertDividends(records: ParsedDividend[]): Promise<number> {
-    let count = 0;
-    for (const r of records) {
-        await prisma.dividend.upsert({
-            where: { isin_exDate: { isin: r.isin, exDate: r.exDate } },
-            update: {
-                symbol: r.symbol,
-                payDate: r.payDate,
-                amount: r.amount,
-                dps: r.dps,
-                quantity: r.quantity,
-                fiscalYear: r.fiscalYear,
-                quarter: r.quarter,
-            },
-            create: {
-                isin: r.isin,
-                symbol: r.symbol,
-                exDate: r.exDate,
-                payDate: r.payDate,
-                amount: r.amount,
-                dps: r.dps,
-                quantity: r.quantity,
-                fiscalYear: r.fiscalYear,
-                quarter: r.quarter,
-            },
-        });
-        count++;
+export interface UpsertDividendsResult {
+    inserted: number;
+    updated: number;
+    unchanged: number;
+    total: number;
+}
+
+/**
+ * Upsert parsed dividends with entry-level duplicate detection.
+ * Dedup key: (isin, exDate).
+ * - "inserted"  — new entries not previously in DB
+ * - "updated"   — existing entries whose amount changed
+ * - "unchanged" — existing entries that match exactly (no write needed)
+ */
+export async function upsertDividends(records: ParsedDividend[]): Promise<UpsertDividendsResult> {
+    if (records.length === 0) return { inserted: 0, updated: 0, unchanged: 0, total: 0 };
+
+    // Fetch all existing rows that could overlap with the incoming batch
+    const isins = [...new Set(records.map(r => r.isin))];
+    const existing = await prisma.dividend.findMany({
+        where: { isin: { in: isins } },
+        select: { isin: true, exDate: true, amount: true },
+    });
+
+    // Build a lookup map: "isin::exDate(ISO)" → existing amount
+    const existingMap = new Map<string, number>();
+    for (const row of existing) {
+        existingMap.set(`${row.isin}::${row.exDate.toISOString()}`, row.amount);
     }
-    return count;
+
+    let inserted = 0;
+    let updated = 0;
+    let unchanged = 0;
+
+    for (const r of records) {
+        const key = `${r.isin}::${r.exDate.toISOString()}`;
+        const existingAmount = existingMap.get(key);
+
+        if (existingAmount === undefined) {
+            // New entry
+            await prisma.dividend.create({
+                data: {
+                    isin: r.isin,
+                    symbol: r.symbol,
+                    exDate: r.exDate,
+                    payDate: r.payDate,
+                    amount: r.amount,
+                    dps: r.dps,
+                    quantity: r.quantity,
+                    fiscalYear: r.fiscalYear,
+                    quarter: r.quarter,
+                },
+            });
+            inserted++;
+        } else if (Math.abs(existingAmount - r.amount) > 0.001) {
+            // Existing entry with a changed amount — update
+            await prisma.dividend.update({
+                where: { isin_exDate: { isin: r.isin, exDate: r.exDate } },
+                data: {
+                    symbol: r.symbol,
+                    payDate: r.payDate,
+                    amount: r.amount,
+                    dps: r.dps,
+                    quantity: r.quantity,
+                    fiscalYear: r.fiscalYear,
+                    quarter: r.quarter,
+                },
+            });
+            updated++;
+        } else {
+            // Exact duplicate — skip
+            unchanged++;
+        }
+    }
+
+    return { inserted, updated, unchanged, total: records.length };
 }
 
 /** Sum of all dividend amounts grouped by ISIN (for future ISIN-based joins) */

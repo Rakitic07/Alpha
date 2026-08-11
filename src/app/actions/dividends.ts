@@ -5,6 +5,7 @@ import {
     upsertDividends,
     getDividendHistory,
     deleteDividendsByPeriod,
+    type UpsertDividendsResult,
 } from '@/lib/dividends';
 import { revalidateApp } from '@/app/actions';
 
@@ -36,17 +37,23 @@ export async function uploadDividendsAction(
             };
         }
 
-        const count = await upsertDividends(records);
+        const result: UpsertDividendsResult = await upsertDividends(records);
         const total = records.reduce((s, r) => s + r.amount, 0);
 
         // Invalidate Next.js cache so the dashboard/portfolio show updated values
         await revalidateApp();
 
+        const parts: string[] = [];
+        if (result.inserted > 0) parts.push(`${result.inserted} new`);
+        if (result.updated > 0) parts.push(`${result.updated} updated`);
+        if (result.unchanged > 0) parts.push(`${result.unchanged} unchanged`);
+        const summary = parts.length > 0 ? parts.join(', ') : 'no changes';
+
         return {
             success: true,
-            count,
+            count: result.inserted + result.updated,
             total,
-            message: `Imported ${count} dividend record${count !== 1 ? 's' : ''} (₹${Math.round(total).toLocaleString('en-IN')} total). Duplicates were overwritten.`,
+            message: `Processed ${result.total} record${result.total !== 1 ? 's' : ''}: ${summary}. Total value ₹${Math.round(total).toLocaleString('en-IN')}.`,
         };
     } catch (err) {
         console.error('[uploadDividendsAction]', err);
