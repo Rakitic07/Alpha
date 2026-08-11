@@ -284,8 +284,7 @@ export async function recalculatePortfolioHistoryInternal(
 
     const priceMap = new Map<string, Map<string, number>>();
     stockHistory.forEach((h) => {
-        const istDate = new Date(h.date.getTime() + 5.5 * 60 * 60 * 1000);
-        const dKey = format(istDate, 'yyyy-MM-dd');
+        const dKey = h.date.toISOString().split('T')[0];
         if (!priceMap.has(dKey)) priceMap.set(dKey, new Map());
 
         // Apply split adjustment if needed (unadjust split-adjusted prices)
@@ -309,8 +308,7 @@ export async function recalculatePortfolioHistoryInternal(
     // Map<DateString, Map<Symbol, Close>>
     const indexMap = new Map<string, Map<string, number>>();
     indexHistory.forEach((h) => {
-        const istDate = new Date(h.date.getTime() + 5.5 * 60 * 60 * 1000);
-        const dKey = format(istDate, 'yyyy-MM-dd');
+        const dKey = h.date.toISOString().split('T')[0];
         if (!indexMap.has(dKey)) indexMap.set(dKey, new Map());
         indexMap.get(dKey)!.set(h.symbol, h.close);
     });
@@ -559,8 +557,10 @@ export async function recalculatePortfolioHistoryInternal(
         while(tIndex < transactions.length && isSameDay(transactions[tIndex].date, currentDate)) {
             const tx = transactions[tIndex];
 
-            // Update Prices Fallback
-            if (!lastKnownPrices.has(tx.symbol) && tx.price > 0) lastKnownPrices.set(tx.symbol, tx.price);
+            // Update Prices Fallback: If StockHistory has no closing price for tx.symbol on currentDate
+            // (e.g., on order days before EOD price sync), use the trade execution price (tx.price)
+            // so portfolio stock valuation matches the dailyNetFlow cash flow.
+            if (!prices.has(tx.symbol) && tx.price > 0) lastKnownPrices.set(tx.symbol, tx.price);
 
             const result = engine.processTransaction(tx);
 
