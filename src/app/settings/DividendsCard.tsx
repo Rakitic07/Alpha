@@ -9,38 +9,40 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
 import {
     uploadDividendsAction,
-    getDividendHistoryAction,
-    deleteDividendPeriodAction,
+    getDividendEntriesAction,
+    deleteDividendByIdAction,
 } from '@/app/actions/dividends';
 import { formatCurrency } from '@/lib/format';
 
-interface HistoryRow {
+interface DividendEntry {
+    id: number;
+    isin: string;
+    symbol: string | null;
+    exDate: Date;
+    amount: number;
     fiscalYear: string;
     quarter: string | null;
-    count: number;
-    total: number;
-    updatedAt: Date;
 }
 
 export default function DividendsCard() {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [history, setHistory] = useState<HistoryRow[]>([]);
+    const [entries, setEntries] = useState<DividendEntry[]>([]);
     const [historyModalOpen, setHistoryModalOpen] = useState(false);
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
         open: false, message: '', severity: 'success',
     });
 
-    const fetchHistory = async () => {
+    const fetchEntries = async () => {
         try {
-            const rows = await getDividendHistoryAction();
-            setHistory(rows);
+            const rows = await getDividendEntriesAction();
+            setEntries(rows);
         } catch (e) {
-            console.error('Failed to fetch dividend history', e);
+            console.error('Failed to fetch dividend entries', e);
         }
     };
 
-    useEffect(() => { fetchHistory(); }, []);
+    useEffect(() => { fetchEntries(); }, []);
 
     const handleUpload = async () => {
         if (!file) return;
@@ -53,7 +55,7 @@ export default function DividendsCard() {
             setSnackbar({ open: true, message: result.message, severity: result.success ? 'success' : 'error' });
             if (result.success) {
                 setFile(null);
-                await fetchHistory();
+                await fetchEntries();
             }
         } catch (e) {
             setSnackbar({ open: true, message: `Upload failed: ${e instanceof Error ? e.message : 'Unknown error'}`, severity: 'error' });
@@ -62,22 +64,15 @@ export default function DividendsCard() {
         }
     };
 
-    const handleDelete = async (fiscalYear: string, quarter: string | null) => {
-        if (!confirm(`Delete dividends for ${fiscalYear}${quarter ? ` ${quarter}` : ''}?`)) return;
-        const result = await deleteDividendPeriodAction(fiscalYear, quarter ?? undefined);
+    const handleDelete = async (id: number) => {
+        if (!confirm('Delete this dividend entry?')) return;
+        const result = await deleteDividendByIdAction(id);
         setSnackbar({ open: true, message: result.message, severity: result.success ? 'success' : 'error' });
         if (result.success) {
-            await fetchHistory();
-            // Close modal if history becomes empty
-            const nextHistory = await getDividendHistoryAction();
-            if (nextHistory.length === 0) {
-                setHistoryModalOpen(false);
-            }
+            await fetchEntries();
+            if (entries.length <= 1) setHistoryModalOpen(false);
         }
     };
-
-    const periodLabel = (row: HistoryRow) =>
-        `FY ${row.fiscalYear.replace('_', '-')}${row.quarter ? ` ${row.quarter}` : ''}`;
 
     return (
         <>
@@ -102,7 +97,7 @@ export default function DividendsCard() {
                             size="small"
                             startIcon={<VisibilityIcon sx={{ fontSize: 14 }} />}
                             onClick={() => setHistoryModalOpen(true)}
-                            disabled={history.length === 0}
+                            disabled={entries.length === 0}
                             sx={{
                                 textTransform: 'none',
                                 color: '#94a3b8',
@@ -113,7 +108,7 @@ export default function DividendsCard() {
                                 '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' },
                             }}
                         >
-                            History ({history.length})
+                            Entries ({entries.length})
                         </Button>
                     </div>
 
@@ -149,7 +144,7 @@ export default function DividendsCard() {
                 </div>
             </Paper>
 
-            {/* History Modal */}
+                {/* History Modal */}
             <Dialog
                 open={historyModalOpen}
                 onClose={() => setHistoryModalOpen(false)}
@@ -163,33 +158,39 @@ export default function DividendsCard() {
             >
                 <DialogTitle sx={{ color: 'white', pb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <FontAwesomeIcon icon={faLeaf} className="text-teal-400" />
-                    Dividends Upload History
+                    Dividend Entries
                 </DialogTitle>
                 <DialogContent sx={{ p: 0 }}>
+                    {/* Table header */}
                     <div className="flex items-center px-3 py-2 bg-slate-800 border-b border-white/10 sticky top-0 z-10">
-                        <div className="flex-1 text-xs font-semibold text-gray-400">Period</div>
-                        <div className="w-20 text-xs font-semibold text-gray-400 text-center">Records</div>
-                        <div className="w-24 text-xs font-semibold text-gray-400 text-right">Total Amount</div>
+                        <div className="w-24 text-xs font-semibold text-gray-400">Ex-Date</div>
+                        <div className="flex-1 text-xs font-semibold text-gray-400">Symbol / ISIN</div>
+                        <div className="w-20 text-xs font-semibold text-gray-400">Period</div>
+                        <div className="w-24 text-xs font-semibold text-gray-400 text-right">Amount</div>
                         <div className="w-10"></div>
                     </div>
-                    
+
                     <div className="max-h-[400px] overflow-y-auto">
-                        {history.length > 0 ? history.map((row, index) => (
-                            <div 
-                                key={`${row.fiscalYear}-${row.quarter ?? 'all'}`}
+                        {entries.length > 0 ? entries.map((row, index) => (
+                            <div
+                                key={row.id}
                                 className={`flex items-center px-3 py-2 border-b border-white/5 ${index % 2 === 0 ? 'bg-slate-900/20' : 'bg-slate-900/40'}`}
                             >
-                                <div className="flex-1 text-sm text-gray-200 font-medium">
-                                    {periodLabel(row)}
+                                <div className="w-24 text-xs text-gray-300 font-mono">
+                                    {new Date(row.exDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
                                 </div>
-                                <div className="w-20 text-xs text-gray-400 text-center">
-                                    {row.count}
+                                <div className="flex-1 text-sm text-gray-200 font-medium truncate pr-2">
+                                    {row.symbol ?? row.isin}
+                                    {row.symbol && <span className="ml-1 text-xs text-gray-500">{row.isin}</span>}
                                 </div>
-                                <div className="w-24 text-xs text-gray-400 text-right font-semibold">
-                                    {formatCurrency(row.total, 0, 0)}
+                                <div className="w-20 text-xs text-gray-500">
+                                    {row.fiscalYear.replace('_', '-')}{row.quarter ? ` ${row.quarter}` : ''}
+                                </div>
+                                <div className="w-24 text-xs text-gray-300 text-right font-semibold">
+                                    {formatCurrency(row.amount, 0, 0)}
                                 </div>
                                 <IconButton
-                                    onClick={() => handleDelete(row.fiscalYear, row.quarter)}
+                                    onClick={() => handleDelete(row.id)}
                                     size="small"
                                     sx={{ color: '#6b7280', '&:hover': { color: '#ef4444' }, ml: 1 }}
                                 >
@@ -198,7 +199,7 @@ export default function DividendsCard() {
                             </div>
                         )) : (
                             <div className="text-center py-8 text-gray-500 text-sm">
-                                No dividend upload history found.
+                                No dividend entries found.
                             </div>
                         )}
                     </div>

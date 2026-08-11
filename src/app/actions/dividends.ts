@@ -4,7 +4,9 @@ import {
     parseZerodhaTaxPnLDividends,
     upsertDividends,
     getDividendHistory,
+    getDividendEntries,
     deleteDividendsByPeriod,
+    deleteDividendById,
     type UpsertDividendsResult,
 } from '@/lib/dividends';
 import { revalidateApp } from '@/app/actions';
@@ -65,11 +67,39 @@ export async function uploadDividendsAction(
 }
 
 // ============================================================
-// History (for settings card)
+// Entries (sorted by date — for settings card table)
+// ============================================================
+
+export async function getDividendEntriesAction() {
+    return getDividendEntries();
+}
+
+// ============================================================
+// History (grouped by period — kept for backward compat)
 // ============================================================
 
 export async function getDividendHistoryAction() {
     return getDividendHistory();
+}
+
+// ============================================================
+// Delete a single entry by id
+// ============================================================
+
+export async function deleteDividendByIdAction(
+    id: number,
+): Promise<{ success: boolean; message: string }> {
+    try {
+        await deleteDividendById(id);
+        await revalidateApp();
+        return { success: true, message: 'Entry deleted.' };
+    } catch (err) {
+        console.error('[deleteDividendByIdAction]', err);
+        return {
+            success: false,
+            message: `Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        };
+    }
 }
 
 // ============================================================
@@ -82,7 +112,7 @@ export async function deleteDividendPeriodAction(
 ): Promise<{ success: boolean; deleted: number; message: string }> {
     try {
         const deleted = await deleteDividendsByPeriod(fiscalYear, quarter);
-        
+
         // Invalidate Next.js cache so the dashboard/portfolio show updated values
         await revalidateApp();
 

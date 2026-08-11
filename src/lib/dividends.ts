@@ -457,3 +457,40 @@ export async function deleteDividendsByPeriod(
     });
     return result.count;
 }
+
+export interface DividendEntry {
+    id: number;
+    isin: string;
+    symbol: string | null;
+    exDate: Date;
+    payDate: Date | null;
+    amount: number;
+    dps: number | null;
+    quantity: number | null;
+    fiscalYear: string;
+    quarter: string | null;
+}
+
+/** All dividend entries sorted by ex-date descending (for the Settings card table) */
+export async function getDividendEntries(): Promise<DividendEntry[]> {
+    return prisma.dividend.findMany({
+        select: {
+            id: true,
+            isin: true,
+            symbol: true,
+            exDate: true,
+            payDate: true,
+            amount: true,
+            dps: true,
+            quantity: true,
+            fiscalYear: true,
+            quarter: true,
+        },
+        orderBy: { exDate: 'desc' },
+    });
+}
+
+/** Delete a single dividend entry by its primary key */
+export async function deleteDividendById(id: number): Promise<void> {
+    await prisma.dividend.delete({ where: { id } });
+}
