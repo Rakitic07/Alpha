@@ -270,20 +270,10 @@ export default function DividendsCard() {
                                 return (
                                     <div key={row.id}>
                                         {/* Data row */}
-                                        <Tooltip
-                                            title={
-                                                row.transferredBack
-                                                    ? idx === 0
-                                                        ? 'Click to clear watermark'
-                                                        : `Click to retract — mark from here as pending`
-                                                    : `Click to set watermark here — mark all up to ${fmtDate(row.exDate)} as transferred`
-                                            }
-                                            placement="left"
-                                        >
-                                            <div
-                                                onClick={() => handleRowClick(row, idx)}
-                                                onContextMenu={e => { e.preventDefault(); handleDelete(row.id); }}
-                                                className={`
+                                        <div
+                                            onClick={() => handleRowClick(row, idx)}
+                                            onContextMenu={e => { e.preventDefault(); handleDelete(row.id); }}
+                                            className={`
                                                     flex items-center px-3 py-[7px] border-b border-white/5
                                                     cursor-pointer select-none transition-all duration-150
                                                     ${row.transferredBack
@@ -292,34 +282,33 @@ export default function DividendsCard() {
                                                     }
                                                     ${isUpdating ? 'pointer-events-none opacity-60' : ''}
                                                 `}
-                                            >
-                                                <div className={`w-20 text-xs font-mono ${row.transferredBack ? 'text-teal-400' : 'text-gray-400'}`}>
-                                                    {fmtDate(row.exDate)}
-                                                </div>
-                                                <div className={`flex-1 text-sm font-medium truncate pr-2 ${row.transferredBack ? 'text-teal-200' : 'text-gray-200'}`}>
-                                                    {row.symbol ?? row.isin}
-                                                    {row.symbol && (
-                                                        <span className="ml-1.5 text-[10px] text-gray-600 font-normal">
-                                                            {row.isin}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="w-16 text-[10px] text-gray-600">
-                                                    {row.fiscalYear.replace('_', '-')}{row.quarter ? ` ${row.quarter}` : ''}
-                                                </div>
-                                                <div className={`w-20 text-xs text-right font-semibold tabular-nums ${row.transferredBack ? 'text-teal-300' : 'text-gray-300'}`}>
-                                                    {formatCurrency(row.amount, 0, 0)}
-                                                </div>
-                                                {/* Status indicator */}
-                                                <div className="w-12 flex justify-center items-center">
-                                                    {row.transferredBack ? (
-                                                        <span className="text-[9px] text-teal-500 font-semibold tracking-wide">✓</span>
-                                                    ) : (
-                                                        <span className="text-[9px] text-gray-700">○</span>
-                                                    )}
-                                                </div>
+                                        >
+                                            <div className={`w-20 text-xs font-mono ${row.transferredBack ? 'text-teal-400' : 'text-gray-400'}`}>
+                                                {fmtDate(row.exDate)}
                                             </div>
-                                        </Tooltip>
+                                            <div className={`flex-1 text-sm font-medium truncate pr-2 ${row.transferredBack ? 'text-teal-200' : 'text-gray-200'}`}>
+                                                {row.symbol ?? row.isin}
+                                                {row.symbol && (
+                                                    <span className="ml-1.5 text-[10px] text-gray-600 font-normal">
+                                                        {row.isin}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="w-16 text-[10px] text-gray-600">
+                                                {row.fiscalYear.replace('_', '-')}{row.quarter ? ` ${row.quarter}` : ''}
+                                            </div>
+                                            <div className={`w-20 text-xs text-right font-semibold tabular-nums ${row.transferredBack ? 'text-teal-300' : 'text-gray-300'}`}>
+                                                {formatCurrency(row.amount, 0, 0)}
+                                            </div>
+                                            {/* Status indicator */}
+                                            <div className="w-12 flex justify-center items-center">
+                                                {row.transferredBack ? (
+                                                    <span className="text-[9px] text-teal-500 font-semibold tracking-wide">✓</span>
+                                                ) : (
+                                                    <span className="text-[9px] text-gray-700">○</span>
+                                                )}
+                                            </div>
+                                        </div>
 
                                         {/* Watermark divider — rendered after the last transferred row */}
                                         {isWatermarkEdge && !isLast && (
