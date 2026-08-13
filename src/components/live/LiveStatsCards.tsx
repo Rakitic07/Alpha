@@ -148,18 +148,26 @@ const LiveStatsCards = memo(function LiveStatsCards({
                             const categories = ['large', 'mid', 'small', 'micro'] as const;
                             const key = categories[idx];
                             const catData = data.breadthByCategory[key];
-                            const total = catData.advances + catData.declines || 1;
+                            const totalCount = catData.advances + catData.declines;
+                            const hasStocks = totalCount > 0;
+                            const total = totalCount || 1;
                             const advPercent = Math.round((catData.advances / total) * 100);
                             return (
                                 <div key={key} className="flex items-center gap-2">
-                                    <div className="flex-1 h-4 rounded-full relative overflow-hidden bg-red-900/40">
-                                        <div className="absolute inset-0 bg-gradient-to-r from-red-900/60 to-red-800/40" />
-                                        <motion.div 
-                                            className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-emerald-400/90 to-emerald-600 flex items-center shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                                            initial={{ width: 0 }}
-                                            animate={{ width: `${advPercent}%` }}
-                                            transition={{ duration: 1, ease: "easeOut" }}
-                                        />
+                                    <div className={`flex-1 h-4 rounded-full relative overflow-hidden ${hasStocks ? 'bg-red-900/40' : 'bg-slate-800/60 border border-slate-700/40'}`}>
+                                        {hasStocks ? (
+                                            <>
+                                                <div className="absolute inset-0 bg-gradient-to-r from-red-900/60 to-red-800/40" />
+                                                <motion.div 
+                                                    className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-emerald-400/90 to-emerald-600 flex items-center shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${advPercent}%` }}
+                                                    transition={{ duration: 1, ease: "easeOut" }}
+                                                />
+                                            </>
+                                        ) : (
+                                            <div className="absolute inset-0 bg-slate-800/40" />
+                                        )}
                                         <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none">
                                             {catData.advances > 0 ? (
                                                 <span className="text-[10px] font-extrabold text-emerald-950 z-10">{catData.advances}</span>
