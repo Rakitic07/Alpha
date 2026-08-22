@@ -6,6 +6,7 @@ import { recalculatePortfolioHistory } from '@/lib/finance';
 import { getLTP, hasValidToken } from '@/lib/upstox-client';
 import { getInstrumentKeys, isValidSymbol, getInstrumentKeyByISIN, getSymbolFromKey } from '@/lib/instrument-service';
 import { getSymbolResolver } from '@/lib/amfi';
+import { orderTransactionsForReplay } from '@/lib/portfolio-engine';
 import { fetchNSEHistory } from '@/lib/nse-api';
 import { logger } from '@/lib/logger';
 
@@ -380,6 +381,36 @@ export async function deleteTransaction(id: number) {
     // Recalculate from the deleted transaction's date
     await recalculatePortfolioHistory(tx.date);
     revalidateApp();
+}
+
+/**
+ * Delete every transaction (buys, sells and corporate actions) for the given
+ * symbols in one shot, then recalculate once from the earliest affected date.
+ * Used by the "Delete by symbol" bulk tool in the Trades screen.
+ */
+export async function deleteTransactionsBySymbols(symbols: string[]): Promise<{ deleted: number; symbols: number }> {
+    const wanted = Array.from(new Set((symbols ?? []).map(s => s.trim()).filter(Boolean)));
+    if (wanted.length === 0) return { deleted: 0, symbols: 0 };
+
+    // Grab the matching rows first so we know the earliest date to recalc from.
+    const txs = await prisma.transaction.findMany({
+        where: { symbol: { in: wanted } },
+        select: { date: true },
+    });
+
+    if (txs.length === 0) return { deleted: 0, symbols: 0 };
+
+    const earliest = txs.reduce((min, t) => (t.date < min ? t.date : min), txs[0].date);
+
+    const res = await prisma.transaction.deleteMany({
+        where: { symbol: { in: wanted } },
+    });
+
+    // Single recalc for the whole batch from the earliest touched date.
+    await recalculatePortfolioHistory(earliest);
+    revalidateApp();
+
+    return { deleted: res.count, symbols: wanted.length };
 }
 
 type CorporateActionData = {
@@ -763,11 +794,14 @@ export async function getCurrentStockQuantities(): Promise<Record<string, number
     const symbolMappings = await prisma.symbolMapping.findMany();
     const resolveSymbol = getSymbolResolver(symbolMappings);
     
-    // Normalize symbols in transactions
-    const normalizedTransactions = transactions.map(tx => ({
-        ...tx,
-        symbol: resolveSymbol(tx.symbol)
-    }));
+    // Normalize symbols in transactions and order same-day events BUY-before-SELL
+    // so intraday pairs and splits replay in a consistent order.
+    const normalizedTransactions = orderTransactionsForReplay(
+        transactions.map(tx => ({
+            ...tx,
+            symbol: resolveSymbol(tx.symbol)
+        }))
+    );
 
     const holdings = new Map<string, number>();
     
