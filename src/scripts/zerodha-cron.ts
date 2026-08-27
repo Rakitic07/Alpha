@@ -131,6 +131,47 @@ async function triggerRecompute(): Promise<void> {
 }
 
 /**
+ * Trigger the momentum screener pipeline on the live Vercel deployment.
+ * Called after recompute so today's trades are already reflected.
+ * The Vercel cron (vercel.json) acts as a fallback if the GH Action never runs.
+ * Best-effort: failure here won't crash the script.
+ */
+async function triggerScreener(): Promise<void> {
+    const appUrl = process.env.NEXT_APP_URL;
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!appUrl) {
+        console.warn('[Screener] NEXT_APP_URL not set, skipping screener.');
+        return;
+    }
+
+    const headers: Record<string, string> = {};
+    if (cronSecret) {
+        headers['x-cron-secret'] = cronSecret;
+    }
+
+    try {
+        console.log(`[Screener] Calling ${appUrl}/api/cron/momentum-screener ...`);
+        const response = await fetch(`${appUrl}/api/cron/momentum-screener`, {
+            method: 'GET',
+            headers,
+            // Screener pipeline can take several minutes
+            signal: AbortSignal.timeout(10 * 60 * 1000),
+        });
+
+        if (response.ok) {
+            const text = await response.text();
+            console.log('[Screener] Completed successfully:', text.slice(0, 200));
+        } else {
+            const text = await response.text();
+            console.error(`[Screener] Failed (${response.status}):`, text);
+        }
+    } catch (error) {
+        console.error('[Screener] Error calling screener endpoint:', error);
+    }
+}
+
+/**
  * Trigger cache revalidation on the live Vercel deployment.
  * This ensures all pages (Portfolio, Exits, Dashboard, etc.) reflect new data.
  * Best-effort: failure here won't crash the script.
@@ -215,10 +256,11 @@ async function main() {
 
         // 6. Recompute portfolio history + revalidate cache (best-effort)
         if (result.synced > 0) {
-            // triggerRecompute() calls recalculatePortfolioHistory and revalidateApp internally
+            // Chain: recompute (recalculates history + revalidates) → screener
             await triggerRecompute();
+            await triggerScreener();
         } else {
-            console.log('No new orders synced, skipping recompute.');
+            console.log('No new orders synced, skipping recompute and screener.');
         }
 
         console.log('--- Zerodha Orders Sync Completed Successfully ---');
