@@ -20,7 +20,7 @@
     },
     {
       "path": "/api/cron/momentum-screener",
-      "schedule": "45 10 * * 1-5"
+      "schedule": "15 10 * * 1-5"
     },
     {
       "path": "/api/cron/bhavcopy",
