@@ -57,6 +57,80 @@ Module._load = function(request: string, parent: any, isMain: boolean) {
 import type { KiteOrder } from '../lib/import-service';
 
 /**
+ * Trigger a full portfolio recompute on the live Vercel deployment via SSE endpoint.
+ * Consumes the SSE stream and logs progress until the server signals completion.
+ * Best-effort: failure here won't crash the script.
+ */
+async function triggerRecompute(): Promise<void> {
+    const appUrl = process.env.NEXT_APP_URL;
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!appUrl) {
+        console.warn('[Recompute] NEXT_APP_URL not set, skipping recompute.');
+        return;
+    }
+
+    // When CRON_SECRET is not set the server allows all requests (dev mode),
+    // so we simply omit the Authorization header rather than skipping.
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (cronSecret) {
+        headers['Authorization'] = `Bearer ${cronSecret}`;
+    }
+
+    try {
+        console.log(`[Recompute] Calling ${appUrl}/api/recompute ...`);
+        const response = await fetch(`${appUrl}/api/recompute`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({}),
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            console.error(`[Recompute] Failed (${response.status}):`, text);
+            return;
+        }
+
+        // Consume the SSE stream until done
+        const reader = response.body?.getReader();
+        if (!reader) {
+            console.error('[Recompute] No response body to read.');
+            return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const payload = JSON.parse(line.slice(6));
+                    if (payload.error) {
+                        console.error(`[Recompute] Error: ${payload.error}`);
+                    } else {
+                        console.log(`[Recompute] [${payload.progress ?? '?'}%] ${payload.message ?? ''}`);
+                    }
+                    if (payload.done) {
+                        console.log('[Recompute] Completed successfully.');
+                        return;
+                    }
+                } catch {
+                    // ignore malformed SSE lines
+                }
+            }
+        }
+        console.log('[Recompute] Stream ended.');
+    } catch (error) {
+        console.error('[Recompute] Error calling recompute endpoint:', error);
+    }
+}
+
+/**
  * Trigger cache revalidation on the live Vercel deployment.
  * This ensures all pages (Portfolio, Exits, Dashboard, etc.) reflect new data.
  * Best-effort: failure here won't crash the script.
@@ -139,11 +213,12 @@ async function main() {
         console.log('Import Result:', result);
         console.log(`Synced: ${result.synced}, Skipped: ${result.skipped}`);
 
-        // 6. Trigger Vercel cache revalidation (best-effort)
+        // 6. Recompute portfolio history + revalidate cache (best-effort)
         if (result.synced > 0) {
-            await triggerRevalidation();
+            // triggerRecompute() calls recalculatePortfolioHistory and revalidateApp internally
+            await triggerRecompute();
         } else {
-            console.log('No new orders synced, skipping revalidation.');
+            console.log('No new orders synced, skipping recompute.');
         }
 
         console.log('--- Zerodha Orders Sync Completed Successfully ---');

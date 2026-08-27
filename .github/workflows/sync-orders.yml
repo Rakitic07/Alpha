@@ -39,7 +39,8 @@ jobs:
         ZERODHA_API_KEY: ${{ secrets.ZERODHA_API_KEY }}
         ZERODHA_API_SECRET: ${{ secrets.ZERODHA_API_SECRET }}
         
-        # Next.js Revalidation
+        # Next.js Revalidation + Recompute
         NEXT_APP_URL: ${{ secrets.NEXT_APP_URL }}
+        CRON_SECRET: ${{ secrets.CRON_SECRET }}
       run: |
         npx tsx src/scripts/zerodha-cron.ts
