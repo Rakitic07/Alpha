@@ -386,3 +386,20 @@ model RadarNewsSource {
 
   @@index([createdAt])
 }
+
+// User-defined saved screener queries (filter/sort presets applied over the
+// computed momentum universe). `filters` is a JSON blob of criteria — see
+// ScreenerQueryFilters in src/app/actions/screener-queries.ts.
+model ScreenerQuery {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  baseTab   String   @default("prefiltered") // all | prefiltered | portfolio
+  filters   String   @default("{}")          // JSON criteria
+  sortField String?
+  sortDir   String?  // asc | desc
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}

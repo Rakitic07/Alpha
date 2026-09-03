@@ -7,7 +7,10 @@ import Link from 'next/link';
 import StatsBar from './StatsBar';
 import RulesInfoModal from './RulesInfoModal';
 import RankHistoryModal from './RankHistoryModal';
+import QueryEditorModal from './QueryEditorModal';
 import { getScreenerData, syncScreener, getRankHistoriesBatch, type ScreenerRow, type ScreenerStats } from '@/app/actions/screener';
+import { listScreenerQueries, type SavedQuery } from '@/app/actions/screener-queries';
+import { applyScreenerFilters, countActiveFilters, type ScreenerQueryFilters } from '@/lib/screener/filter-query';
 
 interface ScreenerClientProps {
   initialData: { rows: ScreenerRow[]; stats: ScreenerStats };
@@ -221,6 +224,7 @@ const ATHSwatches = memo(function ATHSwatches({ athProximity }: { athProximity: 
 function SkeletonRow() {
   return (
     <tr className="border-b border-zinc-800/30 animate-pulse">
+      <td className="px-2 py-3"><div className="h-4 w-4 bg-zinc-800 rounded mx-auto" /></td>
       <td className="pl-5 pr-2 py-3">
         <div className="h-7 w-7 bg-zinc-800 rounded" />
       </td>
@@ -232,6 +236,8 @@ function SkeletonRow() {
         </div>
       </td>
       <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
+      <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
+      <td className="px-1 py-3"><div className="h-3.5 w-12 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-3 py-3 hidden md:table-cell"><div className="h-9 bg-zinc-800/50 rounded" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-10 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-2 py-3">
@@ -253,16 +259,40 @@ function SkeletonRow() {
 
 const TH_BASE = 'px-3 py-4 text-sm font-bold text-zinc-300 uppercase tracking-wider select-none';
 
+// Shared column set for CSV export + clipboard "copy rows" (keeps them in sync).
+const EXPORT_COLUMNS: { header: string; get: (r: ScreenerRow) => string | number }[] = [
+  { header: 'Rank',          get: r => (r.rank === 9999 ? '' : r.rank) },
+  { header: 'Symbol',        get: r => r.symbol },
+  { header: 'Company',       get: r => r.companyName },
+  { header: 'CMP',           get: r => r.currentPrice.toFixed(2) },
+  { header: 'Day Chg %',     get: r => (r.dayChangePct == null ? '' : r.dayChangePct.toFixed(2)) },
+  { header: 'Score',         get: r => r.compositeScore.toFixed(4) },
+  { header: 'Avg Sharpe',    get: r => r.avgSharpe.toFixed(4) },
+  { header: 'ATH Proximity', get: r => r.athProximity.toFixed(4) },
+  { header: '200 DMA %',     get: r => r.aboveDma200Pct.toFixed(2) },
+  { header: 'Turnover Cr',   get: r => r.medianTurnoverCr.toFixed(2) },
+  { header: 'Market Cap Cr', get: r => r.marketCapCr.toFixed(0) },
+  { header: 'Category',      get: r => r.marketCapCategory || '' },
+  { header: 'Rank Change',   get: r => r.rankChange ?? '' },
+];
+
+/** Quote a CSV field only when it contains a comma, quote or newline. */
+function csvCell(v: string | number): string {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 function SortHeader({
-  field, current, dir, onClick, children, center, pl,
+  field, current, dir, onClick, children, center, pl, title,
 }: {
   field: string; current: string; dir: 'asc' | 'desc';
-  onClick: (f: string) => void; children: React.ReactNode; center?: boolean; pl?: string;
+  onClick: (f: string) => void; children: React.ReactNode; center?: boolean; pl?: string; title?: string;
 }) {
   return (
     <th
       className={`${TH_BASE} cursor-pointer hover:text-zinc-200 transition-colors${pl ? ` ${pl}` : ''}`}
       onClick={() => onClick(field)}
+      title={title}
     >
       <span className={`flex items-center gap-0.5 ${center ? 'justify-center' : ''}`}>
         {children}
@@ -289,6 +319,16 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<string>('');
+  // Search + saved queries
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<ScreenerQueryFilters>({});
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [activeQueryId, setActiveQueryId] = useState<number | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  // Row selection + copy feedback
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const copyMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rankHistoryCacheRef = useRef<Record<string, { date: string; rank: number; compositeScore: number }[]>>({});
 
@@ -351,6 +391,71 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     }
   }, [prefetchRankHistories]);
 
+  // Manual tab switch (via StatsBar) clears the active saved query but keeps filters.
+  const handleManualTabChange = useCallback((tab: 'all' | 'prefiltered' | 'portfolio') => {
+    setActiveQueryId(null);
+    handleTabChange(tab);
+  }, [handleTabChange]);
+
+  // Load saved queries once; apply the default query if the user has one.
+  useEffect(() => {
+    (async () => {
+      try {
+        const qs = await listScreenerQueries();
+        setSavedQueries(qs);
+        const def = qs.find(q => q.isDefault);
+        if (def) {
+          setActiveQueryId(def.id);
+          setFilters(def.filters);
+          if (def.sortField) { setSortField(def.sortField); setSortDir(def.sortDir ?? 'asc'); }
+          if (def.baseTab !== 'portfolio') handleTabChange(def.baseTab);
+        }
+      } catch {
+        // non-fatal — saved queries just won't be available
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const activeQuery = useMemo(
+    () => savedQueries.find(q => q.id === activeQueryId) ?? null,
+    [savedQueries, activeQueryId],
+  );
+  // Only surface saved queries that belong to the currently-active tab, so each
+  // tab keeps its own independent dropdown.
+  const visibleQueries = useMemo(
+    () => savedQueries.filter(q => q.baseTab === activeTab),
+    [savedQueries, activeTab],
+  );
+  const filterCount = useMemo(() => countActiveFilters(filters), [filters]);
+
+  // Applying a saved query never switches tabs — it only applies filters/sort
+  // within the current tab. (Dropdown is already scoped to this tab.)
+  const handleSelectQuery = useCallback((id: number | null) => {
+    if (id == null) { setActiveQueryId(null); setFilters({}); return; }
+    const q = savedQueries.find(s => s.id === id);
+    if (!q) return;
+    setActiveQueryId(id);
+    setFilters(q.filters);
+    if (q.sortField) { setSortField(q.sortField); setSortDir(q.sortDir ?? 'asc'); }
+  }, [savedQueries]);
+
+  const handleQuerySaved = useCallback((q: SavedQuery) => {
+    setSavedQueries(prev => {
+      const others = prev.filter(x => x.id !== q.id);
+      const cleaned = q.isDefault ? others.map(x => ({ ...x, isDefault: false })) : others;
+      return [...cleaned, q].sort(
+        (a, b) => (Number(b.isDefault) - Number(a.isDefault)) || a.name.localeCompare(b.name),
+      );
+    });
+    setActiveQueryId(q.id);
+  }, []);
+
+  const handleQueryDeleted = useCallback((id: number) => {
+    setSavedQueries(prev => prev.filter(x => x.id !== id));
+    setActiveQueryId(cur => (cur === id ? null : cur));
+  }, []);
+
   const handleSync = useCallback(async () => {
     setSyncing(true);
     setSyncStep('Starting...');
@@ -376,25 +481,13 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     else { setSortField(field); setSortDir(field === 'score' || field === 'rankChange' ? 'desc' : 'asc'); }
   };
 
+  // Download exactly what is currently in view (filters + search + sort applied).
   const handleExportCSV = () => {
     if (!displayRows.length) return;
-    const headers = ['Rank', 'Symbol', 'Company', 'Score', 'Avg Sharpe', 'ATH Proximity', 'Price', '200 DMA %', 'Turnover Cr', 'Market Cap Cr', 'Category', 'Rank Change'];
-    const csvRows = displayRows.map(r => [
-      r.rank === 9999 ? '' : r.rank,
-      r.symbol,
-      r.companyName,
-      r.compositeScore.toFixed(4),
-      r.avgSharpe.toFixed(4),
-      r.athProximity.toFixed(4),
-      r.currentPrice.toFixed(2),
-      r.aboveDma200Pct.toFixed(2),
-      r.medianTurnoverCr.toFixed(2),
-      r.marketCapCr.toFixed(0),
-      r.marketCapCategory || '',
-      r.rankChange ?? '',
-    ]);
-    const csv = [headers.join(','), ...csvRows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const header = EXPORT_COLUMNS.map(c => csvCell(c.header)).join(',');
+    const body = displayRows.map(r => EXPORT_COLUMNS.map(c => csvCell(c.get(r))).join(','));
+    const csv = [header, ...body].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -402,6 +495,69 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // ── Row selection + clipboard copy ──
+  const flashCopy = (msg: string) => {
+    setCopyMsg(msg);
+    if (copyMsgTimer.current) clearTimeout(copyMsgTimer.current);
+    copyMsgTimer.current = setTimeout(() => setCopyMsg(null), 1800);
+  };
+
+  const writeClipboard = async (text: string, okMsg: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      flashCopy(okMsg);
+    } catch {
+      flashCopy('Copy failed — clipboard blocked');
+    }
+  };
+
+  // Rows to act on: the selected ones, or the whole visible set when none picked.
+  const copyTargets = () =>
+    selected.size ? displayRows.filter(r => selected.has(r.symbol)) : displayRows;
+
+  const copySymbols = () => {
+    const rowsToCopy = copyTargets();
+    if (!rowsToCopy.length) return;
+    writeClipboard(
+      rowsToCopy.map(r => r.symbol).join('\n'),
+      `Copied ${rowsToCopy.length} symbol${rowsToCopy.length > 1 ? 's' : ''}`,
+    );
+  };
+
+  const copyRowsWithHeader = () => {
+    const rowsToCopy = copyTargets();
+    if (!rowsToCopy.length) return;
+    // Tab-separated so it pastes cleanly into Excel / Google Sheets.
+    const header = EXPORT_COLUMNS.map(c => c.header).join('\t');
+    const body = rowsToCopy.map(r => EXPORT_COLUMNS.map(c => String(c.get(r))).join('\t'));
+    writeClipboard(
+      [header, ...body].join('\n'),
+      `Copied ${rowsToCopy.length} row${rowsToCopy.length > 1 ? 's' : ''} with header`,
+    );
+  };
+
+  const toggleRow = (symbol: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(symbol)) next.delete(symbol); else next.add(symbol);
+      return next;
+    });
+  };
+
+  // Toggle select-all across the currently-visible rows only.
+  const toggleSelectAll = () => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      const allSel = displayRows.length > 0 && displayRows.every(r => next.has(r.symbol));
+      for (const r of displayRows) {
+        if (allSel) next.delete(r.symbol); else next.add(r.symbol);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
 
   const displayRows = useMemo(() => {
     let filtered = [...rows];
@@ -411,7 +567,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
     if (activeTab === 'portfolio' && signalFilter) {
       filtered = filtered.filter(r => {
-        const sig = r.exitSignal?.signalType;
         if (signalFilter === 'hold') {
           return !r.exitSignal;
         } else if (signalFilter === 'warning') {
@@ -422,6 +577,10 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         return true;
       });
     }
+
+    // Saved-query filters + live search bar
+    const merged: ScreenerQueryFilters = { ...filters, search: search.trim() || filters.search };
+    filtered = applyScreenerFilters(filtered, merged, activeTab);
 
     return filtered.sort((a, b) => {
       // Pin active exit stocks (red signal, not protected) to the end of the table on the portfolio tab
@@ -471,11 +630,13 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         }
         case 'score':      cmp = a.compositeScore - b.compositeScore; break;
         case 'rankChange': cmp = (a.rankChange ?? 0) - (b.rankChange ?? 0); break;
+        case 'cmp':        cmp = a.currentPrice - b.currentPrice; break;
+        case 'chg':        cmp = (a.dayChangePct ?? 0) - (b.dayChangePct ?? 0); break;
         default:           cmp = a.rank - b.rank;
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [rows, sortField, sortDir, activeTab, hidePortfolio, signalFilter]);
+  }, [rows, sortField, sortDir, activeTab, hidePortfolio, signalFilter, filters, search]);
 
   const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered' || activeTab === 'portfolio';
 
@@ -548,27 +709,137 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       <StatsBar
         stats={stats}
         activeTab={activeTab}
-        onTabChange={handleTabChange}
-        filteredCount={rows.length}
+        onTabChange={handleManualTabChange}
+        filteredCount={displayRows.length}
         hidePortfolio={hidePortfolio}
         onHidePortfolioChange={setHidePortfolio}
         signalFilter={signalFilter}
         onSignalFilterChange={setSignalFilter}
       />
 
+      {/* Search + saved-query toolbar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        {/* Search */}
+        <div className="relative flex-1 min-w-0">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search symbol or company…"
+            className="w-full bg-zinc-900/60 border border-zinc-800/60 rounded-lg pl-9 pr-8 py-2 text-sm text-zinc-100 outline-none focus:border-blue-500/40"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+              title="Clear search"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
+
+        {/* Saved query dropdown */}
+        <div className="relative">
+          <select
+            value={visibleQueries.some(q => q.id === activeQueryId) ? (activeQueryId ?? '') : ''}
+            onChange={(e) => handleSelectQuery(e.target.value ? Number(e.target.value) : null)}
+            className="appearance-none bg-zinc-900/60 border border-zinc-800/60 rounded-lg pl-3 pr-8 py-2 text-sm text-zinc-200 outline-none focus:border-blue-500/40 cursor-pointer min-w-[160px]"
+            title="Saved queries for this tab"
+          >
+            <option value="">Default view</option>
+            {visibleQueries.map((q) => (
+              <option key={q.id} value={q.id}>{q.isDefault ? '★ ' : ''}{q.name}</option>
+            ))}
+          </select>
+          <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+        </div>
+
+        {/* Filters button */}
+        <button
+          onClick={() => setEditorOpen(true)}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+            filterCount > 0
+              ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+              : 'border-zinc-800/60 bg-zinc-900/60 text-zinc-400 hover:text-white'
+          }`}
+          title="Filter builder"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 10h12M10 16h4" /></svg>
+          <span className="hidden sm:inline">Filters</span>
+          {filterCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-500/30 text-[10px] font-bold text-blue-200">{filterCount}</span>
+          )}
+        </button>
+
+        {(filterCount > 0 || activeQueryId != null) && (
+          <button
+            onClick={() => { setFilters({}); setActiveQueryId(null); }}
+            className="px-3 py-2 rounded-lg border border-zinc-800/60 bg-zinc-900/60 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+            title="Clear filters"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Selection / copy bar */}
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <span className="text-zinc-500">
+          {selected.size > 0
+            ? <><span className="text-blue-300 font-semibold">{selected.size}</span> selected</>
+            : <>Copy acts on all <span className="text-zinc-300 font-semibold">{displayRows.length}</span> visible</>}
+        </span>
+        <button
+          onClick={copySymbols}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-800/60 bg-zinc-900/60 text-zinc-300 hover:text-white hover:border-zinc-700 transition-colors"
+          title="Copy stock symbols, one per line"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16h8M8 12h8M8 8h4M6 4h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" /></svg>
+          Copy names
+        </button>
+        <button
+          onClick={copyRowsWithHeader}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-800/60 bg-zinc-900/60 text-zinc-300 hover:text-white hover:border-zinc-700 transition-colors"
+          title="Copy full rows with header (tab-separated, pastes into Excel/Sheets)"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+          Copy rows + header
+        </button>
+        {selected.size > 0 && (
+          <button
+            onClick={clearSelection}
+            className="px-2.5 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
+          >
+            Clear selection
+          </button>
+        )}
+        {copyMsg && (
+          <span className="flex items-center gap-1 text-emerald-400 font-medium">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            {copyMsg}
+          </span>
+        )}
+      </div>
+
       {/* Table */}
       <div
         className="overflow-auto rounded-lg border border-zinc-800/60"
         style={{ maxHeight: 'calc(100vh - 226px)' }}
       >
-        <table className="w-full text-sm" style={{ tableLayout: 'fixed', minWidth: '1000px' }}>
+        <table className="w-full text-sm" style={{ tableLayout: 'fixed', minWidth: '1160px' }}>
             <colgroup>
-              <col style={{ width: '4%',  minWidth: '60px' }} />
-              <col style={{ width: '4%',  minWidth: '50px' }} />
-              <col style={{ width: '18%', minWidth: '180px' }} />
-              <col style={{ width: '8%',  minWidth: '90px' }} />
-              <col style={{ width: '16%', minWidth: '160px' }} />
-              <col style={{ width: '7%',  minWidth: '70px' }} />
+              <col style={{ width: '3%',  minWidth: '40px' }} />
+              <col style={{ width: '4%',  minWidth: '56px' }} />
+              <col style={{ width: '4%',  minWidth: '48px' }} />
+              <col style={{ width: '16%', minWidth: '170px' }} />
+              <col style={{ width: '7%',  minWidth: '80px' }} />
+              <col style={{ width: '8%',  minWidth: '92px' }} />
+              <col style={{ width: '7%',  minWidth: '80px' }} />
+              <col style={{ width: '13%', minWidth: '140px' }} />
+              <col style={{ width: '6%',  minWidth: '64px' }} />
               <col style={{ width: '9%',  minWidth: '100px' }} />
               <col style={{ width: '9%',  minWidth: '100px' }} />
               <col style={{ width: '6%',  minWidth: '60px' }} />
@@ -576,15 +847,32 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
             <thead className="sticky top-0 z-10 bg-slate-900 border-b border-zinc-800/60">
               <tr>
-                <SortHeader field="rank"   current={sortField} dir={sortDir} onClick={handleSort} pl="pl-5">#</SortHeader>
-                <SortHeader field="rankChange" current={sortField} dir={sortDir} onClick={handleSort} center>Δ</SortHeader>
-                <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort}>Stock</SortHeader>
-                <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
-                <th className={`${TH_BASE} hidden md:table-cell`}>Trend</th>
-                <SortHeader field="score"  current={sortField} dir={sortDir} onClick={handleSort} center>Score</SortHeader>
-                <th className={`${TH_BASE} text-center`} title="10 / 20 / 50 / 100 / 200 DMA">DMA</th>
-                <th className={`${TH_BASE} text-center`} title="Away from ATH: 10/15/20/25/30%">ATH</th>
-                <SortHeader field="dd" current={sortField} dir={sortDir} onClick={handleSort} center>DD</SortHeader>
+                <th className={`${TH_BASE} text-center px-2`} title="Select all visible rows">
+                  <input
+                    type="checkbox"
+                    className="accent-blue-500 w-4 h-4 align-middle cursor-pointer"
+                    checked={displayRows.length > 0 && displayRows.every(r => selected.has(r.symbol))}
+                    ref={(el) => {
+                      if (el) {
+                        const someSel = displayRows.some(r => selected.has(r.symbol));
+                        const allSel = displayRows.length > 0 && displayRows.every(r => selected.has(r.symbol));
+                        el.indeterminate = someSel && !allSel;
+                      }
+                    }}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
+                <SortHeader field="rank"   current={sortField} dir={sortDir} onClick={handleSort} pl="pl-5" title="Momentum rank (lower is stronger)">#</SortHeader>
+                <SortHeader field="rankChange" current={sortField} dir={sortDir} onClick={handleSort} center title="Rank change vs previous session">Δ</SortHeader>
+                <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort} title="Stock symbol / company">Stock</SortHeader>
+                <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center title="Market capitalisation (₹ crore)">Marketcap</SortHeader>
+                <SortHeader field="cmp"    current={sortField} dir={sortDir} onClick={handleSort} center title="CMP — Current Market Price">CMP</SortHeader>
+                <SortHeader field="chg"    current={sortField} dir={sortDir} onClick={handleSort} center title="Chg — Day's price change %">Chg</SortHeader>
+                <th className={`${TH_BASE} hidden md:table-cell`} title="Trend — recent price sparkline">Trend</th>
+                <SortHeader field="score"  current={sortField} dir={sortDir} onClick={handleSort} center title="Score — Composite momentum score (higher is stronger)">Score</SortHeader>
+                <th className={`${TH_BASE} text-center`} title="DMA — Daily Moving Averages: above/below 10 / 20 / 50 / 100 / 200-day">DMA</th>
+                <th className={`${TH_BASE} text-center`} title="ATH — All-Time High proximity: within 10 / 15 / 20 / 25 / 30%">ATH</th>
+                <SortHeader field="dd" current={sortField} dir={sortDir} onClick={handleSort} center title="DD — Drawdown from ATH (since-entry drawdown on Portfolio tab)">DD</SortHeader>
               </tr>
             </thead>
 
@@ -593,7 +881,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 [...Array(12)].map((_, i) => <SkeletonRow key={i} />)
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center">
+                  <td colSpan={12} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2 text-zinc-500 text-sm">
                       <span>No rankings yet.</span>
                       <span className="text-xs text-zinc-600">Trigger a sync to run the pipeline.</span>
@@ -646,8 +934,18 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         setSelectedCompany(row.companyName);
                       }
                     }}
-                    className={`transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg}`}
+                    className={`transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg} ${selected.has(row.symbol) ? 'ring-1 ring-inset ring-blue-500/40' : ''}`}
                   >
+                    {/* Select checkbox */}
+                    <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="accent-blue-500 w-4 h-4 cursor-pointer align-middle"
+                        checked={selected.has(row.symbol)}
+                        onChange={() => toggleRow(row.symbol)}
+                      />
+                    </td>
+
                     {/* Rank — left accent bar */}
                     <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 5px 0 0 ${accentColor}` }}>
                       {row.isUnranked ? (
@@ -759,6 +1057,28 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       </span>
                     </td>
 
+                    {/* CMP */}
+                    <td className="px-1 py-3 text-center">
+                      {row.currentPrice > 0 ? (
+                        <span className="font-mono text-xs font-semibold tabular-nums text-zinc-200">
+                          ₹{row.currentPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-700 text-xs">—</span>
+                      )}
+                    </td>
+
+                    {/* Day change */}
+                    <td className="px-1 py-3 text-center">
+                      {row.dayChangePct == null ? (
+                        <span className="text-zinc-700 text-xs">—</span>
+                      ) : (
+                        <span className={`font-mono text-xs font-semibold tabular-nums ${row.dayChangePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {row.dayChangePct >= 0 ? '+' : ''}{row.dayChangePct.toFixed(2)}%
+                        </span>
+                      )}
+                    </td>
+
                     {/* Price trend sparkline */}
                     <td className="px-3 py-3 hidden md:table-cell">
                       <Sparkline data={row.sparklineData} />
@@ -831,6 +1151,17 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       </div>
 
       <RulesInfoModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
+
+      <QueryEditorModal
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        baseTab={activeTab}
+        filters={filters}
+        activeQuery={activeQuery}
+        onApply={setFilters}
+        onSaved={handleQuerySaved}
+        onDeleted={handleQueryDeleted}
+      />
 
       {selectedSymbol && (
         <RankHistoryModal

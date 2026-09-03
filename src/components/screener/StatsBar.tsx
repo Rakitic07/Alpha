@@ -45,19 +45,33 @@ export default memo(function StatsBar({
     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full md:h-12">
       {/* Left side: Tabs */}
       <div className="flex items-center gap-1 bg-slate-800/50 border border-white/5 rounded-xl p-1">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => onTabChange(tab.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              activeTab === tab.key
-                ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            {tab.label} <span className="text-gray-500 ml-0.5">({tab.count})</span>
-          </button>
-        ))}
+        {tabs.map(tab => {
+          const isActive = activeTab === tab.key;
+          // On the active tab, reflect the number of rows currently visible
+          // after search/filters (only when it differs from the universe size).
+          const showFiltered = isActive && filteredCount !== tab.count;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => onTabChange(tab.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                isActive
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              {tab.label}{' '}
+              {showFiltered ? (
+                <span className="ml-0.5">
+                  <span className="text-emerald-400 font-semibold">{filteredCount}</span>
+                  <span className="text-gray-500"> / {tab.count}</span>
+                </span>
+              ) : (
+                <span className="text-gray-500 ml-0.5">({tab.count})</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Right side: Switch or Portfolio Stats */}

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidateTag, unstable_cache } from 'next/cache';
-import { prisma } from '@/lib/db';
+import { prisma, chunkArray } from '@/lib/db';
 import { computePortfolioState } from '@/lib/finance/recalculation';
 import { computeReturns, sharpeRatio, PARAMS } from '@/lib/screener/scoring';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
@@ -19,7 +19,8 @@ export interface ScreenerRow {
   compositeScore: number;
   avgSharpe: number;
   athProximity: number;
-  currentPrice: number;
+  currentPrice: number;       // CMP — latest stored close
+  dayChangePct?: number | null; // EOD day change vs previous session close
   aboveDma200Pct: number;
   dmaSwatches: { above10: boolean; above20: boolean; above50: boolean; above100: boolean; above200: boolean };
   medianTurnoverCr: number;
@@ -463,6 +464,15 @@ export async function getScreenerData(
     }
   }
 
+  // Normalise the market-cap category from the stored mcap value. The AMFI /
+  // label source is currently empty, so every row otherwise comes back tagged
+  // "Small" — which broke the Large/Mid category filters. Deriving from the
+  // marketCapCr we already have keeps badges, filters and stats consistent.
+  for (const r of allRows) {
+    const c = categoryFromMcap(r.marketCapCr);
+    if (c) r.marketCapCategory = c;
+  }
+
   // Filter rows by tab BEFORE computing stats so signal counts reflect the right set
   let rows: ScreenerRow[];
   switch (tab) {
@@ -489,7 +499,76 @@ export async function getScreenerData(
   }
   stats.mcapBreakdown = { large: mcLarge, mid: mcMid, small: mcSmall, micro: mcMicro };
 
+  // Attach EOD day-change % (latest stored close vs previous session close).
+  await attachDayChange(rows);
+
   return { rows, stats };
+}
+
+/**
+ * Classify a stock into a market-cap bucket from its value (₹ crore).
+ * Used because the AMFI/label category source is currently unavailable and
+ * otherwise tags every stock "Small". Thresholds are practical retail bands.
+ */
+function categoryFromMcap(mcapCr: number): string | null {
+  if (!mcapCr || mcapCr <= 0) return null;
+  if (mcapCr >= 20000) return 'Large';   // ≥ ₹20,000 Cr
+  if (mcapCr >= 5000) return 'Mid';       // ₹5,000 – 20,000 Cr
+  if (mcapCr >= 1000) return 'Small';     // ₹1,000 – 5,000 Cr
+  return 'Micro';                         // < ₹1,000 Cr
+}
+
+/**
+ * Compute each row's day-over-day % change from the two most recent trading
+ * sessions in ScreenerPrice and mutate rows in place. Non-fatal on error.
+ */
+async function attachDayChange(rows: ScreenerRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  try {
+    // Look at recent dates WITH their row counts. Some dates are partial
+    // snapshots (only a handful of symbols from corporate-action updates), so
+    // we must skip those and pick the previous date that has full coverage —
+    // otherwise most symbols have no "previous close" and day-change is blank.
+    const dateCounts = await prisma.screenerPrice.groupBy({
+      by: ['date'],
+      _count: { date: true },
+      orderBy: { date: 'desc' },
+      take: 20,
+    });
+    if (dateCounts.length < 2) return;
+    const latest = dateCounts[0].date;
+    const latestCount = dateCounts[0]._count.date;
+    // A "full" session has at least half as many rows as the latest snapshot.
+    const coverageFloor = Math.max(Math.floor(latestCount * 0.5), 50);
+    const prev = dateCounts
+      .slice(1)
+      .find(d => d._count.date >= coverageFloor)?.date;
+    if (!prev) return;
+
+    // Scope to the symbols we're actually displaying (chunked for the IN clause).
+    const symbols = rows.map(r => r.symbol);
+    const priceRows: { symbol: string; date: string; close: number }[] = [];
+    for (const chunk of chunkArray(symbols, 200)) {
+      const part = await prisma.screenerPrice.findMany({
+        where: { date: { in: [latest, prev] }, symbol: { in: chunk } },
+        select: { symbol: true, date: true, close: true },
+      });
+      priceRows.push(...part);
+    }
+    const latestClose = new Map<string, number>();
+    const prevClose = new Map<string, number>();
+    for (const p of priceRows) {
+      if (p.date === latest) latestClose.set(p.symbol, p.close);
+      else prevClose.set(p.symbol, p.close);
+    }
+    for (const r of rows) {
+      const lc = latestClose.get(r.symbol) ?? r.currentPrice;
+      const pc = prevClose.get(r.symbol);
+      r.dayChangePct = pc && pc > 0 ? ((lc - pc) / pc) * 100 : null;
+    }
+  } catch {
+    // non-fatal — day change simply won't render
+  }
 }
 
 // ── Helpers ──
