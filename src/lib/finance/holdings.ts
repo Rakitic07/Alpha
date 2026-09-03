@@ -4,7 +4,7 @@ import xirr from 'xirr';
 import { unstable_cache } from 'next/cache';
 import { getInstrumentKeys } from '../instrument-service';
 import { getLTP, hasValidToken } from '../upstox-client';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '../amfi';
+import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory, hasAMFIData } from '../amfi';
 import { isMarketOpenAsync } from '../marketHours';
 import { financeLogger } from '@/lib/logger';
 import { fetchNSECorporateActions } from '@/lib/nse-api';
@@ -388,18 +388,60 @@ export const calculatePortfolioXIRR = unstable_cache(
 );
 
 // Shared helper for market cap segmentation with concurrent fetching
+/**
+ * Classify a stock into a market-cap bucket from its market cap value (in ₹ Cr).
+ * Used as a fallback when SEBI/AMFI classification data has not been uploaded,
+ * so the breakdown reflects the actual portfolio instead of defaulting to "Small".
+ * Thresholds mirror the screener's categorisation.
+ */
+export function categoryFromMcap(mcapCr: number): 'Large' | 'Mid' | 'Small' | 'Micro' {
+    if (!mcapCr || mcapCr <= 0) return 'Small'; // unknown → neutral default
+    if (mcapCr >= 20000) return 'Large';
+    if (mcapCr >= 5000) return 'Mid';
+    if (mcapCr >= 1000) return 'Small';
+    return 'Micro';
+}
+
+/** Batch-fetch market caps (₹ Cr) for the given symbols from StockMarketCap. */
+export async function getMarketCapsBatch(symbols: string[]): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    if (symbols.length === 0) return map;
+    const chunks = chunkArray(symbols);
+    const results = await Promise.all(
+        chunks.map(chunk =>
+            prisma.stockMarketCap.findMany({
+                where: { symbol: { in: chunk } },
+                select: { symbol: true, marketCap: true },
+            })
+        )
+    );
+    for (const row of results.flat()) {
+        map.set(row.symbol, row.marketCap);
+    }
+    return map;
+}
+
 export async function computeMarketCapSegmentation(
     holdings: Holding[]
 ): Promise<MarketCapResult> {
-    // Fetch AMFI classifications for all holdings
     const symbols = holdings.map(h => h.symbol);
-    const amfiCategories = await getAMFICategoriesBatch(symbols);
+
+    // AMFI classification is the authoritative source. But when it has not been
+    // uploaded, getAMFICategoriesBatch defaults every symbol to "Small" — which
+    // makes the whole portfolio look 100% Small Cap. In that case fall back to
+    // classifying by the stock's actual market-cap value.
+    const [amfiCategories, amfiAvailable, mcapMap] = await Promise.all([
+        getAMFICategoriesBatch(symbols),
+        hasAMFIData(),
+        getMarketCapsBatch(symbols),
+    ]);
 
     let large = 0, mid = 0, small = 0, micro = 0;
 
     for (const holding of holdings) {
-        const amfiCategory = amfiCategories.get(holding.symbol) || 'Small';
-        const category = mapAMFIToMarketCapCategory(amfiCategory);
+        const category = amfiAvailable
+            ? mapAMFIToMarketCapCategory(amfiCategories.get(holding.symbol) || 'Small')
+            : categoryFromMcap(mcapMap.get(holding.symbol) ?? 0);
 
         switch (category) {
             case 'Large': large += holding.currentValue; break;

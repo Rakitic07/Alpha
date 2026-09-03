@@ -9,7 +9,8 @@ import { PortfolioEngine, orderTransactionsForReplay } from '../portfolio-engine
 import { getDataLockDate } from '../config';
 import { SectorAllocation } from '../types';
 import { getSymbolResolver } from '../amfi';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory, getCurrentAMFIPeriod, AMFICategory } from '../amfi';
+import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory, getCurrentAMFIPeriod, AMFICategory, hasAMFIData } from '../amfi';
+import { categoryFromMcap, getMarketCapsBatch } from './holdings';
 import { roundPrice, roundPercent, roundQuantity, roundEquity } from '../precision-utils';
 import { getMarketHolidays, getSpecialTradingDays } from '../upstox/market-info';
 import { getMarketStatus } from '../market-holidays-cache';
@@ -326,6 +327,12 @@ export async function recalculatePortfolioHistoryInternal(
     let amfiCategories = new Map<string, AMFICategory>();
     let lastAmfiPeriod: string | null = null;
 
+    // 4b-i. Market-cap fallback: when AMFI classification data has not been uploaded,
+    // every symbol would default to "Small". Instead classify by the stock's actual
+    // market-cap value so the breakdown reflects a versatile portfolio.
+    const amfiAvailable = await hasAMFIData();
+    const mcapMap = amfiAvailable ? new Map<string, number>() : await getMarketCapsBatch(symbols);
+
     // 4c. Pre-load Sector Mappings (with symbol mapping support)
     const sectorMappingsList = await prisma.sectorMapping.findMany();
     const sectorMap = new Map<string, string>();
@@ -625,9 +632,11 @@ export async function recalculatePortfolioHistoryInternal(
         for (const h of valuation.holdings) {
             const val = h.currentValue;
 
-            // Get AMFI category for this symbol
-            const amfiCategory = amfiCategories.get(h.symbol) || 'Small';
-            const category = mapAMFIToMarketCapCategory(amfiCategory);
+            // Get AMFI category for this symbol (fall back to market-cap value
+            // when AMFI classification data is unavailable).
+            const category = amfiAvailable
+                ? mapAMFIToMarketCapCategory(amfiCategories.get(h.symbol) || 'Small')
+                : categoryFromMcap(mcapMap.get(h.symbol) ?? 0);
 
             switch (category) {
                 case 'Large': large += val; break;
