@@ -1,20 +1,33 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useTransactions, useSymbolMappings } from '@/hooks/useQueries';
 import ManageTradesClient from './ManageTradesClient';
 
 export default function TradesPage() {
-  const { data: transactions, isLoading: transactionsLoading } = useTransactions();
+  // These queries fetch on the client, so the server render has no data yet.
+  // Gate the first render on `mounted` so the server and the initial client
+  // render always agree (a skeleton) — otherwise the data/error branches can
+  // diverge and trigger a hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const { data: transactions, isLoading: transactionsLoading, isError } = useTransactions();
   const { data: mappings, isLoading: mappingsLoading, isFetching } = useSymbolMappings();
 
   const isLoading = transactionsLoading || mappingsLoading;
 
-  if (isLoading && (!transactions || !mappings)) {
+  if (!mounted || (isLoading && (!transactions || !mappings))) {
     return null; // Next.js loading.tsx handles the skeleton
   }
 
+  // Only a genuine fetch error is a failure; missing-but-still-loading data
+  // keeps showing the skeleton above.
   if (!transactions) {
-    return <div className="text-center py-8 text-gray-400">Failed to load transactions</div>;
+    if (isError) {
+      return <div className="text-center py-8 text-gray-400">Failed to load transactions</div>;
+    }
+    return null;
   }
 
   return (

@@ -5,11 +5,12 @@
 import { prisma, chunkArray } from '@/lib/db';
 import { addDays, isSameDay, startOfDay, format, differenceInDays, max as dateMax, subDays, isWeekend } from 'date-fns';
 import { revalidateTag } from 'next/cache';
-import { PortfolioEngine } from '../portfolio-engine';
+import { PortfolioEngine, orderTransactionsForReplay } from '../portfolio-engine';
 import { getDataLockDate } from '../config';
 import { SectorAllocation } from '../types';
 import { getSymbolResolver } from '../amfi';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory, getCurrentAMFIPeriod, AMFICategory } from '../amfi';
+import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory, getCurrentAMFIPeriod, AMFICategory, hasAMFIData } from '../amfi';
+import { categoryFromMcap, getMarketCapsBatch } from './holdings';
 import { roundPrice, roundPercent, roundQuantity, roundEquity } from '../precision-utils';
 import { getMarketHolidays, getSpecialTradingDays } from '../upstox/market-info';
 import { getMarketStatus } from '../market-holidays-cache';
@@ -34,9 +35,14 @@ export async function computePortfolioState(toDate?: Date) {
     const symbolMappings = await prisma.symbolMapping.findMany();
     const resolveSymbol = getSymbolResolver(symbolMappings);
 
-    // Process all transactions (SPLIT/BONUS are handled directly by processTransaction)
-    for (const tx of transactions) {
-        engine.processTransaction({ ...tx, symbol: resolveSymbol(tx.symbol) });
+    // Process all transactions (SPLIT/BONUS are handled directly by processTransaction).
+    // Order same-day events BUY-before-SELL so intraday buy/sell pairs don't leave
+    // phantom holdings (see orderTransactionsForReplay).
+    const orderedTransactions = orderTransactionsForReplay(
+        transactions.map(tx => ({ ...tx, symbol: resolveSymbol(tx.symbol) }))
+    );
+    for (const tx of orderedTransactions) {
+        engine.processTransaction(tx);
     }
 
     financeLogger.info(`[PortfolioState] Final Holdings: ${engine.holdings.size}, Invested Capital: ${engine.investedCapital.toFixed(2)}`);
@@ -65,10 +71,14 @@ export async function recalculatePortfolioHistoryInternal(
     // Normalize symbols using SymbolMapping
     const symbolMappings = await prisma.symbolMapping.findMany();
     const resolveSymbol = getSymbolResolver(symbolMappings);
-    const transactions = transactionsRaw.map(t => ({
-        ...t,
-        symbol: resolveSymbol(t.symbol)
-    }));
+    // Order same-day events BUY-before-SELL to avoid phantom holdings from
+    // intraday buy/sell pairs (see orderTransactionsForReplay).
+    const transactions = orderTransactionsForReplay(
+        transactionsRaw.map(t => ({
+            ...t,
+            symbol: resolveSymbol(t.symbol)
+        }))
+    );
 
 
     if (transactions.length === 0) {
@@ -341,6 +351,12 @@ export async function recalculatePortfolioHistoryInternal(
     let amfiCategories = new Map<string, AMFICategory>();
     let lastAmfiPeriod: string | null = null;
 
+    // 4b-i. Market-cap fallback: when AMFI classification data has not been uploaded,
+    // every symbol would default to "Small". Instead classify by the stock's actual
+    // market-cap value so the breakdown reflects a versatile portfolio.
+    const amfiAvailable = await hasAMFIData();
+    const mcapMap = amfiAvailable ? new Map<string, number>() : await getMarketCapsBatch(symbols);
+
     // 4c. Pre-load Sector Mappings (with symbol mapping support)
     const sectorMappingsList = await prisma.sectorMapping.findMany();
     const sectorMap = new Map<string, string>();
@@ -415,7 +431,7 @@ export async function recalculatePortfolioHistoryInternal(
     type IndexTracker = { lastKnown: number; startValue: number };
     const indexTrackers = new Map<string, IndexTracker>([
         ['NIFTY50', { lastKnown: 0, startValue: 0 }],
-        ['NIFTY500_MOMENTUM50', { lastKnown: 0, startValue: 0 }],
+        ['NIFTY_500', { lastKnown: 0, startValue: 0 }],
         ['NIFTY_MIDCAP100', { lastKnown: 0, startValue: 0 }],
         ['NIFTY_SMALLCAP250', { lastKnown: 0, startValue: 0 }],
         ['NIFTY_MICROCAP250', { lastKnown: 0, startValue: 0 }],
@@ -642,9 +658,11 @@ export async function recalculatePortfolioHistoryInternal(
         for (const h of valuation.holdings) {
             const val = h.currentValue;
 
-            // Get AMFI category for this symbol
-            const amfiCategory = amfiCategories.get(h.symbol) || 'Small';
-            const category = mapAMFIToMarketCapCategory(amfiCategory);
+            // Get AMFI category for this symbol (fall back to market-cap value
+            // when AMFI classification data is unavailable).
+            const category = amfiAvailable
+                ? mapAMFIToMarketCapCategory(amfiCategories.get(h.symbol) || 'Small')
+                : categoryFromMcap(mcapMap.get(h.symbol) ?? 0);
 
             switch (category) {
                 case 'Large': large += val; break;
@@ -782,7 +800,7 @@ export async function recalculatePortfolioHistoryInternal(
                 investedCapital: roundEquity(accumulatedInvestedCapital),
                 portfolioNAV: roundPrice(nav),
                 niftyNAV: indexNavs.get('NIFTY50') ? roundPrice(indexNavs.get('NIFTY50')!) : null,
-                nifty500Momentum50NAV: indexNavs.get('NIFTY500_MOMENTUM50') ? roundPrice(indexNavs.get('NIFTY500_MOMENTUM50')!) : null,
+                nifty500Momentum50NAV: indexNavs.get('NIFTY_500') ? roundPrice(indexNavs.get('NIFTY_500')!) : null,
                 niftyMidcap100NAV: indexNavs.get('NIFTY_MIDCAP100') ? roundPrice(indexNavs.get('NIFTY_MIDCAP100')!) : null,
                 niftySmallcap250NAV: indexNavs.get('NIFTY_SMALLCAP250') ? roundPrice(indexNavs.get('NIFTY_SMALLCAP250')!) : null,
                 niftyMicrocap250NAV: indexNavs.get('NIFTY_MICROCAP250') ? roundPrice(indexNavs.get('NIFTY_MICROCAP250')!) : null,

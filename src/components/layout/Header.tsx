@@ -15,6 +15,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faChartLine,
   faFilter,
+  faFire,
   faBriefcase,
   faBolt,
   faRightFromBracket,
@@ -34,6 +35,7 @@ const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMob
   { text: 'Markets', path: '/market', icon: faHeartPulse },
   { text: 'Dashboard', path: '/dashboard', icon: faChartLine },
   { text: 'Screener', path: '/screener', icon: faFilter },
+  { text: 'Radar', path: '/radar', icon: faFire },
   { text: 'Portfolio', path: '/portfolio', icon: faBriefcase },
   { text: 'Snapshots', path: '/snapshots', icon: faCamera },
   { text: 'Trades', path: '/trades', icon: faBolt, hiddenOnMobile: true },

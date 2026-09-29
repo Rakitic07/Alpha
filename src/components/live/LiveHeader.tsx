@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCamera, faRotateRight, faCalendar } from '@fortawesome/free-solid-svg-icons';
+import ShimmerText from '@/components/ui/ShimmerText';
 
 import type { Variants } from 'framer-motion';
 
@@ -102,6 +103,11 @@ const LiveHeader = memo(function LiveHeader({
                                     ? 'bg-orange-500' 
                                     : 'bg-emerald-500'
                         } ${marketOpen && !isClosed && !isPreOpen ? 'animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}></div>
+                        {loading ? (
+                            <ShimmerText className="text-xs">Syncing live prices…</ShimmerText>
+                        ) : (marketOpen && !isClosed) ? (
+                            <ShimmerText className="text-xs">Streaming live</ShimmerText>
+                        ) : (
                         <p className="text-gray-400 text-xs font-medium">
                             {lastRefreshed && (() => {
                                 const rounded = new Date(lastRefreshed);
@@ -124,6 +130,7 @@ const LiveHeader = memo(function LiveHeader({
                                 );
                             })()}
                         </p>
+                        )}
                     </div>
 
                     {/* Action Buttons Group */}

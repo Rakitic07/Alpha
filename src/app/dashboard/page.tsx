@@ -1,7 +1,7 @@
 'use client';
 
 import { useDashboardData } from '@/hooks/useQueries';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useLiveData } from '@/context/LiveDataContext';
 import { 
   faRocket,
@@ -92,20 +92,28 @@ const TradeReturnHistogram = dynamic(() => import('@/components/exits/TradeRetur
 });
 
 export default function DashboardPage() {
-  const { data, isLoading, isFetching } = useDashboardData();
+  const { data, isLoading, isFetching, isError } = useDashboardData();
   const { privacyMode } = useLiveData();
+
+  // Avoid SSR/client hydration mismatch: render nothing until mounted so the
+  // server and first client render agree (Next.js loading.tsx shows the skeleton).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const drawdownData = useMemo(
     () => (data?.dashboardHistory || []).map(d => ({ date: d.date, drawdown: d.drawdown })),
     [data?.dashboardHistory]
   );
 
-  if (isLoading && !data) {
+  if (!mounted || (isLoading && !data)) {
     return <DashboardLoading />;
   }
 
   if (!data) {
-    return <div className="text-center py-8 text-gray-400">Failed to load dashboard data</div>;
+    // Only surface an error once the query has actually failed.
+    return isError
+      ? <div className="text-center py-8 text-gray-400">Failed to load dashboard data</div>
+      : null;
   }
 
   const {

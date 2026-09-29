@@ -8,9 +8,11 @@ import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
 import TradeDialog from '@/components/trades/TradeDialog';
 import { TableVirtuoso } from 'react-virtuoso';
 import { styled } from '@mui/material/styles';
-import { addTransaction, updateTransaction, deleteTransaction, validateSymbols, type SymbolValidationResult, processZerodhaUpload, getCurrentStockQuantities } from '../actions';
+import { addTransaction, updateTransaction, deleteTransaction, deleteTransactionsBySymbols, validateSymbols, type SymbolValidationResult, processZerodhaUpload, getCurrentStockQuantities } from '../actions';
 import { useImport } from '@/context/ImportContext';
 import { useLiveData } from '@/context/LiveDataContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, usePortfolioHoldings } from '@/hooks/useQueries';
 import { validateTradebook, type ParsedTrade, type Discrepancy, type TradeSummary, detectDiscrepancies, generateSummary } from '@/lib/tradeValidation';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import UploadPreviewModal from '@/components/trades/UploadPreviewModal';
@@ -31,10 +33,12 @@ import CloseIcon from '@mui/icons-material/Close';
 
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import AddIcon from '@mui/icons-material/Add';
 import SyncIcon from '@mui/icons-material/Sync';
 import CircularProgress from '@mui/material/CircularProgress';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
+import Checkbox from '@mui/material/Checkbox';
 
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -134,6 +138,26 @@ export default function ManageTradesClient({
         open: false,
         id: null
     });
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Bulk "delete by symbol" tool state
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [bulkSearch, setBulkSearch] = useState('');
+    const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+    const [bulkOnlyUnheld, setBulkOnlyUnheld] = useState(false);
+    const [bulkBusy, setBulkBusy] = useState(false);
+
+    const queryClient = useQueryClient();
+    const { data: holdingsData } = usePortfolioHoldings();
+
+    // Refresh every dataset touched by a trade change so the UI reflects the DB.
+    const refreshAll = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.trades.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.exits.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.snapshots.all });
+    }, [queryClient]);
 
     // Snackbar State
     const [snackbar, setSnackbar] = useState<{
@@ -289,6 +313,93 @@ export default function ManageTradesClient({
         return result;
     }, [viewMode, groupedTransactions, dailyGroups, expandedGroups, expandedDailyGroups]);
 
+    // Symbols currently held in the portfolio (uppercased for comparison).
+    const heldSet = useMemo(
+        () => new Set((holdingsData ?? []).map((h) => h.symbol.toUpperCase())),
+        [holdingsData],
+    );
+
+    // Every distinct symbol that has trades, with a count + most-recent date.
+    const symbolStats = useMemo(() => {
+        const map = new Map<string, { symbol: string; count: number; lastDate: Date }>();
+        for (const t of initialTransactions) {
+            const cur = map.get(t.symbol);
+            const d = new Date(t.date);
+            if (!cur) {
+                map.set(t.symbol, { symbol: t.symbol, count: 1, lastDate: d });
+            } else {
+                cur.count += 1;
+                if (d > cur.lastDate) cur.lastDate = d;
+            }
+        }
+        return Array.from(map.values()).sort((a, b) => a.symbol.localeCompare(b.symbol));
+    }, [initialTransactions]);
+
+    // Bulk list after search + "only not in portfolio" filters.
+    const bulkFilteredSymbols = useMemo(() => {
+        const q = bulkSearch.trim().toLowerCase();
+        return symbolStats.filter((s) => {
+            const matchesSearch = q ? s.symbol.toLowerCase().includes(q) : true;
+            const matchesHeld = bulkOnlyUnheld ? !heldSet.has(s.symbol.toUpperCase()) : true;
+            return matchesSearch && matchesHeld;
+        });
+    }, [symbolStats, bulkSearch, bulkOnlyUnheld, heldSet]);
+
+    const allFilteredSelected =
+        bulkFilteredSymbols.length > 0 && bulkFilteredSymbols.every((s) => bulkSelected.has(s.symbol));
+
+    const toggleBulkSymbol = useCallback((symbol: string) => {
+        setBulkSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(symbol)) next.delete(symbol);
+            else next.add(symbol);
+            return next;
+        });
+    }, []);
+
+    const toggleSelectAllFiltered = useCallback(() => {
+        setBulkSelected((prev) => {
+            const next = new Set(prev);
+            const everySelected = bulkFilteredSymbols.every((s) => next.has(s.symbol));
+            if (everySelected) {
+                bulkFilteredSymbols.forEach((s) => next.delete(s.symbol));
+            } else {
+                bulkFilteredSymbols.forEach((s) => next.add(s.symbol));
+            }
+            return next;
+        });
+    }, [bulkFilteredSymbols]);
+
+    const openBulk = useCallback(() => {
+        setBulkSelected(new Set());
+        setBulkSearch('');
+        setBulkOnlyUnheld(false);
+        setBulkOpen(true);
+    }, []);
+
+    const confirmBulkDelete = useCallback(async () => {
+        if (bulkSelected.size === 0) return;
+        const symbols = Array.from(bulkSelected);
+        setBulkBusy(true);
+        setSnackbar({ open: true, message: `Deleting ${symbols.length} symbol${symbols.length > 1 ? 's' : ''}…`, severity: 'info' });
+        try {
+            const res = await deleteTransactionsBySymbols(symbols);
+            refreshAll();
+            setSnackbar({
+                open: true,
+                message: `Deleted ${res.deleted} trade${res.deleted === 1 ? '' : 's'} across ${symbols.length} symbol${symbols.length > 1 ? 's' : ''}`,
+                severity: 'success',
+            });
+            setBulkOpen(false);
+            setBulkSelected(new Set());
+        } catch (error) {
+            console.error('Bulk delete failed', error);
+            setSnackbar({ open: true, message: 'Failed to delete selected symbols', severity: 'error' });
+        } finally {
+            setBulkBusy(false);
+        }
+    }, [bulkSelected, refreshAll]);
+
     const handleAdd = useCallback(() => {
         setEditingTrade(null);
         setIsDialogOpen(true);
@@ -305,16 +416,21 @@ export default function ManageTradesClient({
 
     const confirmDelete = useCallback(async () => {
         if (deleteConfirmation.id) {
+            setIsDeleting(true);
+            setSnackbar({ open: true, message: 'Deleting trade…', severity: 'info' });
             try {
                 await deleteTransaction(deleteConfirmation.id);
+                refreshAll();
                 setSnackbar({ open: true, message: 'Trade deleted successfully', severity: 'success' });
             } catch (error) {
                 console.error("Failed to delete trade", error);
                 setSnackbar({ open: true, message: 'Failed to delete trade', severity: 'error' });
+            } finally {
+                setIsDeleting(false);
             }
         }
         setDeleteConfirmation({ open: false, id: null });
-    }, [deleteConfirmation.id]);
+    }, [deleteConfirmation.id, refreshAll]);
 
     const cancelDelete = useCallback(() => {
         setDeleteConfirmation({ open: false, id: null });
@@ -330,12 +446,13 @@ export default function ManageTradesClient({
                 await addTransaction(data);
                 setSnackbar({ open: true, message: 'Trade added successfully', severity: 'success' });
             }
+            refreshAll();
             setIsDialogOpen(false);
         } catch (error) {
             console.error("Failed to save trade", error);
             setSnackbar({ open: true, message: 'Failed to save trade', severity: 'error' });
         }
-    }, [editingTrade]);
+    }, [editingTrade, refreshAll]);
 
 
 
@@ -765,6 +882,28 @@ export default function ManageTradesClient({
                             }}
                         >
                             <FileUploadIcon />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Delete trades by symbol">
+                        <IconButton
+                            onClick={openBulk}
+                            className="hidden sm:inline-flex"
+                            sx={{
+                                background: 'rgba(255,255,255,0.05)',
+                                borderRadius: '0.75rem',
+                                color: 'rgba(255,255,255,0.7)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                width: '40px',
+                                height: '40px',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                    borderColor: 'rgba(239, 68, 68, 0.5)',
+                                    color: '#f87171',
+                                },
+                            }}
+                        >
+                            <DeleteSweepIcon />
                         </IconButton>
                     </Tooltip>
 
@@ -1243,14 +1382,137 @@ export default function ManageTradesClient({
                    </div>
                </DialogContent>
                <DialogActions sx={{ p: 2 }}>
-                   <Button onClick={cancelDelete} sx={{ color: 'gray' }}>
+                   <Button onClick={cancelDelete} sx={{ color: 'gray' }} disabled={isDeleting}>
                        Cancel
                    </Button>
-                   <Button onClick={confirmDelete} color="error" autoFocus>
-                       Delete
+                   <Button onClick={confirmDelete} color="error" autoFocus disabled={isDeleting} startIcon={isDeleting ? <CircularProgress size={14} color="inherit" /> : undefined}>
+                       {isDeleting ? 'Deleting…' : 'Delete'}
                    </Button>
                </DialogActions>
            </Dialog>
+
+           {/* Bulk delete-by-symbol dialog */}
+           <Dialog
+              open={bulkOpen}
+              onClose={() => { if (!bulkBusy) setBulkOpen(false); }}
+              maxWidth="sm"
+              fullWidth
+              slotProps={{
+                  paper: {
+                      className: "glass-card",
+                      sx: {
+                          backgroundColor: 'rgba(17, 24, 39, 0.97)',
+                          backdropFilter: 'blur(20px)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          color: 'white',
+                      },
+                  },
+              }}
+          >
+              <DialogTitle sx={{ color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <DeleteSweepIcon sx={{ color: '#f87171' }} fontSize="small" />
+                  Delete trades by symbol
+              </DialogTitle>
+              <DialogContent>
+                  <p className="text-xs text-gray-400 mb-3">
+                      Select one or more stocks to permanently remove <span className="text-gray-200 font-medium">all</span> of their trades.
+                      Handy for cleaning up symbols no longer in your portfolio. This can’t be undone.
+                  </p>
+
+                  <TextField
+                      placeholder="Search symbol…"
+                      value={bulkSearch}
+                      onChange={(e) => setBulkSearch(e.target.value)}
+                      size="small"
+                      fullWidth
+                      slotProps={{
+                          input: {
+                              startAdornment: (
+                                  <InputAdornment position="start">
+                                      <SearchIcon sx={{ color: 'gray', fontSize: 18 }} />
+                                  </InputAdornment>
+                              ),
+                              sx: {
+                                  backgroundColor: 'rgba(255,255,255,0.05)',
+                                  borderRadius: '0.75rem',
+                                  '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
+                                  color: 'white',
+                              },
+                          },
+                      }}
+                  />
+
+                  <div className="flex items-center justify-between mt-2.5 mb-1.5 gap-2 flex-wrap">
+                      <div className="flex items-center gap-3">
+                          <button
+                              type="button"
+                              onClick={toggleSelectAllFiltered}
+                              disabled={bulkFilteredSymbols.length === 0}
+                              className="text-[11px] font-medium text-blue-400 hover:text-blue-300 disabled:opacity-40"
+                          >
+                              {allFilteredSelected ? 'Clear all' : 'Select all'}
+                          </button>
+                          <label className="flex items-center gap-1 text-[11px] text-gray-400 cursor-pointer select-none">
+                              <input
+                                  type="checkbox"
+                                  checked={bulkOnlyUnheld}
+                                  onChange={(e) => setBulkOnlyUnheld(e.target.checked)}
+                                  className="accent-red-500"
+                              />
+                              Only not in portfolio
+                          </label>
+                      </div>
+                      <span className="text-[11px] text-gray-500">
+                          {bulkSelected.size} selected
+                      </span>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 divide-y divide-white/5 max-h-[340px] overflow-y-auto">
+                      {bulkFilteredSymbols.length === 0 ? (
+                          <div className="py-8 text-center text-gray-500 text-sm">No symbols match.</div>
+                      ) : (
+                          bulkFilteredSymbols.map((s) => {
+                              const held = heldSet.has(s.symbol.toUpperCase());
+                              const checked = bulkSelected.has(s.symbol);
+                              return (
+                                  <label
+                                      key={s.symbol}
+                                      className={`flex items-center gap-2 px-2.5 py-2 cursor-pointer transition-colors ${checked ? 'bg-red-500/10' : 'hover:bg-white/[0.03]'}`}
+                                  >
+                                      <Checkbox
+                                          checked={checked}
+                                          onChange={() => toggleBulkSymbol(s.symbol)}
+                                          size="small"
+                                          sx={{ color: '#6b7280', p: 0.5, '&.Mui-checked': { color: '#f87171' } }}
+                                      />
+                                      <span className="font-semibold text-sm text-white min-w-0 flex-1 truncate">{s.symbol}</span>
+                                      {held ? (
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/15 text-indigo-300 shrink-0">In portfolio</span>
+                                      ) : (
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase bg-white/5 text-gray-500 shrink-0">Not held</span>
+                                      )}
+                                      <span className="text-[11px] text-gray-500 tabular-nums w-16 text-right shrink-0">{s.count} trade{s.count === 1 ? '' : 's'}</span>
+                                  </label>
+                              );
+                          })
+                      )}
+                  </div>
+              </DialogContent>
+              <DialogActions sx={{ p: 2 }}>
+                  <Button onClick={() => setBulkOpen(false)} sx={{ color: 'gray' }} disabled={bulkBusy}>
+                      Cancel
+                  </Button>
+                  <Button
+                      onClick={confirmBulkDelete}
+                      color="error"
+                      variant="contained"
+                      disabled={bulkSelected.size === 0 || bulkBusy}
+                      startIcon={bulkBusy ? <CircularProgress size={14} color="inherit" /> : <DeleteSweepIcon fontSize="small" />}
+                  >
+                      {bulkBusy ? 'Deleting…' : `Delete ${bulkSelected.size || ''} symbol${bulkSelected.size === 1 ? '' : 's'}`.trim()}
+                  </Button>
+              </DialogActions>
+          </Dialog>
             <Snackbar 
                 open={snackbar.open} 
                 autoHideDuration={6000} 

@@ -6,7 +6,8 @@ import { prisma, chunkArray } from '@/lib/db';
 import { SectorAllocation } from '@/lib/types';
 import { getLiveQuoteV3, hasValidToken, UpstoxLiveQuoteV3 } from '@/lib/upstox-client';
 import { getInstrumentKeys } from '@/lib/instrument-service';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '@/lib/amfi';
+import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory, hasAMFIData } from '@/lib/amfi';
+import { categoryFromMcap, getMarketCapsBatch } from '@/lib/finance/holdings';
 import { isMarketOpenAsync } from '@/lib/marketHours';
 import { isTradingHoliday } from '@/lib/market-holidays-cache';
 import { subDays } from 'date-fns';
@@ -417,8 +418,14 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       liveActionsLogger.warn("No valid Upstox token - using fallback prices");
     }
 
-  // Fetch AMFI market cap classifications for all holdings
+  // Fetch AMFI market cap classifications for all holdings.
+  // When AMFI data has not been uploaded, every symbol defaults to "Small", so
+  // fall back to classifying by the stock's actual market-cap value instead.
   const amfiCategories = await getAMFICategoriesBatch(holdingSymbols);
+  const amfiAvailable = await hasAMFIData();
+  const mcapMap = amfiAvailable
+    ? new Map<string, number>()
+    : await getMarketCapsBatch(holdingSymbols);
 
   // Fetch technicals (ATH and 1-month average volume) for all holdings
   const technicalsMap = await getStockTechnicalsBatch(holdingSymbols);
@@ -524,12 +531,12 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     const distAthPct = ath > 0 ? ((price - ath) / ath) * 100 : 0;
     const rvol = avgVolume1m > 0 ? todayVolume / avgVolume1m : 0;
 
-    // Get market cap category from AMFI classification
-    // getAMFICategoriesBatch returns original symbol keys
+    // Get market cap category. Prefer AMFI classification when available,
+    // otherwise derive it from the stock's market-cap value.
     const amfiCategory = amfiCategories.get(h.symbol);
-    const marketCapCategory: MarketCapCategory | undefined = amfiCategory 
-      ? mapAMFIToMarketCapCategory(amfiCategory)
-      : undefined;
+    const marketCapCategory: MarketCapCategory | undefined = amfiAvailable
+      ? (amfiCategory ? mapAMFIToMarketCapCategory(amfiCategory) : undefined)
+      : categoryFromMcap(mcapMap.get(h.symbol) ?? 0);
 
     const value = h.qty * price;
     const prevValue = h.qty * prevClose;
