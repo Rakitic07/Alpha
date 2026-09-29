@@ -26,7 +26,7 @@ config({ path: '.env' });
 
 import { prisma } from './lib/db';
 import { fetchNSECorporateActions, type NSECorporateAction } from '../src/lib/nse-api';
-import { parse, format } from 'date-fns';
+import { parseNSEDateToStr } from '../src/lib/format';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 if (DRY_RUN) console.log('🔍 DRY RUN — no writes will be made\n');
@@ -34,14 +34,7 @@ if (DRY_RUN) console.log('🔍 DRY RUN — no writes will be made\n');
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseNSEDateToISO(dateStr: string): string | null {
-  if (!dateStr || dateStr === '-') return null;
-  try {
-    const parsed = parse(dateStr, 'dd-MMM-yyyy', new Date());
-    if (isNaN(parsed.getTime())) return null;
-    return format(parsed, 'yyyy-MM-dd');
-  } catch {
-    return null;
-  }
+  return parseNSEDateToStr(dateStr);
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────

@@ -196,11 +196,23 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // Track if we're in market hours based on actual server-side market status
   // This is updated from the live data response to support special sessions (like Sunday budget)
   const [isMarketHours, setIsMarketHours] = useState(() => {
-    const now = new Date();
-    const hour = now.getHours();
-    const day = now.getDay();
-    // Initial guess: Monday-Friday, 9 AM to 4 PM IST
-    return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        weekday: 'short',
+        hour12: false,
+      }).formatToParts(new Date());
+      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+      const wd = parts.find(p => p.type === 'weekday')?.value;
+      const isWeekday = wd !== 'Sat' && wd !== 'Sun';
+      return isWeekday && hour >= 9 && hour < 16;
+    } catch {
+      const now = new Date();
+      const hour = now.getHours();
+      const day = now.getDay();
+      return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
+    }
   });
 
   // Apply batched updates to data

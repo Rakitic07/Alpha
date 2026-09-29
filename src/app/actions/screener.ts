@@ -172,13 +172,9 @@ export async function getScreenerData(
 
         for (const [sym, earliestDate] of earliestDateMap.entries()) {
           const hist = pricesBySymbol.get(sym) || [];
-          const startOfEarliest = new Date(earliestDate);
-          startOfEarliest.setHours(0, 0, 0, 0);
+          const earliestDateStr = earliestDate.toISOString().slice(0, 10);
 
-          const afterEntry = hist.filter(h => {
-            const d = new Date(h.date + 'T00:00:00');
-            return d >= startOfEarliest;
-          });
+          const afterEntry = hist.filter(h => h.date >= earliestDateStr);
           
           if (afterEntry.length > 0) {
             const maxHigh = Math.max(...afterEntry.map(h => h.high));

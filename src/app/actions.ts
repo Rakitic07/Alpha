@@ -7,6 +7,7 @@ import { getLTP, hasValidToken } from '@/lib/upstox-client';
 import { getInstrumentKeys, isValidSymbol, getInstrumentKeyByISIN, getSymbolFromKey } from '@/lib/instrument-service';
 import { getSymbolResolver } from '@/lib/amfi';
 import { fetchNSEHistory } from '@/lib/nse-api';
+import { parseNSEDateToStr, parseNSEDateToUTC } from '@/lib/format';
 import { logger } from '@/lib/logger';
 
 const actionsLogger = logger.scope('Actions');
@@ -487,8 +488,7 @@ export interface HistoricalHolding {
 import { computePortfolioState } from '@/lib/finance';
 
 async function getSnapshotHoldingsInternal(dateStr: string): Promise<HistoricalHolding[]> {
-    const targetDate = new Date(dateStr);
-    targetDate.setHours(23, 59, 59, 999);
+    const targetDate = new Date(`${dateStr.slice(0, 10)}T23:59:59.999Z`);
 
     const engine = await computePortfolioState(targetDate);
 
@@ -879,22 +879,7 @@ function parseSplitBonusRatio(subject: string): { type: 'SPLIT' | 'BONUS' | null
 }
 
 function parseNSEDate(dateStr: string): Date | null {
-    // Parse "28-Jan-2025" format
-    const months: Record<string, number> = {
-        'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
-        'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
-    };
-    
-    const match = dateStr.match(/(\d{1,2})-([a-zA-Z]{3})-(\d{4})/);
-    if (!match) return null;
-    
-    const day = parseInt(match[1]);
-    const month = months[match[2].toLowerCase()];
-    const year = parseInt(match[3]);
-    
-    if (month === undefined) return null;
-    
-    return new Date(year, month, day);
+    return parseNSEDateToUTC(dateStr);
 }
 
 export async function processNSECorporateActionsClient(
@@ -928,10 +913,9 @@ export async function processNSECorporateActionsClient(
             if (!type) continue;
             
             // Parse date
-            const exDate = parseNSEDate(action.exDate);
-            if (!exDate) continue;
+            const dateStr = parseNSEDateToStr(action.exDate);
+            if (!dateStr) continue;
             
-            const dateStr = exDate.toISOString().split('T')[0];
             const key = `${action.symbol.toUpperCase()}-${dateStr}-${type}`;
             
             // Skip if already exists

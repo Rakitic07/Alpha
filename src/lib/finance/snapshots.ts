@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/db';
-import { startOfDay, format, differenceInDays, subYears, subDays } from 'date-fns';
+import { format, differenceInDays, subYears, subDays } from 'date-fns';
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { financeLogger } from '@/lib/logger';
-import { istDateParts, istDayOfWeek } from '@/lib/tz';
+import { istDateParts, istDayOfWeek, todayUTCMidnightForISTDay } from '@/lib/tz';
 import { getPortfolioHoldings, computeMarketCapSegmentation } from './holdings';
 import { computePortfolioState } from './recalculation';
 import { roundPercent, roundEquity, roundPrice } from '../precision-utils';
@@ -469,7 +469,7 @@ export const getDashboardStats = unstable_cache(
  * Used when the market is closed to avoid unnecessary recalculation.
  */
 export async function captureHolidaySnapshot(date: Date = new Date()) {
-    const today = startOfDay(date);
+    const today = todayUTCMidnightForISTDay(date);
 
     // Check if snapshot already exists for today
     const existing = await prisma.dailyPortfolioSnapshot.findFirst({

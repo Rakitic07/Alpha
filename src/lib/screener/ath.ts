@@ -6,7 +6,7 @@
 
 import { prisma, chunkArray } from '@/lib/db';
 import { getHistoricalCandles } from '@/lib/upstox-client';
-import { todayIST, toDateStr } from './dates';
+import { todayIST } from './dates';
 import { withConcurrency } from './utils';
 import { logger } from '@/lib/logger';
 
@@ -39,7 +39,7 @@ export async function seedATH(instruments: InstrumentInfo[]): Promise<{ seeded: 
         for (const c of data.candles) {
           if (c.high > maxHigh) {
             maxHigh = c.high;
-            maxHighDate = toDateStr(new Date(c.timestamp));
+            maxHighDate = c.timestamp.slice(0, 10);
           }
         }
 

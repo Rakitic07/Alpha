@@ -13,27 +13,11 @@
 
 import { prisma } from '@/lib/db';
 import { fetchNSECorporateActions, type NSECorporateAction } from '@/lib/nse-api';
-import { todayIST, toDateStr, daysAgo } from './dates';
+import { todayIST, daysAgo } from './dates';
 import { logger } from '@/lib/logger';
-import { parse } from 'date-fns';
+import { parseNSEDateToStr } from '@/lib/format';
 
 const dmLogger = logger.scope('Demerger');
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Parse NSE date format "24-Apr-2025" → "2025-04-24" */
-function parseNSEDateToStr(dateStr: string): string | null {
-  if (!dateStr || dateStr === '-') return null;
-  try {
-    const parsed = parse(dateStr, 'dd-MMM-yyyy', new Date());
-    if (isNaN(parsed.getTime())) return null;
-    return toDateStr(parsed);
-  } catch {
-    return null;
-  }
-}
 
 // ============================================================================
 // Core Functions

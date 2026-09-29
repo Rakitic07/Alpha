@@ -3,6 +3,7 @@ import { addDays, format, subDays } from 'date-fns';
 import { getHistoricalCandles } from '../upstox-client';
 import { getInstrumentKey } from '../instrument-service';
 import { fetchNSEIndexHistory } from '../nse-api';
+import { parseNSEDateToUTC } from '@/lib/format';
 import { financeLogger } from '@/lib/logger';
 
 // Fetch Nifty History
@@ -71,16 +72,12 @@ export async function updateIndexHistory(startDate: Date) {
                         }
 
                         if (records.length > 0) {
-                            dataPoints = records.map((r) => ({
-                                date: new Date(r.EOD_TIMESTAMP), // JS Date parsing handles "13-JAN-2025" usually
-                                close: r.EOD_CLOSE_INDEX_VAL
-                            })).filter((d) => !isNaN(d.date.getTime()));
-
-                            // Normalize dates to UTC midnight
-                            dataPoints = dataPoints.map((d) => ({
-                                ...d,
-                                date: new Date(Date.UTC(d.date.getFullYear(), d.date.getMonth(), d.date.getDate()))
-                            }));
+                            dataPoints = records
+                                .map((r) => ({
+                                    date: parseNSEDateToUTC(r.EOD_TIMESTAMP),
+                                    close: r.EOD_CLOSE_INDEX_VAL
+                                }))
+                                .filter((d): d is { date: Date; close: number } => d.date !== null && !isNaN(d.date.getTime()));
 
                             financeLogger.debug(`[Index] Got ${dataPoints.length} records from NSE for ${symbol}`);
                         }

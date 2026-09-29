@@ -5,6 +5,8 @@
  * Uses Indian locale conventions throughout.
  */
 
+import { istDateParts, todayISTYmd } from '@/lib/tz';
+
 // ============================================================================
 // Currency & Number Formatting
 // ============================================================================
@@ -40,29 +42,58 @@ export function formatNumber(value: number, minimumFractionDigits = 0, maximumFr
   }).format(value);
 }
 
+const MONTH_MAP: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
+
+/**
+ * Parses NSE date string "24-Apr-2025" or "13-JAN-2025" directly into "YYYY-MM-DD"
+ * without any local timezone conversion.
+ */
+export function parseNSEDateToStr(dateStr: string): string | null {
+  if (!dateStr || dateStr === '-') return null;
+  const parts = dateStr.trim().split('-');
+  if (parts.length !== 3) return null;
+  const day = parts[0].padStart(2, '0');
+  const month = MONTH_MAP[parts[1].toLowerCase()];
+  const year = parts[2];
+  if (!month || !year || !day) return null;
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parses NSE date string into a Date object at UTC midnight.
+ */
+export function parseNSEDateToUTC(dateStr: string): Date | null {
+  const str = parseNSEDateToStr(dateStr);
+  return str ? new Date(`${str}T00:00:00.000Z`) : null;
+}
+
 // ============================================================================
 // Date Formatting
 // ============================================================================
 
 /**
- * Format date as DD-MM-YYYY (common in Indian contexts and NSE API)
+ * Format date as DD-MM-YYYY in IST (common in Indian contexts and NSE API)
  * @param date Date object to format
  * @returns Formatted date string
  */
 export function formatDateDMY(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
+  const parts = istDateParts(date);
+  const dd = String(parts.day).padStart(2, '0');
+  const mm = String(parts.month).padStart(2, '0');
+  const yyyy = parts.year;
   return `${dd}-${mm}-${yyyy}`;
 }
 
 /**
- * Format date as YYYY-MM-DD (ISO format, common in APIs)
+ * Format date as YYYY-MM-DD in IST (ISO format, common in APIs)
  * @param date Date object to format
  * @returns Formatted date string
  */
 export function formatDateISO(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return todayISTYmd(date);
 }
 
 /**

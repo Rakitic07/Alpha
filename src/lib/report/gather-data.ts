@@ -48,21 +48,21 @@ async function gatherMultiPeriodPerformance(): Promise<PortfolioSection['multiPe
 
     const latest = snapshots[0];
     const todayStr = latest.date.toISOString().split('T')[0];
-    const dLatest = new Date(todayStr);
+    const dLatest = new Date(`${todayStr}T00:00:00.000Z`);
 
     const findSnapshotOnOrBefore = (targetDateStr: string) => {
       return snapshots.find((s) => s.date.toISOString().split('T')[0] <= targetDateStr);
     };
 
     const d1W = new Date(dLatest);
-    d1W.setDate(d1W.getDate() - 7);
+    d1W.setUTCDate(d1W.getUTCDate() - 7);
     const snap1W = findSnapshotOnOrBefore(d1W.toISOString().split('T')[0]);
 
     const d1M = new Date(dLatest);
-    d1M.setDate(d1M.getDate() - 30);
+    d1M.setUTCDate(d1M.getUTCDate() - 30);
     const snap1M = findSnapshotOnOrBefore(d1M.toISOString().split('T')[0]);
 
-    const year = dLatest.getFullYear();
+    const year = todayStr.slice(0, 4);
     const snapYTD = findSnapshotOnOrBefore(`${year}-01-01`);
 
     const calcReturn = (curr: number | null, prev: number | null) => {

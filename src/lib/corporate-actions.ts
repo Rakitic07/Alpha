@@ -2,8 +2,9 @@
 
 import { prisma } from '@/lib/db';
 import { fetchNSECorporateActions, NSECorporateAction } from '@/lib/nse-api';
-import { subDays, addDays, parse, format } from 'date-fns';
+import { subDays, addDays, format } from 'date-fns';
 import { triggerRecalculatePortfolio } from '@/app/actions';
+import { parseNSEDateToStr } from '@/lib/format';
 import { logger } from '@/lib/logger';
 
 const corpActionsLogger = logger.scope('CorpActions');
@@ -73,22 +74,6 @@ function parseSplitBonusRatio(subject: string): { type: 'SPLIT' | 'BONUS' | null
   return { type: null, ratio: 1 };
 }
 
-/**
- * Parse NSE date format "28-Jan-2025" to Date object
- */
-function parseNSEDate(dateStr: string): Date | null {
-  try {
-    // Handle "-" as empty date
-    if (dateStr === '-' || !dateStr) return null;
-    
-    // Parse "28-Jan-2025" format
-    const parsed = parse(dateStr, 'dd-MMM-yyyy', new Date());
-    if (isNaN(parsed.getTime())) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
 
 // ============================================================================
 // Corporate Action Management
@@ -223,12 +208,11 @@ export async function processNSECorporateActions(
       // Skip non-split/bonus actions or invalid ratios
       if (!type || ratio <= 1) continue;
       
-      const exDate = parseNSEDate(action.exDate);
-      if (!exDate) continue;
+      const dateStr = parseNSEDateToStr(action.exDate);
+      if (!dateStr) continue;
       
       relevantActions.push(action);
       
-      const dateStr = format(exDate, 'yyyy-MM-dd');
       const result = await addCorporateAction(action.symbol, dateStr, type, ratio);
       
       if (result.success) {

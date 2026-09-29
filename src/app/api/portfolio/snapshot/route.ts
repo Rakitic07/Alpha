@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { recalculatePortfolioHistory, captureWeeklySnapshot, captureMonthlySnapshot, captureHolidaySnapshot } from '@/lib/finance';
 import { getMarketStatus } from '@/lib/market-holidays-cache';
-import { addMinutes, isAfter, startOfDay } from 'date-fns';
+import { addMinutes, isAfter } from 'date-fns';
+import { todayUTCMidnightForISTDay } from '@/lib/tz';
 import { prisma } from '@/lib/db';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { apiLogger } from '@/lib/logger';
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
             }
 
             // IDEMPOTENCY CHECK
-            const todayStart = startOfDay(new Date());
+            const todayStart = todayUTCMidnightForISTDay();
             const existingSnapshot = await prisma.dailyPortfolioSnapshot.findFirst({
                 where: { date: { gte: todayStart } },
                 select: { date: true }
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
         }
 
         // FALLBACK: no closeTime from market status API
-        const todayStart = startOfDay(new Date());
+        const todayStart = todayUTCMidnightForISTDay();
         const todayPriceExists = await prisma.stockHistory.findFirst({
             where: { date: { gte: todayStart } },
             select: { id: true }
@@ -101,8 +102,8 @@ export async function GET(request: Request) {
 
         if (todayPriceExists) {
             apiLogger.info('DB fallback: Found stock prices for today, treating as trading day');
-            const defaultCloseTime = new Date();
-            defaultCloseTime.setHours(10, 10, 0, 0); // 3:40 PM IST = 10:10 UTC (includes Closing Auction)
+            const defaultCloseTime = todayUTCMidnightForISTDay();
+            defaultCloseTime.setUTCHours(10, 10, 0, 0); // 3:40 PM IST = 10:10 UTC (includes Closing Auction)
             const triggerTime = addMinutes(defaultCloseTime, 15);
 
             if (!isAfter(new Date(), triggerTime)) {
