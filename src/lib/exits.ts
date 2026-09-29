@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { differenceInCalendarDays } from 'date-fns';
-import type { MarketCapCategory } from './amfi';
-import { getCategoriesBatch, mapAMFIToMarketCapCategory, getSymbolResolver } from './amfi';
+import type { AMFICategory, MarketCapCategory } from './amfi';
+import { getCategoriesBatch, mapAMFIToMarketCapCategory, getSymbolResolver, getApplicablePeriod, periodToString } from './amfi';
 import { calculateBrokerageCharges, calculateCapitalGainsTax, ChargesBreakdown, TaxBreakdown } from './charges';
 
 export interface ExitRecord {
@@ -47,10 +47,6 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
         symbol: resolveSymbol(t.symbol)
     }));
 
-    // Batch fetch AMFI categories for all symbols in transactions
-    const uniqueSymbols = Array.from(new Set(transactions.map(t => t.symbol)));
-    const categoriesMap = await getCategoriesBatch(uniqueSymbols);
-
     const exits: ExitRecord[] = [];
     // Active cycles: Map<Symbol, Cycle>
     const cycles = new Map<string, TradeCycle>();
@@ -95,11 +91,6 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
                     const changePercent = (gainLoss / existingCycle.cumulativeCost) * 100;
                     const days = differenceInCalendarDays(tx.date, existingCycle.startDate);
 
-                    // Get Market Cap Category from AMFI classification
-                    // AMFI provides official Large/Mid/Small cap classification
-                    const amfiCategory = categoriesMap.get(tx.symbol) || 'Small';
-                    const marketCapCategory = mapAMFIToMarketCapCategory(amfiCategory);
-
                     // Compute charges and tax
                     const buyValue = existingCycle.cumulativeCost;
                     const sellValue = existingCycle.cumulativeRevenue;
@@ -118,7 +109,6 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
                         changePercent,
                         gainLoss,
                         timeHeld: days,
-                        marketCapCategory,
                         chargesBreakdown,
                         taxBreakdown,
                         netGainLoss,
@@ -143,6 +133,33 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
                 cycles.set(tx.newSymbol, newCycle);
             }
         }
+    }
+
+    // Batch fetch AMFI categories for exits as of their exit date (sellDate)
+    const periodToExits = new Map<string, { symbol: string; date: Date }[]>();
+    for (const exit of exits) {
+        const periodStr = periodToString(getApplicablePeriod(exit.sellDate));
+        let list = periodToExits.get(periodStr);
+        if (!list) {
+            list = [];
+            periodToExits.set(periodStr, list);
+        }
+        list.push({ symbol: exit.symbol, date: exit.sellDate });
+    }
+
+    const periodCategories = new Map<string, Map<string, AMFICategory>>();
+    await Promise.all(
+        Array.from(periodToExits.entries()).map(async ([periodStr, items]) => {
+            const symbols = Array.from(new Set(items.map(i => i.symbol)));
+            const catMap = await getCategoriesBatch(symbols, items[0].date);
+            periodCategories.set(periodStr, catMap);
+        })
+    );
+
+    for (const exit of exits) {
+        const periodStr = periodToString(getApplicablePeriod(exit.sellDate));
+        const amfiCategory = periodCategories.get(periodStr)?.get(exit.symbol) || 'Small';
+        exit.marketCapCategory = mapAMFIToMarketCapCategory(amfiCategory);
     }
 
     // Sort by Sell Date Descending
