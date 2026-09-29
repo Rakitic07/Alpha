@@ -147,12 +147,14 @@ export default function LivePage() {
         const result = await saveOrShareImage(dataUrl, fileName, 'Alpha Market Dashboard');
 
         if (result.success) {
-          hapticNotification('success');
-          setSnackbar({
-            open: true,
-            message: 'Dashboard snapshot saved / shared successfully!',
-            severity: 'success',
-          });
+          if (result.method === 'capacitor-share') {
+            hapticNotification('success');
+            setSnackbar({
+              open: true,
+              message: 'Dashboard snapshot shared successfully!',
+              severity: 'success',
+            });
+          }
         } else if (result.method === 'preview') {
           setPreviewImage(dataUrl);
         } else {

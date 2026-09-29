@@ -204,42 +204,58 @@ export async function saveOrShareImage(
   fileName: string,
   title: string = 'Market Dashboard'
 ): Promise<SaveOrShareImageResult> {
-  // 1. In Capacitor Android / iOS shell
-  if (isCapacitor()) {
+  // 1. On Web (any browser where isCapacitor() is false):
+  // Continue to download the file directly via <a> tag
+  if (!isCapacitor()) {
     try {
-      const { Filesystem, Directory } = await import('@capacitor/filesystem');
-      const { Share } = await import('@capacitor/share');
-
-      const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-      const saved = await Filesystem.writeFile({
-        path: fileName,
-        data: base64Data,
-        directory: Directory.Cache,
-      });
-
-      await Share.share({
-        title,
-        text: `${title} snapshot`,
-        url: saved.uri,
-        dialogTitle: 'Share Dashboard Screenshot',
-      });
-
-      return { success: true, method: 'capacitor-share' };
-    } catch (e: any) {
-      const msg = String(e?.message || '');
-      // If user dismissed or cancelled the share dialog, treat as completed
-      if (
-        msg.toLowerCase().includes('cancel') ||
-        msg.toLowerCase().includes('abort') ||
-        msg.toLowerCase().includes('dismiss')
-      ) {
-        return { success: true, method: 'capacitor-share' };
-      }
-      console.warn('Capacitor native share failed, falling back:', e);
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return { success: true, method: 'download' };
+    } catch (e) {
+      console.warn('Direct link download failed:', e);
+      return { success: false, method: 'download', error: 'Failed to download file' };
     }
   }
 
-  // 2. Web Share API (navigator.share with File)
+  // 2. In Capacitor Android / iOS shell:
+  // Use native Capacitor Filesystem + Share plugins
+  try {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const { Share } = await import('@capacitor/share');
+
+    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const saved = await Filesystem.writeFile({
+      path: fileName,
+      data: base64Data,
+      directory: Directory.Cache,
+    });
+
+    await Share.share({
+      title,
+      text: `${title} snapshot`,
+      url: saved.uri,
+      dialogTitle: 'Share Dashboard Screenshot',
+    });
+
+    return { success: true, method: 'capacitor-share' };
+  } catch (e: any) {
+    const msg = String(e?.message || '');
+    // If user dismissed or cancelled the share dialog, treat as completed
+    if (
+      msg.toLowerCase().includes('cancel') ||
+      msg.toLowerCase().includes('abort') ||
+      msg.toLowerCase().includes('dismiss')
+    ) {
+      return { success: true, method: 'capacitor-share' };
+    }
+    console.warn('Capacitor native share failed, falling back:', e);
+  }
+
+  // 3. Fallback inside Capacitor WebView: Web Share API if supported
   if (typeof navigator !== 'undefined' && typeof window !== 'undefined') {
     try {
       const res = await fetch(dataUrl);
@@ -258,23 +274,11 @@ export async function saveOrShareImage(
       if (msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) {
         return { success: true, method: 'web-share' };
       }
-      console.warn('Web Share API failed, falling back:', e);
+      console.warn('Web Share API fallback failed:', e);
     }
   }
 
-  // 3. Desktop browser: trigger download link
-  if (!isCapacitor()) {
-    try {
-      const link = document.createElement('a');
-      link.download = fileName;
-      link.href = dataUrl;
-      link.click();
-      return { success: true, method: 'download' };
-    } catch (e) {
-      console.warn('Direct link download failed:', e);
-    }
-  }
-
-  // 4. Fallback for mobile / WebView when native share and download aren't available
+  // 4. Final fallback inside Capacitor: show preview dialog for long-press saving
   return { success: false, method: 'preview' };
 }
+
