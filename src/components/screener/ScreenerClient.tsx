@@ -245,9 +245,9 @@ function SkeletonRow() {
           <div className="h-3 w-36 bg-zinc-800/50 rounded" />
         </div>
       </td>
-      <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
-      <td className="px-3 py-3 hidden md:table-cell"><div className="h-9 bg-zinc-800/50 rounded" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-10 bg-zinc-800 rounded mx-auto" /></td>
+      <td className="px-3 py-3 hidden md:table-cell"><div className="h-9 bg-zinc-800/50 rounded" /></td>
+      <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-8 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-2 py-3">
         <div className="flex gap-0.5 justify-center">
@@ -619,9 +619,9 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
               <col style={{ width: '4%',  minWidth: '60px' }} />
               <col style={{ width: '4%',  minWidth: '50px' }} />
               <col style={{ width: '17%', minWidth: '170px' }} />
-              <col style={{ width: '8%',  minWidth: '85px' }} />
-              <col style={{ width: '15%', minWidth: '150px' }} />
               <col style={{ width: '7%',  minWidth: '65px' }} />
+              <col style={{ width: '15%', minWidth: '150px' }} />
+              <col style={{ width: '8%',  minWidth: '85px' }} />
               <col style={{ width: '6%',  minWidth: '60px' }} />
               <col style={{ width: '9%',  minWidth: '95px' }} />
               <col style={{ width: '9%',  minWidth: '95px' }} />
@@ -633,9 +633,9 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 <SortHeader field="rank"   current={sortField} dir={sortDir} onClick={handleSort} pl="pl-5">#</SortHeader>
                 <SortHeader field="rankChange" current={sortField} dir={sortDir} onClick={handleSort} center>Δ</SortHeader>
                 <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort}>Stock</SortHeader>
-                <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
-                <th className={`${TH_BASE} hidden md:table-cell`}>Trend</th>
                 <SortHeader field="score"  current={sortField} dir={sortDir} onClick={handleSort} center>Score</SortHeader>
+                <th className={`${TH_BASE} hidden md:table-cell`}>Trend</th>
+                <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
                 <SortHeader field="beta"   current={sortField} dir={sortDir} onClick={handleSort} center>Beta</SortHeader>
                 <th className={`${TH_BASE} text-center`} title="10 / 20 / 50 / 100 / 200 DMA">DMA</th>
                 <th className={`${TH_BASE} text-center`} title="Away from ATH: 10/15/20/25/30%">ATH</th>
@@ -865,18 +865,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       </div>
                     </td>
 
-                    {/* Mcap */}
-                    <td className="px-1 py-3 text-center">
-                      <span className="font-mono text-xs tabular-nums text-zinc-400">
-                        {formatMcap(row.marketCapCr)}
-                      </span>
-                    </td>
-
-                    {/* Price trend sparkline */}
-                    <td className="px-3 py-3 hidden md:table-cell">
-                      <Sparkline data={row.sparklineData} />
-                    </td>
-
                     {/* Score */}
                     <td className="px-1 py-3 text-center">
                       {row.isUnranked && row.compositeScore === 0 ? (
@@ -886,6 +874,18 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                           {row.compositeScore.toFixed(2)}
                         </span>
                       )}
+                    </td>
+
+                    {/* Price trend sparkline */}
+                    <td className="px-3 py-3 hidden md:table-cell">
+                      <Sparkline data={row.sparklineData} />
+                    </td>
+
+                    {/* Mcap */}
+                    <td className="px-1 py-3 text-center">
+                      <span className="font-mono text-xs tabular-nums text-zinc-400">
+                        {formatMcap(row.marketCapCr)}
+                      </span>
                     </td>
 
                     {/* Beta */}
