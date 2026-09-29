@@ -6,6 +6,7 @@
 
 // Force UTC timezone so local execution matches production Vercel server environment exactly
 process.env.TZ = 'UTC';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);

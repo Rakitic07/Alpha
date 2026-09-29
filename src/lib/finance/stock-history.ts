@@ -1,12 +1,13 @@
 import { prisma } from '@/lib/db';
-import { addDays, isSameDay, startOfDay, format, differenceInDays } from 'date-fns';
+import { addDays, isSameDay, startOfDay, format, differenceInDays, isWeekend } from 'date-fns';
 import { getDataLockDate } from '../config';
 import { getHistoricalCandles, hasValidToken, getLTP, UpstoxCandle } from '../upstox-client';
 import { getInstrumentKey, getInstrumentKeys } from '../instrument-service';
 import { fetchNSEHistory } from '../nse-api';
 import { getMarketStatus } from '../market-holidays-cache';
+import { getMarketHolidays } from '../upstox/market-info';
 import { financeLogger } from '@/lib/logger';
-import { istTimeParts } from '@/lib/tz';
+import { istTimeParts, istDayOfWeek, todayISTYmd, utcMidnightOfISTDate } from '@/lib/tz';
 import { StockQuote, StockHistoryResult, SplitEvent, RequestCache } from './types';
 
 // Feature flag for Upstox migration - set to true to use Upstox as primary data source
@@ -154,22 +155,39 @@ export async function updateStockHistory(
     const today = new Date();
     const lockDate = await getDataLockDate();
 
+    // Fetch market holidays for validation
+    let marketHolidays = new Set<string>();
+    try {
+        const holidays = await getMarketHolidays();
+        marketHolidays = new Set(
+            holidays.filter(h => h.holiday_type === 'TRADING_HOLIDAY').map(h => h.date)
+        );
+    } catch (e) {
+        financeLogger.warn('[UpdateStockHistory] Failed to load market holidays:', e);
+    }
+
     // Dynamic Market Status Check
     const status = await getMarketStatus();
-    // It is EOD if:
-    // 1. Market is explicitly CLOSED today (isOpen = false) AND closeTime exists (meaning it WAS open but is now closed)
-    // 2. OR Market is actively OPEN (isOpen = true) but current time > closeTime (safety check)
-    // Fallback: If API returns no closeTime (e.g. data missing), default to hardcoded 4:00 PM check
+    const todayYmd = todayISTYmd(today);
+    const day = istDayOfWeek(today);
+    const isWeekendDay = day === 0 || day === 6;
+    const isHoliday = status.reason?.includes('Holiday') || status.reason?.includes('Weekend') || marketHolidays.has(todayYmd);
+
+    // It is EOD only if today is a regular trading day AND the session has closed:
     let isEOD = false;
 
-    if (status.closeTime) {
-         // Use API-provided close time
-         isEOD = !status.isOpen || new Date() >= status.closeTime;
-         if (isEOD) financeLogger.info(`[UpdateStockHistory] EOD Detected via API (Close Time: ${status.closeTime.toLocaleTimeString()})`);
+    if (!isWeekendDay && !isHoliday) {
+        if (status.closeTime) {
+             // Use API-provided close time
+             isEOD = !status.isOpen || new Date() >= status.closeTime;
+             if (isEOD) financeLogger.info(`[UpdateStockHistory] EOD Detected via API (Close Time: ${status.closeTime.toLocaleTimeString()})`);
+        } else {
+             // Fallback to static schedule (use IST hours, not server-local hours)
+             isEOD = istTimeParts().hour >= 16; // After 4:00 PM IST
+             financeLogger.info(`[UpdateStockHistory] EOD Detected via Static Fallback (No API status)`);
+        }
     } else {
-         // Fallback to static schedule (use IST hours, not server-local hours)
-         isEOD = istTimeParts().hour >= 16; // After 4:00 PM IST
-         financeLogger.info(`[UpdateStockHistory] EOD Detected via Static Fallback (No API status)`);
+        financeLogger.info(`[UpdateStockHistory] Market is closed today (Weekend/Holiday: ${status.reason || todayYmd}). Skipping EOD live quotes.`);
     }
 
     // Check if Upstox is available
@@ -277,15 +295,20 @@ export async function updateStockHistory(
                     const nseData = await fetchNSEHistory(symbol, fetchStart, today);
                     if (nseData && nseData.data && nseData.data.length > 0) {
                         // Convert NSE format to standard quote format
-                        const nseQuotes = nseData.data.map(d => ({
-                            date: new Date(d.CH_TIMESTAMP),
-                            close: d.CH_CLOSING_PRICE,
-                            adjClose: d.CH_CLOSING_PRICE,
-                            open: d.CH_CLOSING_PRICE,
-                            high: d.CH_CLOSING_PRICE,
-                            low: d.CH_CLOSING_PRICE,
-                            volume: 0
-                        }));
+                        // Note: d.CH_TIMESTAMP is in UTC format of IST midnight e.g. "2026-09-14T18:30:00.000Z".
+                        // Must resolve the IST date ("2026-09-15") to avoid a 1-day backward shift!
+                        const nseQuotes = nseData.data.map(d => {
+                            const istDateStr = todayISTYmd(new Date(d.CH_TIMESTAMP));
+                            return {
+                                date: utcMidnightOfISTDate(istDateStr),
+                                close: d.CH_CLOSING_PRICE,
+                                adjClose: d.CH_CLOSING_PRICE,
+                                open: d.CH_CLOSING_PRICE,
+                                high: d.CH_CLOSING_PRICE,
+                                low: d.CH_CLOSING_PRICE,
+                                volume: 0
+                            };
+                        });
                         result = { quotes: nseQuotes };
                         financeLogger.debug(`[NSE Fallback] Got ${nseQuotes.length} records for ${symbol}`);
                     }
@@ -439,6 +462,12 @@ export async function updateStockHistory(
                 // Force UTC Midnight to avoid 18:30 IST offsets
                 const yDate = new Date(q.date);
                 const utcDate = new Date(Date.UTC(yDate.getUTCFullYear(), yDate.getUTCMonth(), yDate.getUTCDate()));
+                const dStr = format(utcDate, 'yyyy-MM-dd');
+
+                // Never insert price data on weekends or trading holidays
+                if (isWeekend(utcDate) || marketHolidays.has(dStr)) {
+                    continue;
+                }
 
                 data.push({
                     date: utcDate,

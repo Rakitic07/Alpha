@@ -135,31 +135,37 @@ async function printSummary(bad: { date: string; reason: string }[]) {
   let totalPrices = 0;
   let totalRankings = 0;
   let totalScores = 0;
+  let totalStockHistory = 0;
 
   for (const { date, reason } of bad) {
     const dow = new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
-    const [prices, rankings, scores] = await Promise.all([
+    const utcDate = new Date(date + 'T00:00:00.000Z');
+    const [prices, rankings, scores, stockHistoryCount] = await Promise.all([
       prisma.screenerPrice.count({ where: { date } }),
       prisma.rankingHistory.count({ where: { date } }),
       prisma.momentumScore.count({ where: { computedDate: date } }),
+      prisma.stockHistory.count({ where: { date: utcDate } }),
     ]);
     totalPrices += prices;
     totalRankings += rankings;
     totalScores += scores;
-    console.log(`  ${date} (${dow}) [${reason}]  prices=${prices}  rankings=${rankings}  scores=${scores}`);
+    totalStockHistory += stockHistoryCount;
+    console.log(`  ${date} (${dow}) [${reason}]  prices=${prices}  rankings=${rankings}  scores=${scores}  stockHistory=${stockHistoryCount}`);
   }
 
-  console.log(`\nTotal to delete: ${totalPrices} price rows, ${totalRankings} ranking rows, ${totalScores} score rows`);
-  return { totalPrices, totalRankings, totalScores };
+  console.log(`\nTotal to delete: ${totalPrices} price rows, ${totalRankings} ranking rows, ${totalScores} score rows, ${totalStockHistory} stock history rows`);
+  return { totalPrices, totalRankings, totalScores, totalStockHistory };
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 
 async function purge(bad: { date: string; reason: string }[]) {
   for (const { date } of bad) {
+    const utcDate = new Date(date + 'T00:00:00.000Z');
     await prisma.rankingHistory.deleteMany({ where: { date } });
     await prisma.momentumScore.deleteMany({ where: { computedDate: date } });
     await prisma.screenerPrice.deleteMany({ where: { date } });
+    await prisma.stockHistory.deleteMany({ where: { date: utcDate } });
     process.stdout.write(`  Purged ${date}\n`);
   }
 }

@@ -178,6 +178,25 @@ export async function recalculatePortfolioHistoryInternal(
         return true;
     };
 
+    const isLastTradingDayOfWeek = (date: Date): boolean => {
+        let next = addDays(date, 1);
+        while (next.getDay() !== 1) { // Advance until next Monday
+            if (isTradingDay(next)) return false;
+            next = addDays(next, 1);
+        }
+        return true;
+    };
+
+    const isLastTradingDayOfMonth = (date: Date): boolean => {
+        const month = date.getMonth();
+        let next = addDays(date, 1);
+        while (next.getMonth() === month) {
+            if (isTradingDay(next)) return false;
+            next = addDays(next, 1);
+        }
+        return true;
+    };
+
 
 
     // 3b. Corporate Actions are now stored in Transaction table (type='SPLIT' or 'BONUS')
@@ -423,6 +442,7 @@ export async function recalculatePortfolioHistoryInternal(
     let tIndex = 0;
 
     let prevTotalEquity = 0;
+    let accumulatedDisplayCashflow = 0;
     // Previous Weekly/Monthly NAVs for Return Calc
     let lastWeeklyNav = 0;
     let lastMonthlyNav = 0;
@@ -528,44 +548,18 @@ export async function recalculatePortfolioHistoryInternal(
             amfiCategories = await getAMFICategoriesBatch(symbols, currentDate);
             lastAmfiPeriod = amfiPeriodStr;
         }
-        const isFriday = currentDate.getDay() === 5;
-        // Check if Month End: Next day is 1st of new month OR Today is Today (last day of loop)
-        const nextDay = addDays(currentDate, 1);
-        const isMonthEnd = nextDay.getDate() === 1 || isSameDay(currentDate, today);
-        // Also check if Today is Friday or we are at the end of loop, capture weekly
-        const isWeekEnd = isFriday || isSameDay(currentDate, today);
-
-        // A. Pricing & Market Value
-        const prices = priceMap.get(dKey) || new Map();
-
-        for (const [sym, price] of prices) {
-            lastKnownPrices.set(sym, price);
-            // Propagate price to aliases (e.g. if we have price for NEW, set it for OLD too)
-            // IMPORTANT: Only propagate if the alias doesn't already have a price for TODAY
-            // This prevents stale/wrong prices from overwriting correct ones when both
-            // old and new symbols have price data (e.g., during symbol name changes)
-            if (aliasMap.has(sym)) {
-                for (const alias of aliasMap.get(sym)!) {
-                    if (!prices.has(alias)) {
-                        lastKnownPrices.set(alias, price);
-                    }
-                }
-            }
-        }
-
-        engine.resetDailyFlow();
-
-        // B. Process Events for Today
+        // B. Process Events for Today (Transactions & Corporate Actions)
+        // These can occur even on non-trading days (e.g. off-market transfers, Sunday IPO allotment, splits)
         let displayCashflow = 0;
 
         // Process Transactions
-        while(tIndex < transactions.length && isSameDay(transactions[tIndex].date, currentDate)) {
+        while (tIndex < transactions.length && isSameDay(transactions[tIndex].date, currentDate)) {
             const tx = transactions[tIndex];
 
-            // Update Prices Fallback: If StockHistory has no closing price for tx.symbol on currentDate
-            // (e.g., on order days before EOD price sync), use the trade execution price (tx.price)
-            // so portfolio stock valuation matches the dailyNetFlow cash flow.
-            if (!prices.has(tx.symbol) && tx.price > 0) lastKnownPrices.set(tx.symbol, tx.price);
+            // If StockHistory has no closing price for tx.symbol on currentDate, fallback to tx.price
+            if (tx.price > 0 && !lastKnownPrices.has(tx.symbol)) {
+                lastKnownPrices.set(tx.symbol, tx.price);
+            }
 
             const result = engine.processTransaction(tx);
 
@@ -595,22 +589,49 @@ export async function recalculatePortfolioHistoryInternal(
             tIndex++;
         }
 
-
-
-        // B2. Apply Corporate Actions from Yahoo (auto-detected splits)
+        // Apply Corporate Actions from Yahoo (auto-detected splits)
         const todaysCorpActions = corpActionsByDate.get(dKey) || [];
         for (const action of todaysCorpActions) {
-           // My engine has applySplit(symbol, ratio). Let's use that.
-           if (action.type === 'SPLIT') {
+            if (action.type === 'SPLIT') {
                 engine.applySplit(action.symbol, action.ratio);
-
-                // NOTE: DO NOT adjust price here.
-                // Yahoo Finance prices in stockHistory are already split-adjusted.
-                // halving the price again here causes the double-adjustment bug.
-
                 financeLogger.info(`Applied SPLIT for ${action.symbol} via Engine (Price already adjusted in History)`);
-           }
+            }
         }
+
+        // Incremental XIRR: append cash flow with the exact transaction date
+        if (Math.abs(displayCashflow) > 0) {
+            xirrFlows.push({ amount: displayCashflow, when: new Date(currentDate) });
+        }
+
+        // Skip non-trading days (weekends and market holidays)
+        // Accumulate any cashflow and dailyNetFlow for the subsequent trading day.
+        // Do NOT read prices, compound NAV, or save snapshots on non-trading days.
+        if (!isTradingDay(currentDate)) {
+            accumulatedDisplayCashflow += displayCashflow;
+            currentDate = addDays(currentDate, 1);
+            continue;
+        }
+
+        const isWeekEnd = isLastTradingDayOfWeek(currentDate) || isSameDay(currentDate, today);
+        const isMonthEnd = isLastTradingDayOfMonth(currentDate) || isSameDay(currentDate, today);
+
+        // A. Pricing & Market Value for Trading Day
+        const prices = priceMap.get(dKey) || new Map();
+
+        for (const [sym, price] of prices) {
+            lastKnownPrices.set(sym, price);
+            // Propagate price to aliases (e.g. if we have price for NEW, set it for OLD too)
+            // IMPORTANT: Only propagate if the alias doesn't already have a price for TODAY
+            if (aliasMap.has(sym)) {
+                for (const alias of aliasMap.get(sym)!) {
+                    if (!prices.has(alias)) {
+                        lastKnownPrices.set(alias, price);
+                    }
+                }
+            }
+        }
+
+        const totalDisplayCashflow = accumulatedDisplayCashflow + displayCashflow;
 
         // C. Calculate End-of-Day Equity
         let large = 0, mid = 0, small = 0, micro = 0;
@@ -723,15 +744,6 @@ export async function recalculatePortfolioHistoryInternal(
         const units = nav > 0 ? totalEquity / nav : 0;
         const pnl = totalEquity - accumulatedInvestedCapital;
 
-        // F1. Append today's transaction cash flows for incremental XIRR
-        // This mirrors the flow-building in calculatePortfolioXIRR (holdings.ts)
-        // We track the loop's tIndex position; transactions already consumed above in section B.
-        // So we re-derive flows from displayCashflow for simplicity:
-        // BUY reduces cash (negative), SELL adds cash (positive)
-        if (Math.abs(displayCashflow) > 0) {
-            xirrFlows.push({ amount: displayCashflow, when: new Date(currentDate) });
-        }
-
         // F2. Compute XIRR and CAGR for this day.
         // XIRR is computed as long as we have at least one historical cash flow.
         // terminal = totalEquity (0 is valid — means all capital has been returned/closed out).
@@ -758,10 +770,9 @@ export async function recalculatePortfolioHistoryInternal(
             dailyCagr = roundPercent(Math.pow(nav / 100, 365 / daysElapsed) - 1);
         }
 
-        // F. Save Daily Snapshot IF within recalculation window AND it's a trading day
-        // Skip weekends and market holidays - no snapshot for non-trading days
-        // Special sessions (Budget Day, Muhurat) are detected via the specialTradingDays API set
-        if (currentDate >= effectiveFromDate && isTradingDay(currentDate)) {
+        // F. Save Daily Snapshot IF within recalculation window
+        // (Guaranteed to be a trading day here, as non-trading days were skipped above)
+        if (currentDate >= effectiveFromDate) {
             const d = new Date(currentDate);
             const utcSnapshotDate = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 
@@ -776,7 +787,7 @@ export async function recalculatePortfolioHistoryInternal(
                 niftySmallcap250NAV: indexNavs.get('NIFTY_SMALLCAP250') ? roundPrice(indexNavs.get('NIFTY_SMALLCAP250')!) : null,
                 niftyMicrocap250NAV: indexNavs.get('NIFTY_MICROCAP250') ? roundPrice(indexNavs.get('NIFTY_MICROCAP250')!) : null,
                 units: roundQuantity(units),
-                cashflow: roundEquity(displayCashflow),
+                cashflow: roundEquity(totalDisplayCashflow),
                 drawdown: roundPercent(drawdown),
                 dailyPnL: roundEquity(dailyPnL),
                 dailyReturn: roundPercent(dailyRet),
@@ -915,7 +926,10 @@ export async function recalculatePortfolioHistoryInternal(
              monthsActive++;
         }
 
-        // Prep for next day
+        // Prep for next trading day:
+        // Reset daily flows and update previous equity benchmark
+        engine.resetDailyFlow();
+        accumulatedDisplayCashflow = 0;
         prevTotalEquity = totalEquity;
         currentDate = addDays(currentDate, 1);
     }
