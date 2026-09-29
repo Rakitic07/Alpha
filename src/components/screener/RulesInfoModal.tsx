@@ -56,6 +56,7 @@ export default function RulesInfoModal({ open, onClose }: RulesInfoModalProps) {
                 </p>
                 <div className="space-y-1.5">
                   <p><span className="text-gray-500">Sharpe</span> = (mean × 252) / (std × √252) — annualized, sample std, rf = 0</p>
+                  <p><span className="text-gray-500">Beta</span> = Cov(R_stock, R_nifty50) / Var(R_nifty50) — 1-year lookback (252 trading days)</p>
                   <p><span className="text-gray-500">3m window</span> = 62 days ending 21 days ago (4m→1m, skips recent month)</p>
                   <p><span className="text-gray-500">ATH proximity</span> = entry filter only (≥70% of ATH), not part of score</p>
                 </div>

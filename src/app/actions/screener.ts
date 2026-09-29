@@ -3,7 +3,7 @@
 import { revalidateTag, unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { computePortfolioState } from '@/lib/finance/recalculation';
-import { computeReturns, sharpeRatio, PARAMS } from '@/lib/screener/scoring';
+import { computeReturns, sharpeRatio, PARAMS, computeBetaFromCloses } from '@/lib/screener/scoring';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
 import { getAllInstrumentData, getBESymbols } from '@/lib/instrument-service';
@@ -19,6 +19,7 @@ export interface ScreenerRow {
   companyName: string;
   compositeScore: number;
   avgSharpe: number;
+  beta: number | null;
   athProximity: number;
   currentPrice: number;
   aboveDma200Pct: number;
@@ -239,6 +240,7 @@ export async function getScreenerData(
       companyName: s.companyName,
       compositeScore: s.compositeScore,
       avgSharpe: s.avgSharpe,
+      beta: s.beta ?? null,
       athProximity: s.athProximity,
       currentPrice: s.currentPrice,
       aboveDma200Pct: s.aboveDma200Pct,
@@ -268,11 +270,11 @@ export async function getScreenerData(
   if (tab === 'portfolio') {
     const unrankedSyms = Array.from(portfolioSymbols).filter(s => !rankedSymbols.has(s));
     if (unrankedSyms.length > 0) {
-      const [prices, athRows, mcapRows, amfiRows, lastScores, instrumentMap, activeAllScores] = await Promise.all([
+      const [prices, athRows, mcapRows, amfiRows, lastScores, instrumentMap, activeAllScores, niftyRows] = await Promise.all([
         prisma.screenerPrice.findMany({
           where: { symbol: { in: unrankedSyms } },
           orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
-          select: { symbol: true, close: true, high: true, volume: true },
+          select: { symbol: true, date: true, close: true, high: true, volume: true },
         }),
         prisma.stockATH.findMany({ where: { symbol: { in: unrankedSyms } }, select: { symbol: true, ath: true } }),
         prisma.stockMarketCap.findMany({ where: { symbol: { in: unrankedSyms } }, select: { symbol: true, marketCap: true } }),
@@ -292,13 +294,25 @@ export async function getScreenerData(
           where: { symbol: { in: unrankedSyms }, isActive: true, rankType: 'all' },
           select: { symbol: true },
         }),
+        prisma.indexHistory.findMany({
+          where: { symbol: 'NIFTY50' },
+          orderBy: { date: 'asc' },
+          select: { date: true, close: true },
+        }),
       ]);
 
-      const pricesBySymbol = new Map<string, { close: number; high: number; volume: number }[]>();
+      const niftyMap = new Map<string, number>();
+      for (const r of niftyRows) {
+        const d = new Date(r.date);
+        const istDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        niftyMap.set(istDate, r.close);
+      }
+
+      const pricesBySymbol = new Map<string, { date: string; close: number; high: number; volume: number }[]>();
       for (const p of prices) {
         let arr = pricesBySymbol.get(p.symbol);
         if (!arr) { arr = []; pricesBySymbol.set(p.symbol, arr); }
-        arr.push({ close: p.close, high: p.high, volume: p.volume });
+        arr.push({ date: p.date, close: p.close, high: p.high, volume: p.volume });
       }
       const athMap = new Map(athRows.map(r => [r.symbol, r.ath]));
       const mcapMap = new Map(mcapRows.map(r => [r.symbol, r.marketCap]));
@@ -404,12 +418,30 @@ export async function getScreenerData(
           drawdownSinceEntry = -((1 - (price / entryPeak)) * 100);
         }
 
+        // Compute Beta relative to NIFTY 50 (1-year lookback)
+        let beta: number | null = null;
+        if (niftyMap.size > 0 && candles.length >= 21) {
+          const alignedStock: number[] = [];
+          const alignedBench: number[] = [];
+          for (const c of candles) {
+            const benchClose = niftyMap.get(c.date);
+            if (benchClose != null) {
+              alignedStock.push(c.close);
+              alignedBench.push(benchClose);
+            }
+          }
+          if (alignedStock.length >= 21) {
+            beta = computeBetaFromCloses(alignedStock.slice(-252), alignedBench.slice(-252));
+          }
+        }
+
         allRows.push({
           rank: 9999,
           symbol: sym,
           companyName: amfi?.companyName || portfolioNames.get(sym) || sym,
           compositeScore,
           avgSharpe,
+          beta,
           athProximity,
           currentPrice: price,
           aboveDma200Pct: d200 !== null ? ((price - d200) / d200) * 100 : 0,

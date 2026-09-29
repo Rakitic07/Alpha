@@ -305,6 +305,7 @@ model MomentumScore {
   sharpe12m         Float
   sharpe6m          Float
   sharpe3m          Float
+  beta              Float?   // Stock beta relative to Nifty 50 (1-year lookback)
   athProximity      Float    // currentClose / ATH (0 to 1.0)
   ath               Float    // ATH price
   currentPrice      Float

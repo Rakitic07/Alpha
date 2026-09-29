@@ -81,6 +81,41 @@ export function sharpeRatio(returns: number[]): number {
   return (m * 252) / (s * Math.sqrt(252));
 }
 
+// ── Beta (vs Market Benchmark) ──
+
+/**
+ * Stock Beta relative to a benchmark index (e.g. NIFTY 50).
+ * Formula: Cov(R_stock, R_bench) / Var(R_bench)
+ * Returns null if < 20 aligned returns or benchmark variance is zero.
+ */
+export function computeBeta(stockReturns: number[], benchReturns: number[]): number | null {
+  const n = Math.min(stockReturns.length, benchReturns.length);
+  if (n < 20) return null;
+  const sMean = mean(stockReturns.slice(0, n));
+  const bMean = mean(benchReturns.slice(0, n));
+  let cov = 0;
+  let varB = 0;
+  for (let i = 0; i < n; i++) {
+    const diffS = stockReturns[i] - sMean;
+    const diffB = benchReturns[i] - bMean;
+    cov += diffS * diffB;
+    varB += diffB * diffB;
+  }
+  if (varB === 0) return null;
+  const beta = cov / varB;
+  return Number.isFinite(beta) ? Math.round(beta * 100) / 100 : null;
+}
+
+/**
+ * Compute stock Beta from aligned close price series.
+ */
+export function computeBetaFromCloses(stockCloses: number[], benchCloses: number[]): number | null {
+  if (stockCloses.length < 21 || benchCloses.length < 21) return null;
+  const stockRet = computeReturns(stockCloses);
+  const benchRet = computeReturns(benchCloses);
+  return computeBeta(stockRet, benchRet);
+}
+
 // ── Moving average (engine.py:62-65) ──
 
 /**
@@ -133,6 +168,7 @@ export interface ScoreResult {
   aboveDma100: boolean;
   medianTurnoverCr: number;
   currentPrice: number;
+  beta: number | null;
 }
 
 /**
@@ -147,6 +183,8 @@ export interface ScoreResult {
  * @param options.skipFilters  When true, skip the 4 entry filters (200 DMA, min price, ATH proximity,
  *                             median turnover) and return a result regardless. Computation prerequisites
  *                             (dateIdx >= 247, finite Sharpe values) still apply.
+ * @param options.benchmarkCloses  Optional benchmark (NIFTY 50) closes aligned with stock closes for beta.
+ * @param options.beta  Pre-computed beta value (optional).
  * @returns ScoreResult or null if stock fails any prerequisite (or a filter when skipFilters is false)
  */
 export function scoreStock(
@@ -155,7 +193,7 @@ export function scoreStock(
   volumes: number[],
   symbol: string,
   storedATH?: number,
-  options?: { skipFilters?: boolean },
+  options?: { skipFilters?: boolean; benchmarkCloses?: number[]; beta?: number | null },
 ): ScoreResult | null {
   const skipFilters = options?.skipFilters === true;
   const skipDays = PARAMS.skipMonths * 21; // engine.py:72
@@ -240,6 +278,13 @@ export function scoreStock(
   const dma50 = movingAveragePrefix(prefixSums, dateIdx, 50);
   const dma100 = movingAveragePrefix(prefixSums, dateIdx, 100);
 
+  // Compute Beta relative to benchmark (1-year lookback)
+  const beta = options?.beta !== undefined
+    ? options.beta
+    : options?.benchmarkCloses
+      ? computeBetaFromCloses(closes.slice(-252), options.benchmarkCloses.slice(-252))
+      : null;
+
   return {
     sharpe12m,
     sharpe6m,
@@ -256,5 +301,6 @@ export function scoreStock(
     aboveDma100: dma100 !== null && currentClose >= dma100,
     medianTurnoverCr: medianTurnover / 1e7, // Convert to Crores
     currentPrice: currentClose,
+    beta,
   };
 }

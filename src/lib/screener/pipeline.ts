@@ -19,7 +19,7 @@ import { fetchAndStoreCandles, patchTodayPrices } from './prices';
 import { detectAndFlushAnomalies } from './corporate-actions';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { detectAndAdjustDemergers } from './demerger';
-import { scoreStock, PARAMS, isETFWhitelisted } from './scoring';
+import { scoreStock, PARAMS, isETFWhitelisted, computeBetaFromCloses } from './scoring';
 import { resolveLastTradingDay, isMarketHours, daysAgo } from './dates';
 import { logger } from '@/lib/logger';
 import { updateJob } from '@/lib/jobs';
@@ -307,9 +307,10 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
 
   // ── Step 6: Parallel DB loads ──────────────────────────────────────────────
   const scoreableSymbols = scoreableInsts.map(i => i.symbol);
-  const [amfiCategories, athMap] = await Promise.all([
+  const [amfiCategories, athMap, niftyMap] = await Promise.all([
     getCategoriesBatch(scoreableSymbols),
     loadATHMap(),
+    loadNiftyIndexMap(),
   ]);
 
   const [prevRanks, prevAllRanks] = await Promise.all([
@@ -322,15 +323,15 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     loadRankingHistoryForStats('all'),
   ]);
 
-  pipelineLogger.info(`[${elapsed()}] DB loads complete`);
+  pipelineLogger.info(`[${elapsed()}] DB loads complete (including ${niftyMap.size} NIFTY benchmark dates)`);
   await progress(50, 'Loading prices...');
 
   // ── Step 7: Load prices (only for scoreable stocks) ────────────────────────
   const priceFromDate = daysAgo(500, today);
-  type Candle = { close: number; high: number; volume: number };
+  type Candle = { date: string; close: number; high: number; volume: number };
 
   // Only load prices for scoreable stocks — cuts query size ~50%
-  let allPrices: Array<{ symbol: string; close: number; high: number; volume: number }> = [];
+  let allPrices: Array<{ symbol: string; date: string; close: number; high: number; volume: number }> = [];
 
   if (scoreableInsts.length < tradeableFiltered.length * 0.8) {
     // Chunk symbol list for the IN clause (to avoid SQLite's 999 prepared statement parameter limit)
@@ -343,7 +344,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
             symbol: { in: chunk },
           },
           orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
-          select: { symbol: true, close: true, high: true, volume: true },
+          select: { symbol: true, date: true, close: true, high: true, volume: true },
         })
       )
     );
@@ -352,14 +353,14 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     allPrices = await prisma.screenerPrice.findMany({
       where: { date: { gte: priceFromDate, lte: today } },
       orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
-      select: { symbol: true, close: true, high: true, volume: true },
+      select: { symbol: true, date: true, close: true, high: true, volume: true },
     });
   }
   const pricesBySymbol = new Map<string, Candle[]>();
   for (const p of allPrices) {
     let arr = pricesBySymbol.get(p.symbol);
     if (!arr) { arr = []; pricesBySymbol.set(p.symbol, arr); }
-    arr.push({ close: p.close, high: p.high, volume: p.volume });
+    arr.push({ date: p.date, close: p.close, high: p.high, volume: p.volume });
   }
   pipelineLogger.info(`[${elapsed()}] Loaded ${allPrices.length} price rows for ${pricesBySymbol.size} symbols`);
   await progress(60, 'Scoring...');
@@ -383,13 +384,30 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
       const storedATH = athMap.get(inst.symbol);
       const mcap = mcapMap.get(inst.symbol) ?? 0;
 
+      // Compute Beta relative to NIFTY 50 (1-year lookback)
+      let beta: number | null = null;
+      if (niftyMap.size > 0) {
+        const alignedStock: number[] = [];
+        const alignedBench: number[] = [];
+        for (const c of candles) {
+          const benchClose = niftyMap.get(c.date);
+          if (benchClose != null) {
+            alignedStock.push(c.close);
+            alignedBench.push(benchClose);
+          }
+        }
+        if (alignedStock.length >= 21) {
+          beta = computeBetaFromCloses(alignedStock.slice(-252), alignedBench.slice(-252));
+        }
+      }
+
       // Score with skipFilters to get all-universe result
-      const allResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { skipFilters: true });
+      const allResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { skipFilters: true, beta });
       if (!allResult) continue;
 
       // Circuit band < 9% (2% circuit stocks and narrow bands) excluded from pre-filtered; 5% circuits (bandWidth ~10.5%) are allowed with warning highlight
       // Market cap must be >= 1,000 Cr (or whitelisted ETF / portfolio holding)
-      const filteredResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH);
+      const filteredResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { beta });
       const passesMcap = (mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(inst.symbol) || !!portfolioSymbols?.has(inst.symbol);
       const passesCircuit = bandWidth === undefined || bandWidth >= 0.09 || !!portfolioSymbols?.has(inst.symbol);
       const passesFilters = filteredResult !== null && passesCircuit && passesMcap;
@@ -586,6 +604,7 @@ function buildScoreRows(
       sharpe12m: s.score.sharpe12m,
       sharpe6m: s.score.sharpe6m,
       sharpe3m: s.score.sharpe3m,
+      beta: s.score.beta ?? null,
       athProximity: s.score.athProximity,
       ath: s.score.ath,
       currentPrice: s.score.currentPrice,
@@ -647,3 +666,24 @@ async function loadRankingHistoryForStats(rankType?: string): Promise<Map<string
   }
   return map;
 }
+
+async function loadNiftyIndexMap(): Promise<Map<string, number>> {
+  try {
+    const rows = await prisma.indexHistory.findMany({
+      where: { symbol: 'NIFTY50' },
+      orderBy: { date: 'asc' },
+      select: { date: true, close: true },
+    });
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      const d = new Date(r.date);
+      const istDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      map.set(istDate, r.close);
+    }
+    return map;
+  } catch (err) {
+    pipelineLogger.warn('Failed to load NIFTY50 index history for beta:', err);
+    return new Map();
+  }
+}
+
