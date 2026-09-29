@@ -14,6 +14,8 @@ import IntradayMarketBreadthChart from '@/components/market/IntradayMarketBreadt
 import StockMovesDistributionChart from '@/components/market/StockMovesDistributionChart';
 import AthDistributionChart from '@/components/market/AthDistributionChart';
 import MarketHealthDashboard from '@/components/market/MarketHealthDashboard';
+import InstitutionalActivityChart from '@/components/market/InstitutionalActivityChart';
+import type { InstitutionalActivityResponse } from '@/lib/upstox/institutional';
 import { fetchNSEMarketBreadth, getIntradayMarketBreadth } from '@/app/actions/market-breadth';
 import type { NSEMarketBreadthData, MarketHealthHistoryData, IntradayMarketBreadthData } from '@/app/actions/market-breadth';
 import { useLiveData } from '@/context/LiveDataContext';
@@ -61,6 +63,7 @@ interface MarketOverviewClientProps {
   initialBreadthData?: NSEMarketBreadthData | null;
   initialHealthData?: MarketHealthHistoryData | null;
   initialIntradayData?: IntradayMarketBreadthData | null;
+  initialInstitutionalData?: InstitutionalActivityResponse | null;
   embedded?: boolean;
 }
 
@@ -71,6 +74,7 @@ export default function MarketOverviewClient({
   initialBreadthData = null,
   initialHealthData = null,
   initialIntradayData = null,
+  initialInstitutionalData = null,
   embedded = false,
 }: MarketOverviewClientProps) {
   const [selectedIndex, setSelectedIndex] = useState('NIFTY Total Market');
@@ -1029,6 +1033,13 @@ export default function MarketOverviewClient({
       {!embedded && (
         <motion.div variants={itemVariants}>
           <MarketHealthDashboard initialData={initialHealthData} />
+        </motion.div>
+      )}
+
+      {/* Section 5: Institutional Cash Market Activity (FII / DII) */}
+      {!embedded && (
+        <motion.div variants={itemVariants}>
+          <InstitutionalActivityChart initialData={initialInstitutionalData} />
         </motion.div>
       )}
     </Container>
