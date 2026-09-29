@@ -112,6 +112,9 @@ function DynamicMoverRow({
   const high = Math.max(stock.dayHigh || price, price);
   const rangeSpan = Math.max(0.01, high - low);
   const currentPosPct = Math.max(0, Math.min(100, ((price - low) / rangeSpan) * 100));
+  const prevClose = price / (1 + (stock.changePercent || 0) / 100);
+  const lowPct = prevClose > 0 ? ((low - prevClose) / prevClose) * 100 : 0;
+  const highPct = prevClose > 0 ? ((high - prevClose) / prevClose) * 100 : 0;
 
   return (
     <motion.div
@@ -155,8 +158,16 @@ function DynamicMoverRow({
       {/* Column 2: Day Range Bar (Uniformly aligned across all rows) */}
       <div
         className="flex flex-col gap-1 w-full max-w-[200px] sm:max-w-[260px] mx-auto px-1 sm:px-2"
-        title={`LTP: ₹${price.toFixed(2)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(2)} | High: ₹${high.toFixed(2)}`}
+        title={`LTP: ₹${price.toFixed(2)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(2)} (${Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}) | High: ₹${high.toFixed(2)} (${Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`})`}
       >
+        <div className="flex justify-between text-[10px] font-mono leading-none px-0.5 font-medium">
+          <span className={lowPct > 0.005 ? 'text-emerald-400' : lowPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
+            {Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}
+          </span>
+          <span className={highPct > 0.005 ? 'text-emerald-400' : highPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
+            {Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`}
+          </span>
+        </div>
         <div className="w-full h-1.5 bg-slate-800/90 rounded-full relative overflow-visible border border-white/5">
           <div
             className={`h-full rounded-full transition-all duration-300 ${

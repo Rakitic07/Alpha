@@ -179,3 +179,102 @@ export async function exitApp(): Promise<void> {
     // ignore
   }
 }
+
+// ─── Image Save & Share (Mobile / Capacitor) ──────────────────────────────
+
+export interface SaveOrShareImageResult {
+  success: boolean;
+  method: 'capacitor-share' | 'web-share' | 'download' | 'preview';
+  error?: string;
+}
+
+/**
+ * Save or share an image (base64 data URL).
+ *
+ * Flow:
+ * 1. Inside Capacitor: saves the base64 image to device cache using @capacitor/filesystem,
+ *    then triggers the native Android/iOS share sheet via @capacitor/share.
+ * 2. Mobile web: attempts navigator.share with a File object (supported on modern mobile browsers).
+ * 3. Desktop web: downloads the image via a standard <a> tag.
+ * 4. Fallback: returns method: 'preview' so the UI can display an inline modal allowing
+ *    the user to long-press to save/copy the image directly.
+ */
+export async function saveOrShareImage(
+  dataUrl: string,
+  fileName: string,
+  title: string = 'Market Dashboard'
+): Promise<SaveOrShareImageResult> {
+  // 1. In Capacitor Android / iOS shell
+  if (isCapacitor()) {
+    try {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { Share } = await import('@capacitor/share');
+
+      const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Cache,
+      });
+
+      await Share.share({
+        title,
+        text: `${title} snapshot`,
+        url: saved.uri,
+        dialogTitle: 'Share Dashboard Screenshot',
+      });
+
+      return { success: true, method: 'capacitor-share' };
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      // If user dismissed or cancelled the share dialog, treat as completed
+      if (
+        msg.toLowerCase().includes('cancel') ||
+        msg.toLowerCase().includes('abort') ||
+        msg.toLowerCase().includes('dismiss')
+      ) {
+        return { success: true, method: 'capacitor-share' };
+      }
+      console.warn('Capacitor native share failed, falling back:', e);
+    }
+  }
+
+  // 2. Web Share API (navigator.share with File)
+  if (typeof navigator !== 'undefined' && typeof window !== 'undefined') {
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title,
+          files: [file],
+        });
+        return { success: true, method: 'web-share' };
+      }
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) {
+        return { success: true, method: 'web-share' };
+      }
+      console.warn('Web Share API failed, falling back:', e);
+    }
+  }
+
+  // 3. Desktop browser: trigger download link
+  if (!isCapacitor()) {
+    try {
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      link.click();
+      return { success: true, method: 'download' };
+    } catch (e) {
+      console.warn('Direct link download failed:', e);
+    }
+  }
+
+  // 4. Fallback for mobile / WebView when native share and download aren't available
+  return { success: false, method: 'preview' };
+}

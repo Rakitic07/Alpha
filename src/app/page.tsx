@@ -6,6 +6,10 @@ import { formatNumber } from '@/lib/format';
 import { motion, MotionConfig, type Variants } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { LiveHeader, LiveStatsCards, LiveMovers, PerformanceRank, IntradayPnLChart, LiveStockDynamicsTable } from '@/components/live';
+import { saveOrShareImage, haptic, hapticNotification } from '@/lib/mobile';
+import { Snackbar, Alert, Dialog } from '@mui/material';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faXmark, faShareNodes } from '@fortawesome/free-solid-svg-icons';
 
 const PortfolioHeatmap = dynamic(() => import('@/components/portfolio/PortfolioHeatmap'), {
   loading: () => <div className="h-[400px] bg-slate-800/50 rounded-2xl animate-pulse" />,
@@ -39,6 +43,12 @@ export default function LivePage() {
   const marketOpen = data?.marketStatus === 'OPEN';
   const [downloading, setDownloading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info';
+  }>({ open: false, message: '', severity: 'info' });
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -71,13 +81,17 @@ export default function LivePage() {
 
   const handleDownloadSnapshot = useCallback(async () => {
     setDownloading(true);
+    haptic('light');
     try {
       // 1. Wait for React to flush state updates to DOM
       await new Promise((resolve) => setTimeout(resolve, 150));
 
-      // 2. Wait for web fonts to be fully loaded
+      // 2. Wait for web fonts to be fully loaded (with 1.5s timeout safety)
       if (typeof document !== 'undefined' && document.fonts?.ready) {
-        await document.fonts.ready;
+        await Promise.race([
+          document.fonts.ready,
+          new Promise((resolve) => setTimeout(resolve, 1500)),
+        ]);
       }
 
       // 3. Double requestAnimationFrame to ensure browser has recalculated styles & painted
@@ -97,33 +111,66 @@ export default function LivePage() {
         if (intradayDynamics) intradayDynamics.style.display = 'none';
         const contentHeight = element.scrollHeight;
         const contentWidth = element.scrollWidth;
-        const dataUrl = await toPng(element, {
+
+        const captureOptions = {
           cacheBust: true,
           quality: 0.95,
-          pixelRatio: 2,
+          pixelRatio: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 2 : 2, 2),
           height: contentHeight,
           width: contentWidth,
           backgroundColor: '#0f172a',
-          filter: (node) => {
-            if (
-              node instanceof HTMLElement &&
-              (node.id === 'market-overview' || node.id === 'intraday-dynamics')
-            ) {
-              return false;
+          filter: (node: Node) => {
+            if (node instanceof HTMLElement) {
+              if (node.id === 'market-overview' || node.id === 'intraday-dynamics') {
+                return false;
+              }
+              if (node.classList?.contains('snapshot-hide')) {
+                return false;
+              }
             }
             return true;
           },
-        });
+        };
+
+        let dataUrl: string;
+        try {
+          dataUrl = await toPng(element, captureOptions);
+        } catch (captureErr) {
+          console.warn('Initial toPng failed, retrying with skipFonts: true', captureErr);
+          dataUrl = await toPng(element, { ...captureOptions, skipFonts: true });
+        }
+
         if (marketOverview) marketOverview.style.display = '';
         if (intradayDynamics) intradayDynamics.style.display = '';
 
-        const link = document.createElement('a');
-        link.download = `market-dashboard-${new Date().toISOString().split('T')[0]}.png`;
-        link.href = dataUrl;
-        link.click();
+        const fileName = `market-dashboard-${new Date().toISOString().split('T')[0]}.png`;
+        const result = await saveOrShareImage(dataUrl, fileName, 'Alpha Market Dashboard');
+
+        if (result.success) {
+          hapticNotification('success');
+          setSnackbar({
+            open: true,
+            message: 'Dashboard snapshot saved / shared successfully!',
+            severity: 'success',
+          });
+        } else if (result.method === 'preview') {
+          setPreviewImage(dataUrl);
+        } else {
+          setSnackbar({
+            open: true,
+            message: result.error || 'Failed to save snapshot',
+            severity: 'error',
+          });
+        }
       }
     } catch (err) {
       console.error('Failed to capture snapshot:', err);
+      hapticNotification('error');
+      setSnackbar({
+        open: true,
+        message: 'Failed to capture snapshot. Please try again.',
+        severity: 'error',
+      });
     } finally {
       const marketOverview = document.getElementById('market-overview');
       const intradayDynamics = document.getElementById('intraday-dynamics');
@@ -312,6 +359,83 @@ export default function LivePage() {
           visibility: hidden !important;
         }
       `}</style>
+
+      {/* Snapshot Preview Dialog (Fallback / Mobile View) */}
+      {previewImage && (
+        <Dialog
+          open={!!previewImage}
+          onClose={() => setPreviewImage(null)}
+          maxWidth="md"
+          fullWidth
+          slotProps={{
+            paper: {
+              className: 'bg-slate-900 border border-white/10 rounded-2xl text-white p-4 max-h-[90vh] shadow-2xl',
+            },
+          }}
+        >
+          <div className="flex items-center justify-between pb-3 border-b border-white/10">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <span>Dashboard Snapshot</span>
+            </h3>
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="text-gray-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            >
+              <FontAwesomeIcon icon={faXmark} className="text-base" />
+            </button>
+          </div>
+
+          <div className="py-4 flex flex-col items-center gap-3 overflow-y-auto">
+            <div className="w-full max-h-[60vh] overflow-auto rounded-xl border border-white/10 bg-slate-950 flex items-center justify-center p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewImage}
+                alt="Dashboard Snapshot"
+                className="max-w-full h-auto object-contain rounded-lg shadow-lg"
+              />
+            </div>
+            <p className="text-xs text-gray-400 text-center">
+              💡 <span className="font-medium text-gray-300">Tip:</span> Long-press the image to save or share it directly to your photos or messaging apps.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-gray-300 transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+            <button
+              onClick={async () => {
+                const fileName = `market-dashboard-${new Date().toISOString().split('T')[0]}.png`;
+                await saveOrShareImage(previewImage, fileName, 'Alpha Market Dashboard');
+              }}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <FontAwesomeIcon icon={faShareNodes} />
+              <span>Share / Save</span>
+            </button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Snapshot Toast Feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%', borderRadius: '12px' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </MotionConfig>
   );
 }

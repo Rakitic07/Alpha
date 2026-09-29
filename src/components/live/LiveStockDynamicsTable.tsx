@@ -465,6 +465,8 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 const rangeSpan = Math.max(0.01, high - low);
                 const currentPosPct = Math.max(0, Math.min(100, ((price - low) / rangeSpan) * 100));
                 const sparkPoints = sparklines[stock.symbol];
+                const lowPct = prevClose > 0 ? ((low - prevClose) / prevClose) * 100 : 0;
+                const highPct = prevClose > 0 ? ((high - prevClose) / prevClose) * 100 : 0;
 
                 return (
                   <tr
@@ -516,8 +518,18 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                     <td className="py-3 px-3">
                       <div
                         className="flex flex-col gap-1 w-full max-w-[140px] mx-auto"
-                        title={`LTP: ₹${price.toFixed(1)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(1)} | High: ₹${high.toFixed(1)} | Open: ₹${open.toFixed(1)}`}
+                        title={`LTP: ₹${price.toFixed(1)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(1)} (${Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}) | High: ₹${high.toFixed(1)} (${Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`}) | Open: ₹${open.toFixed(1)}`}
                       >
+                        {/* % Range: Low % on left, High % on right */}
+                        <div className="flex justify-between text-[10px] font-mono px-0.5 leading-none font-medium">
+                          <span className={lowPct > 0.005 ? 'text-emerald-400' : lowPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
+                            {Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}
+                          </span>
+                          <span className={highPct > 0.005 ? 'text-emerald-400' : highPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
+                            {Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`}
+                          </span>
+                        </div>
+
                         {/* Filled Bar Container */}
                         <div className="w-full h-2 bg-slate-800/90 rounded-full relative overflow-visible border border-white/5">
                           {/* Filled bar from Low up to current LTP */}
